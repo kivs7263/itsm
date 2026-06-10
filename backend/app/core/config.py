@@ -73,6 +73,13 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_ID: str = ""    # itsm
 
     # ------------------------------------------------------------------
+    # [선택] SA 브릿지 — ITSM → SA KPI push
+    # SA_BACKEND_URL 미설정 시 브릿지 비활성 (graceful skip)
+    # ------------------------------------------------------------------
+    SA_BACKEND_URL: str = ""           # http://sa_backend:8000
+    BRIDGE_INTERVAL_MINUTES: int = 60  # KPI push 주기 (분)
+
+    # ------------------------------------------------------------------
     # [선택] 환경 / 로깅
     # ------------------------------------------------------------------
     ENVIRONMENT: Literal["development", "production"] = "production"

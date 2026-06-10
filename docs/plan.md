@@ -168,14 +168,40 @@
 
 ---
 
-## Phase 2: SA KPI 브릿지 + 고도화 [ PENDING ]
+## Phase 2: SA KPI 브릿지 + 고도화
 
-- [ ] `itsm_bridge.py` — SA push: 장애 건수/SLA 준수율/MTTA/MTTR/CSAT/투입 공수
-- [ ] Calendar-service push: 현장방문·원격지원 이벤트
-- [ ] Meilisearch 인덱싱: 티켓·KB 전문 검색
-- [ ] KB(지식베이스) 모듈: 문서 작성·검색·티켓 연결
-- [ ] 이메일 채널 수신 (IMAP 폴링 또는 웹훅)
-- [ ] Slack/Teams 알림 연동
+### P2-1. SA KPI 브릿지 [ DONE 2026-06-10 ]
+> ITSM 운영 지표 → SA 사업카드 실시간 반영
+- [x] SA `routers/itsm_bridge.py` — x-internal-secret 인증, business.itsm_kpi JSONB 갱신
+- [x] SA migration 176 — businesses 테이블 `itsm_kpi JSONB` 컬럼 추가
+- [x] ITSM `services/bridge_service.py` — KPI 집계: 장애건수/SLA준수율/MTTA/MTTR/CSAT/투입공수/계약만료D-day
+- [x] ITSM `workers/bridge_worker.py` — 1시간 주기 SA push (SA_BACKEND_URL 미설정 시 graceful skip)
+
+### P2-2. Calendar-service 이벤트 연동 [ PENDING ]
+> ITSM 현장방문·원격지원 일정 → 공용 캘린더 반영
+- [ ] ITSM `services/calendar_push_service.py` — calendar-service HTTP push
+- [ ] ITSM `routers/calendar_events.py` — 현장방문(파랑)/원격지원(주황)/내부일정(초록) CRUD
+- [ ] Frontend: 이벤트 생성 모달 (티켓 연결)
+
+### P2-3. Meilisearch 인덱싱 [ PENDING ]
+> 티켓·KB 전문 검색 (한국어 분석기)
+- [ ] ITSM `services/search_service.py` — index/update/delete (티켓, KB)
+- [ ] 티켓 CRUD hook — create/update/delete 시 인덱스 자동 갱신
+- [ ] Frontend: 상단 검색바 → 검색 결과 드롭다운
+
+### P2-4. KB(지식베이스) 모듈 [ PENDING ]
+> 장애 해결책 문서화, 티켓 연결
+- [ ] DB migration 004: `kb_articles` (title, content TEXT, tags jsonb, linked_ticket_id, author_id)
+- [ ] ITSM `routers/kb.py` — CRUD + 티켓 연결
+- [ ] Frontend: KB 목록·상세·작성 페이지, 티켓 슬라이더에서 관련 KB 표시
+
+### P2-5. 이메일 채널 수신 [ PENDING ]
+- [ ] `workers/email_worker.py` — IMAP 폴링 60s, 신규 메일 → 티켓 자동 생성
+- [ ] 환경변수: IMAP_HOST/USER/PASSWORD/FOLDER
+
+### P2-6. Slack/Teams 알림 [ PENDING ]
+- [ ] `services/notification_service.py` — 티켓 생성/상태변경/SLA breach webhook
+- [ ] 환경변수: SLACK_WEBHOOK_URL / TEAMS_WEBHOOK_URL
 
 ---
 

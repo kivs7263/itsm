@@ -82,6 +82,28 @@ services:
     networks:
       - itsm_internal
 
+  # ── Bridge 워커 (ITSM → SA KPI push) ──────────────────────────────
+  itsm_bridge_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: itsm_bridge_worker
+    restart: unless-stopped
+    command: python -m app.workers.bridge_worker
+    environment:
+      DATABASE_URL: postgresql+asyncpg://itsm_user:${POSTGRES_PASSWORD}@itsm_postgres_ha:5000/itsm
+      REDIS_URL: redis://itsm_redis:6379/0
+      SERVICE_BUS_SECRET: ${SERVICE_BUS_SECRET}
+      SECRET_KEY: ${SECRET_KEY}
+      SA_BACKEND_URL: ${SA_BACKEND_URL:-}
+    depends_on:
+      itsm_postgres_ha:
+        condition: service_healthy
+      itsm_redis:
+        condition: service_healthy
+    networks:
+      - itsm_internal
+
   # ── PostgreSQL HA ─────────────────────────────────────────────────
   itsm_postgres_primary:
     image: pgvector/pgvector:pg16
