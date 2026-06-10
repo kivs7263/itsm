@@ -136,13 +136,13 @@
 - [ ] `workers/sla_worker.py` — Redis 분산 lock 기반 SLA breach 감지·알림
 - [ ] Alembic 마이그레이션 001~003 실행 및 검증
 
-### P1-3. Frontend 기반 구조 [ PENDING ]
-- [ ] `frontend/` Next.js 프로젝트 초기화 (GW 패턴 동일)
-- [ ] `Dockerfile`, `next.config.js`, `tailwind.config.ts`, `shadcn/ui` 설정
-- [ ] AppShell, Sidebar, WorkspaceSwitcher (4앱: GW/SA/ITSM/Admin)
-- [ ] 인증 흐름: `/login` → JWT → `/{slug}/tickets`
-- [ ] CrossApp 수신 페이지: `/{slug}/crossapp`
-- [ ] 고객 포털 레이아웃: `/portal/{slug}/...`
+### P1-3. Frontend 기반 구조 [ DONE 2026-06-10 ]
+- [x] `frontend/` Next.js 프로젝트 초기화 (GW 패턴 동일)
+- [x] `Dockerfile`, `next.config.js`, `tailwind.config.ts`, `shadcn/ui` 설정
+- [x] AppShell, Sidebar, WorkspaceSwitcher (4앱: GW/SA/ITSM/Admin)
+- [x] 인증 흐름: `/login` → JWT → `/{slug}/tickets`
+- [x] CrossApp 수신 페이지: `/{slug}/crossapp`
+- [x] 고객 포털 레이아웃: `/portal/{slug}/...`
 
 ### P1-4. 티켓 모듈 UI [ PENDING ]
 - [ ] 티켓 목록 (테이블뷰, 필터: status/priority/담당자/고객)

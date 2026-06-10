@@ -1,0 +1,343 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =====================================================================
+   CSS 변수 — 라이트 모드 (:root)
+===================================================================== */
+:root {
+  /* === Brand — ITSM (#F5C000 Honey) === */
+  --color-brand:          #F5C000;
+  --color-brand-hover:    #F5B800;
+  --color-brand-active:   #E89412;
+  --color-brand-subtle:   rgba(245, 192, 0, 0.10);
+
+  /* === Primary Accent (Honey 팔레트) === */
+  --color-accent-50:  #FFF8EC;
+  --color-accent-100: #FFF4D2;
+  --color-accent-200: #FFE9A8;
+  --color-accent-300: #FFDB7D;
+  --color-accent-400: #FFCE54;
+  --color-accent-500: #F5C000;
+  --color-accent-600: #F5B800;
+  --color-accent-700: #E89412;
+  --color-accent-800: #B47009;
+  --color-accent-900: #7A4D08;
+  --color-accent-950: #3D2604;
+
+  /* === Neutral === */
+  --color-neutral-50:  #f9fafb;
+  --color-neutral-100: #f3f4f6;
+  --color-neutral-200: #e5e7eb;
+  --color-neutral-300: #d1d5db;
+  --color-neutral-400: #9ca3af;
+  --color-neutral-500: #6b7280;
+  --color-neutral-600: #4b5563;
+  --color-neutral-700: #374151;
+  --color-neutral-800: #1f2937;
+  --color-neutral-900: #111827;
+  --color-neutral-950: #030712;
+
+  /* === Semantic: Success === */
+  --color-success:        #16a34a;
+  --color-success-bg:     #f0fdf4;
+  --color-success-border: #bbf7d0;
+  --color-success-text:   #15803d;
+
+  /* === Semantic: Warning === */
+  --color-warning:        #d97706;
+  --color-warning-bg:     #fffbeb;
+  --color-warning-border: #fde68a;
+  --color-warning-text:   #b45309;
+
+  /* === Semantic: Error === */
+  --color-error:        #991b1b;
+  --color-error-bg:     #fef2f2;
+  --color-error-border: #fecaca;
+  --color-error-text:   #b91c1c;
+
+  /* === Semantic: Info === */
+  --color-info:        #2563eb;
+  --color-info-bg:     #eff6ff;
+  --color-info-border: #bfdbfe;
+  --color-info-text:   #1d4ed8;
+
+  /* === Surface === */
+  --color-bg:               #f3f4f8;
+  --color-bg-primary:       #f3f4f8;
+  --color-bg-secondary:     #ffffff;
+  --color-bg-tertiary:      #f8f9fe;
+  --color-bg-elevated:      #f8f9fe;
+  --color-surface:          #ffffff;
+  --color-surface-elevated: #f8f9fe;
+  --color-surface-overlay:  rgba(0, 0, 0, 0.4);
+  --color-surface-hover:    rgba(0, 0, 0, 0.06);
+
+  /* === Border === */
+  --color-border:         #e5e7eb;
+  --color-border-subtle:  #f3f4f6;
+  --color-border-default: #e5e7eb;
+  --color-border-strong:  #d1d5db;
+
+  /* === Text === */
+  --color-text-primary:   #111827;
+  --color-text-secondary: #4b5563;
+  --color-text-disabled:  #9ca3af;
+  --color-text-muted:     #4b5563;
+  --color-text-inverse:   #ffffff;
+  --color-text-accent:    #B45309;
+  --color-accent-on:      #0E0E0C;
+
+  /* === 티켓 상태 === */
+  --color-status-open:         #2563eb;
+  --color-status-open-bg:      #eff6ff;
+  --color-status-pending:      #d97706;
+  --color-status-pending-bg:   #fffbeb;
+  --color-status-resolved:     #16a34a;
+  --color-status-resolved-bg:  #f0fdf4;
+  --color-status-closed:       #6b7280;
+  --color-status-closed-bg:    #f9fafb;
+
+  /* === 티켓 우선순위 === */
+  --color-priority-urgent: #dc2626;
+  --color-priority-high:   #d97706;
+  --color-priority-medium: #2563eb;
+  --color-priority-low:    #9ca3af;
+
+  /* === Border Radius === */
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   16px;
+  --radius-xl:   20px;
+  --radius-full: 9999px;
+  --radius-base: var(--radius-md);
+
+  /* === Shadow === */
+  --shadow-sm:    0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md:    0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg:    0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  --shadow-xl:    0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  --shadow-brand: 0 0 0 3px rgba(245, 192, 0, 0.32);
+
+  /* === Sidebar === */
+  --sidebar-active-bg: rgba(245, 192, 0, 0.14);
+
+  /* === shadcn/ui 브리지 === */
+  --background:           var(--color-bg);
+  --foreground:           var(--color-text-primary);
+  --card:                 var(--color-surface);
+  --card-foreground:      var(--color-text-primary);
+  --popover:              var(--color-surface-elevated);
+  --popover-foreground:   var(--color-text-primary);
+  --primary:              var(--color-accent-600);
+  --primary-foreground:   var(--color-text-inverse);
+  --secondary:            var(--color-neutral-100);
+  --secondary-foreground: var(--color-text-primary);
+  --muted:                var(--color-neutral-100);
+  --muted-foreground:     var(--color-text-secondary);
+  --accent:               var(--color-accent-100);
+  --accent-foreground:    var(--color-accent-800);
+  --destructive:          var(--color-error);
+  --destructive-foreground: #ffffff;
+  --border:               var(--color-border-default);
+  --input:                var(--color-border-default);
+  --ring:                 var(--color-accent-600);
+  --radius:               var(--radius-md);
+}
+
+/* =====================================================================
+   다크 모드 (.dark)
+===================================================================== */
+.dark {
+  /* === Neutral (indigo 색조) === */
+  --color-neutral-50:  #0b0d12;
+  --color-neutral-100: #0f1117;
+  --color-neutral-200: #161922;
+  --color-neutral-300: #1e2130;
+  --color-neutral-400: #2d3244;
+  --color-neutral-500: #3d4460;
+  --color-neutral-600: #555e7a;
+  --color-neutral-700: #7c849e;
+  --color-neutral-800: #a8b0c8;
+  --color-neutral-900: #c8d0e4;
+  --color-neutral-950: #e8ecf4;
+
+  /* === Semantic === */
+  --color-success:        #4ade80;
+  --color-success-bg:     rgba(74, 222, 128, 0.08);
+  --color-success-border: rgba(74, 222, 128, 0.18);
+  --color-success-text:   #86efac;
+
+  --color-warning:        #fbbf24;
+  --color-warning-bg:     rgba(251, 191, 36, 0.08);
+  --color-warning-border: rgba(251, 191, 36, 0.18);
+  --color-warning-text:   #fcd34d;
+
+  --color-error:        #f87171;
+  --color-error-bg:     rgba(248, 113, 113, 0.08);
+  --color-error-border: rgba(248, 113, 113, 0.18);
+  --color-error-text:   #fca5a5;
+
+  --color-info:        #60a5fa;
+  --color-info-bg:     rgba(96, 165, 250, 0.08);
+  --color-info-border: rgba(96, 165, 250, 0.18);
+  --color-info-text:   #93c5fd;
+
+  /* === Surface === */
+  --color-bg:               #0b0d12;
+  --color-bg-primary:       #0b0d12;
+  --color-bg-secondary:     #0f1117;
+  --color-bg-tertiary:      #161922;
+  --color-bg-elevated:      #161922;
+  --color-surface:          #0f1117;
+  --color-surface-elevated: #161922;
+  --color-surface-overlay:  rgba(0, 0, 0, 0.6);
+  --color-surface-hover:    rgba(255, 255, 255, 0.04);
+
+  /* === Border === */
+  --color-border:         rgba(255, 255, 255, 0.08);
+  --color-border-subtle:  rgba(255, 255, 255, 0.04);
+  --color-border-default: rgba(255, 255, 255, 0.08);
+  --color-border-strong:  rgba(255, 255, 255, 0.14);
+
+  /* === Text === */
+  --color-text-primary:   #e8ecf4;
+  --color-text-secondary: #7c849e;
+  --color-text-disabled:  #3d4460;
+  --color-text-muted:     #7c849e;
+  --color-text-inverse:   #0b0d12;
+  --color-text-accent:    #FCD34D;
+
+  /* === 티켓 상태 (다크) === */
+  --color-status-open:         #60a5fa;
+  --color-status-open-bg:      rgba(96, 165, 250, 0.08);
+  --color-status-pending:      #fbbf24;
+  --color-status-pending-bg:   rgba(251, 191, 36, 0.08);
+  --color-status-resolved:     #4ade80;
+  --color-status-resolved-bg:  rgba(74, 222, 128, 0.08);
+  --color-status-closed:       #7c849e;
+  --color-status-closed-bg:    rgba(124, 132, 158, 0.08);
+
+  /* === Shadow (dark) === */
+  --shadow-sm:    0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md:    0 4px 6px -1px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-lg:    0 10px 15px -3px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-xl:    0 20px 25px -5px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-brand: 0 0 0 3px rgba(245, 192, 0, 0.26);
+
+  /* === Sidebar === */
+  --sidebar-active-bg: rgba(245, 192, 0, 0.14);
+
+  /* === shadcn/ui 브리지 (dark override) === */
+  --primary: var(--color-accent-500);
+  --ring:    var(--color-accent-400);
+  --destructive:            var(--color-error);
+  --destructive-foreground: #1a0505;
+  --color-accent-on: #0E0E0C;
+  --color-brand:     #F5C000;
+  --color-brand-subtle: rgba(245, 192, 0, 0.10);
+}
+
+/* =====================================================================
+   @layer base — 전역 기본 스타일
+===================================================================== */
+@layer base {
+  * {
+    @apply border-border-default;
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: var(--font-pretendard), 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 14px;
+    line-height: 1.6;
+    word-break: keep-all;
+  }
+
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-brand);
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+}
+
+/* =====================================================================
+   페이지 전환 애니메이션
+===================================================================== */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter { animation: page-enter 150ms cubic-bezier(0, 0, 0.3, 1); }
+
+/* =====================================================================
+   패널 슬라이드
+===================================================================== */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes slide-out-right {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(100%); opacity: 0; }
+}
+.panel-enter { animation: slide-in-right  200ms cubic-bezier(0, 0, 0.3, 1); }
+.panel-exit  { animation: slide-out-right 150ms cubic-bezier(0.7, 0, 1, 1); }
+
+/* =====================================================================
+   Skeleton shimmer
+===================================================================== */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-border-subtle) 25%,
+    var(--color-border-default) 50%,
+    var(--color-border-subtle) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1500ms linear infinite;
+  border-radius: var(--radius-md);
+}
+
+/* =====================================================================
+   한국어 타이포그래피
+===================================================================== */
+.prose-kr {
+  line-height: 1.7;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.prose-kr p { margin-bottom: 1em; }
+.prose-kr li { margin-bottom: 0.4em; }
+
+h1, .text-h1 { letter-spacing: -0.03em; }
+h2, .text-h2 { letter-spacing: -0.02em; }
+h3, .text-h3 { letter-spacing: -0.015em; }
+
+/* =====================================================================
+   접근성 — prefers-reduced-motion
+===================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
