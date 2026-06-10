@@ -25,3 +25,4 @@
 | 2026-06-10 15:06 | build | docker compose build itsm_email_worker 2>&1 | tail -5 | ✅ | itsm | build-hook |
 | 2026-06-10 15:07 | build | python3 -c "import ast, pathlib; [ast.parse(p.read_text()) for p in pathlib.Path | ✅ | itsm | build-hook |
 | 2026-06-10 15:09 | build | bash ~/.claude/hooks/_manual/pattern_add.sh database migration "SA Alembic hook  | ✅ | itsm | build-hook |
+| 2026-06-10 | session_close | Pre+P1+P2 (14항목) 완료. plan_archive 생성. ITSM/SA/calendar 3레포 push. | ✅ | itsm | leader |
