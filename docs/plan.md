@@ -151,11 +151,11 @@
 - [x] SLA 배지 (응답/해결 마감까지 남은 시간, breach 시 빨간색)
 - [x] 대량 상태 변경
 
-### P1-5. 고객 셀프서비스 포털 [ PENDING ]
-- [ ] 매직링크 인증 흐름 (`/portal/{slug}/login` → 이메일 → `/portal/{slug}/verify`)
-- [ ] 내 티켓 목록 / 상세 (내부 코멘트 완전 차단)
-- [ ] 새 티켓 접수 폼
-- [ ] 자산/계약 조회
+### P1-5. 고객 셀프서비스 포털 [ DONE 2026-06-10 ]
+- [x] 매직링크 인증 흐름 (`/portal/{slug}/login` → 이메일 → `/portal/{slug}/verify`)
+- [x] 내 티켓 목록 / 상세 (내부 코멘트 완전 차단 — `is_internal === false` strict filter)
+- [x] 새 티켓 접수 폼
+- [x] 자산/계약 조회
 
 ### P1-6. nginx + Docker Compose 완성 [ PENDING ]
 - [ ] `postgres/init.sql` — pgvector extension 활성화

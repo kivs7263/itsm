@@ -9,6 +9,7 @@
  */
 
 import type { Metadata } from 'next';
+import { PortalNav } from './PortalNav';
 
 export const metadata: Metadata = {
   title: {
@@ -55,6 +56,9 @@ export default function PortalLayout({ children, params }: PortalLayoutProps) {
               <p className="text-xs text-text-secondary">{params.tenantSlug}</p>
             </div>
           </div>
+
+          {/* 포털 네비게이션 (클라이언트 컴포넌트) */}
+          <PortalNav tenantSlug={params.tenantSlug} />
         </div>
       </header>
 
