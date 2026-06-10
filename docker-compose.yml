@@ -73,6 +73,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://itsm_user:${POSTGRES_PASSWORD}@itsm_postgres_ha:5000/itsm
       REDIS_URL: redis://itsm_redis:6379/0
       SERVICE_BUS_SECRET: ${SERVICE_BUS_SECRET}
+      SECRET_KEY: ${SECRET_KEY}
     depends_on:
       itsm_postgres_ha:
         condition: service_healthy

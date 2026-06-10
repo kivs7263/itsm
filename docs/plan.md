@@ -157,13 +157,14 @@
 - [x] 새 티켓 접수 폼
 - [x] 자산/계약 조회
 
-### P1-6. nginx + Docker Compose 완성 [ PENDING ]
-- [ ] `postgres/init.sql` — pgvector extension 활성화
-- [ ] `postgres/haproxy.cfg` — primary:5432 라우팅
-- [ ] `monitoring/prometheus.yml`, `monitoring/promtail.yml`
-- [ ] `backend/Dockerfile` (GW 패턴 동일)
-- [ ] `frontend/Dockerfile` (GW 패턴 동일)
-- [ ] 전체 `docker compose up -d` 성공 확인
+### P1-6. nginx + Docker Compose 완성 [ DONE 2026-06-10 ]
+- [x] `postgres/init.sql` — pgvector extension 활성화 (기존 완성)
+- [x] `postgres/haproxy.cfg` — primary:5432 라우팅 (기존 완성)
+- [x] `monitoring/prometheus.yml`, `monitoring/promtail.yml` (기존 완성)
+- [x] `backend/Dockerfile` — P1-2에서 완성
+- [x] `frontend/Dockerfile` — P1-3에서 완성
+- [x] `workers/sla_worker.py` 구현 (Redis 분산 lock, SLA breach 감지)
+- [x] 전체 `docker compose up -d` 성공 확인 (13개 서비스 모두 Up)
 
 ---
 
