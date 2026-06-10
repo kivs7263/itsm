@@ -96,7 +96,7 @@
 > 목표: 티켓 접수 → 처리 → SLA 추적 → 고객 알림 → 셀프서비스 포털 한 사이클 완성
 > 완료 기준: 실제 엔지니어가 티켓을 받아 처리하고, 고객이 포털에서 확인 가능한 상태
 
-### P1-1. DB 스키마 확정 (Migration 001~003) [ PENDING ]
+### P1-1. DB 스키마 확정 (Migration 001~003) [ DONE 2026-06-10 ]
 
 **Migration 001 — 멀티테넌트 + 사용자 기반**
 - [ ] `tenants` (id, slug UQ, name, settings jsonb, created_at)
@@ -120,7 +120,7 @@
 - [ ] `sla_events` (id, tenant_id, ticket_id, event_type enum: breach_warning|breached|resolved, fired_at)
 - [ ] `portal_sessions` (id, tenant_id, customer_id, token_hash, expires_at, created_at) — 고객 포털 매직링크
 
-### P1-2. Backend 기반 구조 [ PENDING ]
+### P1-2. Backend 기반 구조 [ DONE 2026-06-10 ]
 - [ ] `main.py` — FastAPI 앱, CORS, 라우터 등록, lifespan
 - [ ] `core/config.py` — Settings (pydantic-settings), DATABASE_URL, SERVICE_BUS_SECRET 등
 - [ ] `core/database.py` — AsyncSession, get_session
