@@ -82,6 +82,34 @@ services:
     networks:
       - itsm_internal
 
+  # ── Email 워커 (IMAP 폴링 → 티켓 자동 생성) ──────────────────────
+  itsm_email_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: itsm_email_worker
+    restart: unless-stopped
+    command: python -m app.workers.email_worker
+    environment:
+      DATABASE_URL: postgresql+asyncpg://itsm_user:${POSTGRES_PASSWORD}@itsm_postgres_ha:5000/itsm
+      REDIS_URL: redis://itsm_redis:6379/0
+      SERVICE_BUS_SECRET: ${SERVICE_BUS_SECRET}
+      SECRET_KEY: ${SECRET_KEY}
+      IMAP_HOST: ${IMAP_HOST:-}
+      IMAP_PORT: ${IMAP_PORT:-993}
+      IMAP_USER: ${IMAP_USER:-}
+      IMAP_PASSWORD: ${IMAP_PASSWORD:-}
+      IMAP_FOLDER: ${IMAP_FOLDER:-INBOX}
+      IMAP_TENANT_SLUG: ${IMAP_TENANT_SLUG:-}
+      EMAIL_INTERVAL_SECONDS: ${EMAIL_INTERVAL_SECONDS:-60}
+    depends_on:
+      itsm_postgres_ha:
+        condition: service_healthy
+      itsm_redis:
+        condition: service_healthy
+    networks:
+      - itsm_internal
+
   # ── Bridge 워커 (ITSM → SA KPI push) ──────────────────────────────
   itsm_bridge_worker:
     build:

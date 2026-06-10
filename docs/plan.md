@@ -195,13 +195,13 @@
 - [x] ITSM `routers/kb.py` — CRUD + 티켓 연결 + Meilisearch 인덱싱
 - [ ] Frontend: KB 목록·상세·작성 페이지, 티켓 슬라이더에서 관련 KB 표시
 
-### P2-5. 이메일 채널 수신 [ PENDING ]
-- [ ] `workers/email_worker.py` — IMAP 폴링 60s, 신규 메일 → 티켓 자동 생성
-- [ ] 환경변수: IMAP_HOST/USER/PASSWORD/FOLDER
+### P2-5. 이메일 채널 수신 [ DONE 2026-06-10 ]
+- [x] `workers/email_worker.py` — IMAP 폴링 (run_in_executor), 신규 메일 → 티켓 자동 생성
+- [x] 환경변수: IMAP_HOST/USER/PASSWORD/FOLDER/TENANT_SLUG (미설정 시 graceful sleep)
 
-### P2-6. Slack/Teams 알림 [ PENDING ]
-- [ ] `services/notification_service.py` — 티켓 생성/상태변경/SLA breach webhook
-- [ ] 환경변수: SLACK_WEBHOOK_URL / TEAMS_WEBHOOK_URL
+### P2-6. Slack/Teams 알림 [ DONE 2026-06-10 ]
+- [x] `services/notification_service.py` — 티켓 생성/상태변경/SLA breach webhook
+- [x] 환경변수: SLACK_WEBHOOK_URL / TEAMS_WEBHOOK_URL (미설정 시 no-op)
 
 ---
 

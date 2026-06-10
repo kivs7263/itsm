@@ -86,6 +86,25 @@ class Settings(BaseSettings):
     BRIDGE_INTERVAL_MINUTES: int = 60  # KPI push 주기 (분)
 
     # ------------------------------------------------------------------
+    # [선택] 이메일 채널 수신 (IMAP 폴링)
+    # IMAP_HOST 미설정 시 email_worker 비활성
+    # ------------------------------------------------------------------
+    IMAP_HOST: str = ""
+    IMAP_PORT: int = 993
+    IMAP_USER: str = ""
+    IMAP_PASSWORD: str = ""
+    IMAP_FOLDER: str = "INBOX"
+    IMAP_TENANT_SLUG: str = ""   # 수신 메일을 어느 테넌트 티켓으로 생성할지
+    EMAIL_INTERVAL_SECONDS: int = 60
+
+    # ------------------------------------------------------------------
+    # [선택] Slack / Teams 웹훅 알림
+    # 미설정 시 해당 채널 알림 비활성
+    # ------------------------------------------------------------------
+    SLACK_WEBHOOK_URL: str = ""
+    TEAMS_WEBHOOK_URL: str = ""
+
+    # ------------------------------------------------------------------
     # [선택] 환경 / 로깅
     # ------------------------------------------------------------------
     ENVIRONMENT: Literal["development", "production"] = "production"
