@@ -132,3 +132,11 @@ async def health_check():
 # P2-2 Calendar Events
 from app.routers import calendar_events as calendar_events_router  # noqa: E402
 app.include_router(calendar_events_router.router, prefix="/api")
+
+# P2-3 Search
+from app.routers import search as search_router  # noqa: E402
+app.include_router(search_router.router, prefix="/api")
+
+# P2-4 KB
+from app.routers import kb as kb_router  # noqa: E402
+app.include_router(kb_router.router, prefix="/api")

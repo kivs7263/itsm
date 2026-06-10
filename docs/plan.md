@@ -184,16 +184,15 @@
 - [x] migration 004: itsm_calendar_events 테이블
 - [ ] Frontend: 이벤트 생성 모달 (티켓 연결)
 
-### P2-3. Meilisearch 인덱싱 [ PENDING ]
+### P2-3. Meilisearch 인덱싱 [ DONE 2026-06-10 ]
 > 티켓·KB 전문 검색 (한국어 분석기)
-- [ ] ITSM `services/search_service.py` — index/update/delete (티켓, KB)
-- [ ] 티켓 CRUD hook — create/update/delete 시 인덱스 자동 갱신
+- [x] ITSM `services/search_service.py` — index/update/delete (티켓, KB), graceful fallback
+- [x] `GET /{slug}/search?q=...&type=ticket|kb|all` — 통합 검색 라우터
 - [ ] Frontend: 상단 검색바 → 검색 결과 드롭다운
 
-### P2-4. KB(지식베이스) 모듈 [ PENDING ]
-> 장애 해결책 문서화, 티켓 연결
-- [ ] DB migration 004: `kb_articles` (title, content TEXT, tags jsonb, linked_ticket_id, author_id)
-- [ ] ITSM `routers/kb.py` — CRUD + 티켓 연결
+### P2-4. KB(지식베이스) 모듈 [ DONE 2026-06-10 ]
+- [x] DB migration 005: `kb_articles` (title, content, tags jsonb, linked_ticket_id, author_id)
+- [x] ITSM `routers/kb.py` — CRUD + 티켓 연결 + Meilisearch 인덱싱
 - [ ] Frontend: KB 목록·상세·작성 페이지, 티켓 슬라이더에서 관련 KB 표시
 
 ### P2-5. 이메일 채널 수신 [ PENDING ]
