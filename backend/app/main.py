@@ -128,3 +128,7 @@ async def health_check():
 # app.include_router(sla.router, prefix="/api/sla", tags=["sla"])
 # app.include_router(portal_auth.router, prefix="/api/portal", tags=["portal"])
 # app.include_router(crossapp_auth.router, prefix="/api/auth/crossapp", tags=["crossapp"])
+
+# P2-2 Calendar Events
+from app.routers import calendar_events as calendar_events_router  # noqa: E402
+app.include_router(calendar_events_router.router, prefix="/api")

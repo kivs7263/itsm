@@ -73,6 +73,12 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_ID: str = ""    # itsm
 
     # ------------------------------------------------------------------
+    # [선택] Calendar Service 연동
+    # CALENDAR_SERVICE_URL 미설정 시 캘린더 push 비활성 (graceful skip)
+    # ------------------------------------------------------------------
+    CALENDAR_SERVICE_URL: str = ""     # http://cal_nginx
+
+    # ------------------------------------------------------------------
     # [선택] SA 브릿지 — ITSM → SA KPI push
     # SA_BACKEND_URL 미설정 시 브릿지 비활성 (graceful skip)
     # ------------------------------------------------------------------

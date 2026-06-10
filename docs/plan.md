@@ -177,10 +177,11 @@
 - [x] ITSM `services/bridge_service.py` — KPI 집계: 장애건수/SLA준수율/MTTA/MTTR/CSAT/투입공수/계약만료D-day
 - [x] ITSM `workers/bridge_worker.py` — 1시간 주기 SA push (SA_BACKEND_URL 미설정 시 graceful skip)
 
-### P2-2. Calendar-service 이벤트 연동 [ PENDING ]
+### P2-2. Calendar-service 이벤트 연동 [ DONE 2026-06-10 ]
 > ITSM 현장방문·원격지원 일정 → 공용 캘린더 반영
-- [ ] ITSM `services/calendar_push_service.py` — calendar-service HTTP push
-- [ ] ITSM `routers/calendar_events.py` — 현장방문(파랑)/원격지원(주황)/내부일정(초록) CRUD
+- [x] ITSM `services/calendar_push_service.py` — calendar-service HTTP push (graceful fallback)
+- [x] ITSM `routers/calendar_events.py` — 현장방문(파랑)/원격지원(주황)/내부일정(초록) CRUD
+- [x] migration 004: itsm_calendar_events 테이블
 - [ ] Frontend: 이벤트 생성 모달 (티켓 연결)
 
 ### P2-3. Meilisearch 인덱싱 [ PENDING ]

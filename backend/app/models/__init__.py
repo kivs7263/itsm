@@ -26,6 +26,7 @@ from app.models.sla import (  # noqa: F401
     SLAEventType,
 )
 from app.models.portal_session import PortalSession  # noqa: F401
+from app.models.calendar_event import CalendarEvent  # noqa: F401
 
 __all__ = [
     "Base",
@@ -66,4 +67,6 @@ __all__ = [
     "SLAEventType",
     # portal
     "PortalSession",
+    # calendar
+    "CalendarEvent",
 ]
