@@ -75,18 +75,18 @@
 
 ## Pre-Phase: 기반 환경 구성
 
-### P0-1. 기존 서비스 연동 업데이트 [ PENDING ]
+### P0-1. 기존 서비스 연동 업데이트 [ DONE 2026-06-10 ]
 > SA, GW, calendar-service에 ITSM 연동을 위한 최소 수정 적용
 
-- [ ] SA `crossapp_auth.py` — `iss != "gw"` → `ALLOWED_ISS = {"gw", "itsm"}` 화이트리스트
-- [ ] GW `crossapp_auth.py` — `iss != "sa"` → `ALLOWED_ISS = {"sa", "itsm"}` 화이트리스트
-- [ ] GW `WorkspaceSwitcher.tsx` — ITSM 셀 추가 (3×2 그리드, LifeBuoy 아이콘, `NEXT_PUBLIC_ITSM_URL`)
-- [ ] SA `WorkspaceSwitcher` (또는 `OrgAppSwitcher.tsx`) — 동일하게 ITSM 셀 추가
-- [ ] calendar-service `calendar_service.py:436` — source 화이트리스트 `["sa","gw","itsm"]`
-- [ ] calendar-service `routers/external.py:184` — 동일
-- [ ] calendar-service `schemas/calendar.py` — 설명 문자열 업데이트
-- [ ] SA `.env.example`, GW `.env.example` — `NEXT_PUBLIC_ITSM_URL` 추가
-- [ ] ADR 작성: ADR-001 ITSM 도입 결정, ADR-002 CrossApp 화이트리스트 전환
+- [x] SA `crossapp_auth.py` — `iss != "gw"` → `ALLOWED_ISS = {"gw", "itsm"}` 화이트리스트
+- [x] GW `crossapp_auth.py` — `iss != "sa"` → `ALLOWED_ISS = {"sa", "itsm"}` 화이트리스트
+- [x] GW `WorkspaceSwitcher.tsx` — ITSM 셀 추가 (3×2 그리드, LifeBuoy 아이콘, `NEXT_PUBLIC_ITSM_URL`)
+- [x] SA `WorkspaceSwitcher` (또는 `OrgAppSwitcher.tsx`) — 동일하게 ITSM 셀 추가
+- [x] calendar-service `calendar_service.py:436` — source 화이트리스트 `["sa","gw","itsm"]`
+- [x] calendar-service `routers/external.py:184` — 동일
+- [x] calendar-service `schemas/calendar.py` — 설명 문자열 업데이트
+- [x] SA `.env.example`, GW `.env.example` — `NEXT_PUBLIC_ITSM_URL` 추가
+- [x] ADR 작성: ADR-001 ITSM 도입 결정, ADR-002 CrossApp 화이트리스트 전환
 
 ### P0-2. ITSM 프로젝트 초기 세팅 [ PENDING ]
 - [ ] Git 초기화 + README + main 브랜치 push (https://github.com/kivs7263/itsm)
