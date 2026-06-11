@@ -1,13 +1,14 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle, Clock, TicketIcon } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, Download, TicketIcon } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { SlaDashboard, SlaPolicy, ContractTier } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 // -----------------------------------------------------------------------
 // KPI 카드
@@ -113,6 +114,29 @@ export default function SLAPage() {
   const params = useParams();
   const tenantSlug = params?.tenantSlug as string;
 
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  async function handleDownloadPDF() {
+    if (isDownloading) return;
+    setIsDownloading(true);
+    try {
+      const response = await api.get(`/${tenantSlug}/sla/report/pdf`, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data as BlobPart], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `sla-report-${tenantSlug}.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      console.error('PDF 다운로드 실패');
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
   // SLA 대시보드 요약
   const { data: dashboard, isLoading: dashLoading } = useQuery<SlaDashboard>({
     queryKey: ['sla-dashboard', tenantSlug],
@@ -134,6 +158,15 @@ export default function SLAPage() {
       {/* 헤더 */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border-default bg-surface shrink-0">
         <h1 className="text-xl font-semibold text-text-primary">SLA</h1>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={handleDownloadPDF}
+          disabled={isDownloading}
+          leftIcon={<Download size={14} />}
+        >
+          {isDownloading ? '생성 중...' : 'PDF 내보내기'}
+        </Button>
       </div>
 
       {/* 본문 */}

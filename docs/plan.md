@@ -101,5 +101,10 @@
 | `P3-3a` | Migration 008 — csat_surveys (ENUM csat_status_enum, UNIQUE 2종) | S | `[ DONE 2026-06-11 ]` |
 | `P3-3b` | Backend — csat_service + csat router (포털/내부) + tickets.py resolve 훅 | M | `[ DONE 2026-06-11 ]` |
 | `P3-3c` | Frontend — 포털 설문 페이지 (별점, 5상태) + 리포트 CSAT 섹션 | M | `[ DONE 2026-06-11 ]` |
-### P3-4: SLA 리포트 PDF 생성 [ PENDING ]
+### P3-4: SLA 리포트 PDF 생성 [ DONE 2026-06-11 ]
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `P3-4a` | Backend — fpdf2 추가 + GET /sla/report/pdf (KPI+정책+이벤트) | S | `[ DONE 2026-06-11 ]` |
+| `P3-4b` | Frontend — SLA 페이지 "PDF 내보내기" 버튼 (blob 다운로드) | S | `[ DONE 2026-06-11 ]` |
 ### P3-5: 멀티 채널 (카카오 알림톡, SMS) [ PENDING ]

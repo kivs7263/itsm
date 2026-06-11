@@ -13,12 +13,15 @@ prefix : /{tenant_slug}/sla
 """
 from __future__ import annotations
 
+import io
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from fpdf import FPDF
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, case, cast, func, select
 from sqlalchemy import Float
@@ -373,3 +376,249 @@ async def sla_dashboard(
             for p in policies
         ],
     }
+
+
+# ------------------------------------------------------------------
+# SLA 리포트 PDF 다운로드
+# ------------------------------------------------------------------
+
+
+@router.get(
+    "/report/pdf",
+    summary="SLA 리포트 PDF 다운로드",
+)
+async def download_sla_report_pdf(
+    tenant_slug: str,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    tid = current_user.tenant_id
+
+    # --- KPI 집계 (sla_dashboard 동일 로직) ---
+    _active_statuses = [TicketStatus.open, TicketStatus.in_progress, TicketStatus.pending]
+
+    total_active: int = await db.scalar(
+        select(func.count())
+        .select_from(Ticket)
+        .where(
+            and_(
+                Ticket.tenant_id == tid,
+                Ticket.status.in_(_active_statuses),
+            )
+        )
+    ) or 0
+
+    breached_subq = (
+        select(SLAEvent.ticket_id)
+        .join(Ticket, SLAEvent.ticket_id == Ticket.id)
+        .where(
+            and_(
+                SLAEvent.tenant_id == tid,
+                SLAEvent.event_type == SLAEventType.breached,
+                Ticket.status.notin_([TicketStatus.resolved, TicketStatus.closed]),
+            )
+        )
+        .distinct()
+        .scalar_subquery()
+    )
+    breached_count: int = await db.scalar(
+        select(func.count()).select_from(breached_subq.alias())
+    ) or 0
+
+    warning_subq = (
+        select(SLAEvent.ticket_id)
+        .join(Ticket, SLAEvent.ticket_id == Ticket.id)
+        .where(
+            and_(
+                SLAEvent.tenant_id == tid,
+                SLAEvent.event_type == SLAEventType.breach_warning,
+                Ticket.status.in_(_active_statuses),
+            )
+        )
+        .distinct()
+        .scalar_subquery()
+    )
+    warning_count: int = await db.scalar(
+        select(func.count()).select_from(warning_subq.alias())
+    ) or 0
+
+    total_tickets: int = await db.scalar(
+        select(func.count()).select_from(Ticket).where(Ticket.tenant_id == tid)
+    ) or 0
+    resolved_tickets: int = await db.scalar(
+        select(func.count())
+        .select_from(Ticket)
+        .where(
+            and_(
+                Ticket.tenant_id == tid,
+                Ticket.status.in_([TicketStatus.resolved, TicketStatus.closed]),
+            )
+        )
+    ) or 0
+    compliance_rate = round(resolved_tickets / total_tickets * 100, 2) if total_tickets > 0 else 0.0
+
+    avg_minutes_row = await db.scalar(
+        select(
+            func.avg(
+                func.extract(
+                    "epoch",
+                    Ticket.resolved_at - Ticket.created_at,
+                ) / 60
+            )
+        )
+        .where(
+            and_(
+                Ticket.tenant_id == tid,
+                Ticket.resolved_at.isnot(None),
+            )
+        )
+    )
+    avg_resolution_minutes = round(float(avg_minutes_row), 1) if avg_minutes_row else 0.0
+
+    # --- 정책 조회 (최대 20개) ---
+    policies = (
+        await db.execute(
+            select(SLAPolicy)
+            .where(SLAPolicy.tenant_id == tid)
+            .order_by(SLAPolicy.grade)
+            .limit(20)
+        )
+    ).scalars().all()
+
+    # --- 최근 30일 이벤트 (최대 50개) ---
+    since_30d = datetime.now(timezone.utc) - timedelta(days=30)
+    events = (
+        await db.execute(
+            select(SLAEvent)
+            .where(
+                and_(
+                    SLAEvent.tenant_id == tid,
+                    SLAEvent.fired_at >= since_30d,
+                )
+            )
+            .order_by(SLAEvent.fired_at.desc())
+            .limit(50)
+        )
+    ).scalars().all()
+
+    # --- PDF 생성 ---
+    # fpdf2 표준 패턴: footer 오버라이드는 서브클래스로, add_page 전에 인스턴스화
+    class _SLAReportPDF(FPDF):
+        def footer(self) -> None:
+            self.set_y(-15)
+            self.set_font("Helvetica", size=8)
+            self.cell(0, 10, f"Page {self.page_no()}/{{nb}}", align="C")
+
+    pdf = _SLAReportPDF()
+    pdf.alias_nb_pages()  # {nb} 치환 등록 — add_page 전 호출
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+
+    row_h = 8
+
+    # 헤더
+    pdf.set_font("Helvetica", style="B", size=20)
+    pdf.cell(0, 12, "SLA Report", new_x="LMARGIN", new_y="NEXT", align="C")
+
+    generated_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    pdf.set_font("Helvetica", size=10)
+    pdf.cell(
+        0,
+        8,
+        f"Generated: {generated_date}  |  Tenant: {tenant_slug}",
+        new_x="LMARGIN",
+        new_y="NEXT",
+        align="C",
+    )
+    pdf.ln(2)
+    pdf.set_draw_color(180, 180, 180)
+    pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
+    pdf.ln(6)
+
+    # KPI 요약 섹션
+    pdf.set_font("Helvetica", style="B", size=14)
+    pdf.cell(0, 10, "Summary", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+    kpi_rows = [
+        ("Active Tickets", str(total_active)),
+        ("Breached", str(breached_count)),
+        ("Warning", str(warning_count)),
+        ("Compliance Rate", f"{compliance_rate}%"),
+        ("Avg Resolution (min)", str(avg_resolution_minutes)),
+    ]
+    label_w = 80
+    value_w = 60
+
+    pdf.set_font("Helvetica", style="B", size=10)
+    pdf.set_fill_color(230, 230, 230)
+    pdf.cell(label_w, row_h, "Metric", border=1, fill=True)
+    pdf.cell(value_w, row_h, "Value", border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
+
+    pdf.set_font("Helvetica", size=10)
+    for label, value in kpi_rows:
+        pdf.cell(label_w, row_h, label, border=1)
+        pdf.cell(value_w, row_h, value, border=1, new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(8)
+
+    # 정책 섹션
+    pdf.set_font("Helvetica", style="B", size=14)
+    pdf.cell(0, 10, "SLA Policies", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+    col_w = [40, 50, 55, 45]
+    pol_headers = ["Grade", "Response (min)", "Resolution (min)", "Business Hours"]
+
+    pdf.set_font("Helvetica", style="B", size=10)
+    pdf.set_fill_color(230, 230, 230)
+    for i, h in enumerate(pol_headers):
+        pdf.cell(col_w[i], row_h, h, border=1, fill=True)
+    pdf.ln()
+
+    pdf.set_font("Helvetica", size=10)
+    if policies:
+        for p in policies:
+            grade_val = p.grade if isinstance(p.grade, str) else p.grade.value
+            bh = str(getattr(p, "business_hours", "-"))
+            pdf.cell(col_w[0], row_h, grade_val, border=1)
+            pdf.cell(col_w[1], row_h, str(p.response_minutes), border=1)
+            pdf.cell(col_w[2], row_h, str(p.resolution_minutes), border=1)
+            pdf.cell(col_w[3], row_h, bh, border=1)
+            pdf.ln()
+    else:
+        pdf.cell(sum(col_w), row_h, "No policies defined.", border=1, new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(8)
+
+    # 이벤트 섹션
+    pdf.set_font("Helvetica", style="B", size=14)
+    pdf.cell(0, 10, "Recent Events (last 30 days)", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+    ev_col_w = [50, 60, 80]
+    ev_headers = ["Event Type", "Ticket ID", "Fired At"]
+
+    pdf.set_font("Helvetica", style="B", size=10)
+    pdf.set_fill_color(230, 230, 230)
+    for i, h in enumerate(ev_headers):
+        pdf.cell(ev_col_w[i], row_h, h, border=1, fill=True)
+    pdf.ln()
+
+    pdf.set_font("Helvetica", size=10)
+    if events:
+        for ev in events:
+            ev_type = ev.event_type if isinstance(ev.event_type, str) else ev.event_type.value
+            ticket_short = str(ev.ticket_id)[:8]
+            fired_str = ev.fired_at.strftime("%Y-%m-%d %H:%M") if ev.fired_at else "-"
+            pdf.cell(ev_col_w[0], row_h, ev_type, border=1)
+            pdf.cell(ev_col_w[1], row_h, ticket_short, border=1)
+            pdf.cell(ev_col_w[2], row_h, fired_str, border=1)
+            pdf.ln()
+    else:
+        pdf.cell(sum(ev_col_w), row_h, "No events in the last 30 days.", border=1, new_x="LMARGIN", new_y="NEXT")
+
+    pdf_bytes = bytes(pdf.output())
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=sla-report.pdf"},
+    )
