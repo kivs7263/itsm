@@ -3,9 +3,9 @@
 import React from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart2, Clock, Construction } from 'lucide-react';
+import { BarChart2, Clock, Construction, Star, MessageSquare, Users, CheckSquare } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { ReportSummary, TicketStatus } from '@/lib/types';
+import type { ReportSummary, TicketStatus, CSATSummary } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -48,6 +48,72 @@ function MonthlyBar({ count, max }: { count: number; max: number }) {
 }
 
 // -----------------------------------------------------------------------
+// CSAT KPI 카드
+// -----------------------------------------------------------------------
+function CsatKpiCard({
+  label,
+  value,
+  icon,
+  iconColor,
+  iconBg,
+  isLoading,
+}: {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+  iconColor: string;
+  iconBg: string;
+  isLoading: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-border-default bg-surface p-4 flex items-center gap-3">
+      <div
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
+        style={{ background: iconBg }}
+      >
+        <span style={{ color: iconColor }}>{icon}</span>
+      </div>
+      <div>
+        <p className="text-xs text-text-secondary">{label}</p>
+        {isLoading ? (
+          <Skeleton className="h-6 w-16 mt-1" />
+        ) : (
+          <p className="text-xl font-bold text-text-primary tabular-nums">{value}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
+// CSAT 점수 분포 바
+// -----------------------------------------------------------------------
+function ScoreBar({ star, count, max }: { star: number; count: number; max: number }) {
+  const pct = max > 0 ? (count / max) * 100 : 0;
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-text-secondary w-6 shrink-0 flex items-center gap-0.5">
+        <Star size={10} className="fill-yellow-400 text-yellow-400" />
+        {star}
+      </span>
+      <div className="flex-1 bg-border-subtle rounded-sm overflow-hidden" style={{ height: 6 }}>
+        <div
+          className="h-full rounded-sm"
+          style={{
+            width: `${pct}%`,
+            background: 'linear-gradient(90deg, #F5C000, #f59e0b)',
+            transition: 'width 0.4s ease',
+          }}
+        />
+      </div>
+      <span className="text-xs font-medium text-text-primary w-6 text-right tabular-nums">
+        {count}
+      </span>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
 // 리포트 대시보드 페이지
 // -----------------------------------------------------------------------
 export default function ReportsPage() {
@@ -60,11 +126,23 @@ export default function ReportsPage() {
     enabled: !!tenantSlug,
   });
 
+  const { data: csat, isLoading: csatLoading } = useQuery<CSATSummary>({
+    queryKey: ['csat-summary', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/csat/summary`).then((r) => r.data),
+    enabled: !!tenantSlug,
+  });
+
   const monthlyTickets = report?.monthly_tickets ?? [];
   const byStatus       = report?.by_status ?? [];
   const complianceRate = report?.sla_compliance_rate ?? 0;
 
   const maxMonthlyCount = Math.max(...monthlyTickets.map((m) => m.count), 1);
+
+  const scoreDistribution = csat?.score_distribution ?? {};
+  const maxScoreCount = Math.max(
+    ...([1, 2, 3, 4, 5].map((s) => scoreDistribution[String(s)] ?? 0)),
+    1,
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -185,6 +263,78 @@ export default function ReportsPage() {
                   </p>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* CSAT 섹션 */}
+        <div className="rounded-lg border border-border-default bg-surface">
+          <div className="flex items-center gap-2 px-5 py-4 border-b border-border-subtle">
+            <Star size={16} className="text-text-secondary" />
+            <h2 className="text-sm font-semibold text-text-primary">고객 만족도 (CSAT)</h2>
+          </div>
+          <div className="p-5 flex flex-col gap-5">
+            {/* KPI 4개 */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <CsatKpiCard
+                label="평균 점수"
+                value={
+                  csat?.avg_score != null
+                    ? `${csat.avg_score.toFixed(1)} / 5`
+                    : '데이터 없음'
+                }
+                icon={<Star size={18} />}
+                iconColor="#F5C000"
+                iconBg="rgba(245, 192, 0, 0.12)"
+                isLoading={csatLoading}
+              />
+              <CsatKpiCard
+                label="응답률"
+                value={csat != null ? `${csat.response_rate.toFixed(1)}%` : '-'}
+                icon={<CheckSquare size={18} />}
+                iconColor="#22c55e"
+                iconBg="rgba(34, 197, 94, 0.12)"
+                isLoading={csatLoading}
+              />
+              <CsatKpiCard
+                label="총 설문 수"
+                value={csat != null ? String(csat.total) : '-'}
+                icon={<Users size={18} />}
+                iconColor="#3b82f6"
+                iconBg="rgba(59, 130, 246, 0.12)"
+                isLoading={csatLoading}
+              />
+              <CsatKpiCard
+                label="제출 수"
+                value={csat != null ? String(csat.submitted) : '-'}
+                icon={<MessageSquare size={18} />}
+                iconColor="#8b5cf6"
+                iconBg="rgba(139, 92, 246, 0.12)"
+                isLoading={csatLoading}
+              />
+            </div>
+
+            {/* 점수 분포 */}
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium text-text-secondary">점수 분포</p>
+              {csatLoading ? (
+                <div className="flex flex-col gap-2">
+                  {[5, 4, 3, 2, 1].map((s) => (
+                    <Skeleton key={s} className="h-4 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {[5, 4, 3, 2, 1].map((s) => (
+                    <ScoreBar
+                      key={s}
+                      star={s}
+                      count={scoreDistribution[String(s)] ?? 0}
+                      max={maxScoreCount}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

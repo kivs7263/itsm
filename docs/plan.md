@@ -94,6 +94,12 @@
 | `P3-2b` | Backend — gw_approval_service (KC Bearer + GW bridge) + change_management router (15 endpoints) | L | `[ DONE 2026-06-11 ]` |
 | `P3-2c` | Frontend — 변경 관리 목록/상세 페이지 + 생성 모달 + 사이드바 | M | `[ DONE 2026-06-11 ]` |
 | `P3-2d` | GW service_auth — itsm-svc AZP 추가 | S | `[ DONE 2026-06-11 ]` |
-### P3-3: 고객 포털 CSAT 설문 [ PENDING ]
+### P3-3: 고객 포털 CSAT 설문 [ DONE 2026-06-11 ]
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `P3-3a` | Migration 008 — csat_surveys (ENUM csat_status_enum, UNIQUE 2종) | S | `[ DONE 2026-06-11 ]` |
+| `P3-3b` | Backend — csat_service + csat router (포털/내부) + tickets.py resolve 훅 | M | `[ DONE 2026-06-11 ]` |
+| `P3-3c` | Frontend — 포털 설문 페이지 (별점, 5상태) + 리포트 CSAT 섹션 | M | `[ DONE 2026-06-11 ]` |
 ### P3-4: SLA 리포트 PDF 생성 [ PENDING ]
 ### P3-5: 멀티 채널 (카카오 알림톡, SMS) [ PENDING ]

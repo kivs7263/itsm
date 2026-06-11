@@ -46,6 +46,10 @@ from app.models.change_request import (  # noqa: F401
     CRRiskLevel,
     CRPriority,
 )
+from app.models.csat_survey import (  # noqa: F401
+    CSATSurvey,
+    CSATStatus,
+)
 
 __all__ = [
     "Base",
@@ -106,4 +110,7 @@ __all__ = [
     "CRStatus",
     "CRRiskLevel",
     "CRPriority",
+    # csat
+    "CSATSurvey",
+    "CSATStatus",
 ]

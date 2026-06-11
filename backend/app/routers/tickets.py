@@ -338,6 +338,10 @@ async def update_ticket(
     for field, value in update_fields.items():
         if field == "status" and value is not None:
             _apply_resolved_closed(ticket, value)
+            # 티켓 상태가 resolved 또는 closed로 변경 시 CSAT 설문 자동 생성
+            if value in (TicketStatus.resolved, TicketStatus.closed):
+                from app.services.csat_service import maybe_create_survey
+                await maybe_create_survey(db, ticket)
         setattr(ticket, field, value)
 
     await db.commit()

@@ -152,3 +152,9 @@ app.include_router(kb_router.router, prefix="/api")
 # P3-2 Change Management
 from app.routers import change_management as change_management_router  # noqa: E402
 app.include_router(change_management_router.router, prefix="/api")
+
+# P3-3 CSAT
+from app.routers import csat as csat_router  # noqa: E402
+app.include_router(csat_router.router, prefix="/api")                      # /api/{slug}/csat/...
+app.include_router(csat_router.router_tickets_csat, prefix="/api")         # /api/{slug}/tickets/{id}/csat
+app.include_router(csat_router.router_portal)                              # /portal/{slug}/survey/{token}

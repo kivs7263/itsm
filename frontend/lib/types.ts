@@ -273,3 +273,16 @@ export interface ReportSummary {
   by_status: { status: TicketStatus; count: number }[];
   sla_compliance_rate: number;
 }
+
+// -----------------------------------------------------------------------
+// CSAT
+// -----------------------------------------------------------------------
+export interface CSATSummary {
+  total: number;
+  submitted: number;
+  pending: number;
+  expired: number;
+  avg_score: number | null;
+  response_rate: number;
+  score_distribution: Record<string, number>; // "1" ~ "5" 키
+}
