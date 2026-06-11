@@ -21,7 +21,8 @@ export default function RootPage() {
     if (slug) {
       router.replace(`/${slug}/tickets`);
     } else {
-      router.replace('/login');
+      // slug 없으면 기본 조직 로그인 페이지로
+      router.replace('/xiilab/login');
     }
   }, [router]);
 

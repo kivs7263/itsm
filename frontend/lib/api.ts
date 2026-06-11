@@ -26,13 +26,16 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '/api';
 // 401 redirect 시 slug 포함 login 경로 반환
 // -----------------------------------------------------------------------
 function getLoginRedirectUrl(): string {
-  if (typeof document === 'undefined') return '/login';
+  if (typeof document === 'undefined') return '/xiilab/login';
   // 쿠키에서 itsm.last.tenant 읽기
   const entry = document.cookie
     .split(';')
     .find((c) => c.trim().startsWith('itsm.last.tenant='));
   const slug = entry?.split('=')[1]?.trim();
-  return slug ? `/${slug}/login` : '/login';
+  // slug가 없거나 예약어인 경우 기본 xiilab 조직으로
+  const reserved = new Set(['login', 'api', 'portal', 'auth', 'static']);
+  if (!slug || reserved.has(slug)) return '/xiilab/login';
+  return `/${slug}/login`;
 }
 
 // -----------------------------------------------------------------------
