@@ -13,6 +13,7 @@ services:
       - itsm_backend
     networks:
       - itsm_internal
+      - itsm_edge
       - service_mesh
 
   # ── frontend ──────────────────────────────────────────────────────
@@ -263,6 +264,9 @@ services:
 
 networks:
   itsm_internal:
+    driver: bridge
+  itsm_edge:
+    name: itsm_edge
     driver: bridge
   service_mesh:
     external: true
