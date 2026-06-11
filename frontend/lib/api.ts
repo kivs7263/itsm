@@ -134,6 +134,14 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // 로그인/회원가입 401 → 잘못된 자격증명, refresh 시도 금지 (그냥 reject)
+    if (
+      originalRequest.url?.includes('/auth/login') ||
+      originalRequest.url?.includes('/auth/register')
+    ) {
+      return Promise.reject(error);
+    }
+
     // refresh endpoint 자체가 401인 경우 → 로그아웃
     if (
       originalRequest.url?.includes('/auth/refresh') ||
