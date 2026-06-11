@@ -69,9 +69,9 @@ async def get_current_user(
         if await redis.exists(f"blacklist:jti:{jti}"):
             raise _CREDENTIALS_EXCEPTION
 
-    # type 검증 (access 토큰만 허용)
+    # type 검증 (access 토큰만 허용, type 클레임 없는 경우도 차단)
     token_type = payload.get("type")
-    if token_type is not None and token_type != "access":
+    if token_type != "access":
         raise _CREDENTIALS_EXCEPTION
 
     user_id: Optional[str] = payload.get("sub")

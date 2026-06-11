@@ -119,6 +119,7 @@ def issue_crossapp_token(
             "tenant_id": tenant_id,
             "email": email,
             "iss": iss,
+            "jti": str(uuid.uuid4()),
             "iat": int(time.time()),
             "exp": int(time.time()) + _CROSSAPP_TTL,
         },

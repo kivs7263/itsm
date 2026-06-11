@@ -118,16 +118,24 @@ async def health_check():
     )
 
 
-# TODO: register routers
-# from app.routers import tickets, customers, assets, contracts, sla, auth, portal_auth, crossapp_auth
-# app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-# app.include_router(tickets.router, prefix="/api/tickets", tags=["tickets"])
-# app.include_router(customers.router, prefix="/api/customers", tags=["customers"])
-# app.include_router(assets.router, prefix="/api/assets", tags=["assets"])
-# app.include_router(contracts.router, prefix="/api/contracts", tags=["contracts"])
-# app.include_router(sla.router, prefix="/api/sla", tags=["sla"])
-# app.include_router(portal_auth.router, prefix="/api/portal", tags=["portal"])
-# app.include_router(crossapp_auth.router, prefix="/api/auth/crossapp", tags=["crossapp"])
+from app.routers import (
+    auth as auth_router,
+    crossapp_auth as crossapp_auth_router,
+    tickets as tickets_router,
+    customers as customers_router,
+    assets as assets_router,
+    contracts as contracts_router,
+    sla as sla_router,
+    cmdb as cmdb_router,
+)
+app.include_router(auth_router.router, prefix="/api")            # /api/auth
+app.include_router(crossapp_auth_router.router, prefix="/api")  # /api/{slug}/auth/crossapp
+app.include_router(tickets_router.router, prefix="/api")         # /api/{slug}/tickets
+app.include_router(customers_router.router, prefix="/api")       # /api/{slug}/customers
+app.include_router(assets_router.router, prefix="/api")          # /api/{slug}/assets
+app.include_router(contracts_router.router, prefix="/api")       # /api/{slug}/contracts
+app.include_router(sla_router.router, prefix="/api")             # /api/{slug}/sla
+app.include_router(cmdb_router.router, prefix="/api")            # /api/{slug}/cmdb
 
 # P2-2 Calendar Events
 from app.routers import calendar_events as calendar_events_router  # noqa: E402

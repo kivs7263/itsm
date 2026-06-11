@@ -102,7 +102,8 @@ export function useAuth() {
   // 로그인
   const loginMutation = useMutation({
     mutationFn: async (payload: LoginPayload) => {
-      const response = await api.post<AuthResponse>('/auth/login', payload);
+      const slug = getSlug(tenantSlug) || undefined;
+      const response = await api.post<AuthResponse>('/auth/login', { ...payload, slug });
       return response.data;
     },
     onSuccess: async (data) => {

@@ -26,3 +26,10 @@
 | 2026-06-10 15:07 | build | python3 -c "import ast, pathlib; [ast.parse(p.read_text()) for p in pathlib.Path | ✅ | itsm | build-hook |
 | 2026-06-10 15:09 | build | bash ~/.claude/hooks/_manual/pattern_add.sh database migration "SA Alembic hook  | ✅ | itsm | build-hook |
 | 2026-06-10 | session_close | Pre+P1+P2 (14항목) 완료. plan_archive 생성. ITSM/SA/calendar 3레포 push. | ✅ | itsm | leader |
+| 2026-06-11 00:48 | build | docker compose build itsm_backend 2>&1 | tail -15 | ✅ | itsm | build-hook |
+| 2026-06-11 00:48 | build | docker compose run --rm --no-deps itsm_backend alembic upgrade head 2>&1 | tail  | ✅ | itsm | build-hook |
+| 2026-06-11 00:56 | build | docker compose build itsm_backend 2>&1 | ✅ | itsm | build-hook |
+| 2026-06-11 00:57 | build | docker compose build itsm_backend && docker compose up -d itsm_backend 2>&1 | ✅ | itsm | build-hook |
+| 2026-06-11 00:59 | build | docker compose build itsm_frontend 2>&1 | ✅ | itsm | build-hook |
+| 2026-06-11 01:05 | build | docker compose build itsm_backend 2>&1 | tail -5 && docker compose up -d itsm_ba | ✅ | itsm | build-hook |
+| 2026-06-11 01:06 | build | docker compose build itsm_frontend 2>&1 | tail -5 && docker compose up -d itsm_f | ✅ | itsm | build-hook |

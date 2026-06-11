@@ -74,10 +74,19 @@
 
 ---
 
-## Phase 3: 엔터프라이즈 확장 [ PENDING ]
+## Phase 3: 엔터프라이즈 확장 [ IN PROGRESS ]
 
-- [ ] CMDB (Configuration Management DB) 심화
-- [ ] Change Management (변경 요청 결재 — GW 결재 연동)
-- [ ] 고객 포털 CSAT 설문
-- [ ] SLA 리포트 PDF 생성
-- [ ] 멀티 채널 (카카오 알림톡, SMS)
+### P3-1: Core API 완성 + CMDB심화 [ DONE 2026-06-11 ]
+
+> Phase 1+2에서 설계만 된 핵심 라우터 구현 + CMDB 신규 기능
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `P3-1a` | Migration 006 — configuration_items + ci_relationships + ci_change_log 3개 테이블 | S | `[ DONE 2026-06-11 ]` |
+| `P3-1b` | Backend 핵심 라우터 8종 — auth / tickets / customers / assets / contracts / sla / crossapp_auth / cmdb | L | `[ DONE 2026-06-11 ]` |
+| `P3-1c` | Frontend — CMDB 페이지 (CI 목록·상세·관계·이력) + nav 페이지 완성 (customers/assets/contracts/sla/reports) | L | `[ DONE 2026-06-11 ]` |
+
+### P3-2: Change Management (GW 결재 연동) [ PENDING ]
+### P3-3: 고객 포털 CSAT 설문 [ PENDING ]
+### P3-4: SLA 리포트 PDF 생성 [ PENDING ]
+### P3-5: 멀티 채널 (카카오 알림톡, SMS) [ PENDING ]
