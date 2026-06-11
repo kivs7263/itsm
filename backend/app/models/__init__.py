@@ -50,6 +50,11 @@ from app.models.csat_survey import (  # noqa: F401
     CSATSurvey,
     CSATStatus,
 )
+from app.models.notification_log import (  # noqa: F401
+    NotificationLog,
+    NotifChannel,
+    NotifStatus,
+)
 
 __all__ = [
     "Base",
@@ -113,4 +118,8 @@ __all__ = [
     # csat
     "CSATSurvey",
     "CSATStatus",
+    # notification
+    "NotificationLog",
+    "NotifChannel",
+    "NotifStatus",
 ]

@@ -27,6 +27,7 @@ import {
   ChevronRight,
   Server,
   GitMerge,
+  Bell,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSlug } from '@/lib/slug';
@@ -56,6 +57,7 @@ const NAV_ITEMS = [
   { label: '계약',    href: '/contracts',        icon: FileText  },
   { label: '변경 관리', href: '/change-requests', icon: GitMerge  },
   { label: 'SLA',     href: '/sla',              icon: Clock     },
+  { label: '알림',    href: '/notifications',    icon: Bell      },
   { label: '리포트',  href: '/reports',          icon: BarChart2 },
 ] as const;
 

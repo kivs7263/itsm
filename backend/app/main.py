@@ -158,3 +158,7 @@ from app.routers import csat as csat_router  # noqa: E402
 app.include_router(csat_router.router, prefix="/api")                      # /api/{slug}/csat/...
 app.include_router(csat_router.router_tickets_csat, prefix="/api")         # /api/{slug}/tickets/{id}/csat
 app.include_router(csat_router.router_portal)                              # /portal/{slug}/survey/{token}
+
+# P3-5 멀티채널 알림
+from app.routers import notifications as notifications_router  # noqa: E402
+app.include_router(notifications_router.router, prefix="/api")             # /api/{slug}/notifications

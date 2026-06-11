@@ -286,3 +286,33 @@ export interface CSATSummary {
   response_rate: number;
   score_distribution: Record<string, number>; // "1" ~ "5" 키
 }
+
+// -----------------------------------------------------------------------
+// 알림 로그 타입
+// -----------------------------------------------------------------------
+export type NotifChannel = 'kakao' | 'sms' | 'slack' | 'teams';
+export type NotifStatus = 'sent' | 'failed' | 'skipped';
+
+export interface NotifLog {
+  id: string;
+  channel: NotifChannel;
+  event_type: string;
+  recipient: string;
+  status: NotifStatus;
+  message_summary: string | null;
+  error_msg: string | null;
+  ticket_id: string | null;
+  created_at: string;
+}
+
+export interface NotifLogsResponse {
+  items: NotifLog[];
+  total: number;
+}
+
+export interface ChannelStatus {
+  kakao: { configured: boolean };
+  sms: { configured: boolean };
+  slack: { configured: boolean };
+  teams: { configured: boolean };
+}

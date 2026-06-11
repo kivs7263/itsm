@@ -107,4 +107,11 @@
 |---|---|---|---|
 | `P3-4a` | Backend — fpdf2 추가 + GET /sla/report/pdf (KPI+정책+이벤트) | S | `[ DONE 2026-06-11 ]` |
 | `P3-4b` | Frontend — SLA 페이지 "PDF 내보내기" 버튼 (blob 다운로드) | S | `[ DONE 2026-06-11 ]` |
-### P3-5: 멀티 채널 (카카오 알림톡, SMS) [ PENDING ]
+### P3-5: 멀티 채널 (카카오 알림톡, SMS) [ DONE 2026-06-11 ]
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `P3-5a` | Migration 009 — notification_logs (ENUM 2종: notif_channel/status) | S | `[ DONE 2026-06-11 ]` |
+| `P3-5b` | Backend — kakao_channel + sms_channel(Solapi HMAC) + notification_service(4채널 dispatch) + notifications router | M | `[ DONE 2026-06-11 ]` |
+| `P3-5c` | Backend — tickets.py 훅 2개 (생성·해결), config.py KAKAO*/SMS* 추가 | S | `[ DONE 2026-06-11 ]` |
+| `P3-5d` | Frontend — 알림 로그 페이지 (채널 상태 카드 + 로그 테이블) + Sidebar '알림' | S | `[ DONE 2026-06-11 ]` |

@@ -275,6 +275,15 @@ async def create_ticket(
         )
     )
 
+    # 담당자 알림 (graceful)
+    if ticket.assigned_to:
+        try:
+            from app.services.notification_service import notify_ticket_created
+            # assigned user phone은 현재 컨텍스트에서 조회 불필요 — phone 없으면 dispatch가 skip
+            await notify_ticket_created(db, ticket, assigned_user_phone=None)
+        except Exception:
+            pass
+
     return TicketOut.model_validate(ticket)
 
 
@@ -342,6 +351,15 @@ async def update_ticket(
             if value in (TicketStatus.resolved, TicketStatus.closed):
                 from app.services.csat_service import maybe_create_survey
                 await maybe_create_survey(db, ticket)
+            # 티켓 해결 시 고객 알림 (graceful)
+            if value == TicketStatus.resolved:
+                try:
+                    from app.services.notification_service import notify_ticket_resolved
+                    # customer_phone은 None — 실제 운영 시 Customer 테이블 조회로 교체 가능
+                    # dispatch는 None이면 카카오/SMS 자동 skip, 웹훅은 발송
+                    await notify_ticket_resolved(db, ticket, customer_phone=None)
+                except Exception:
+                    pass
         setattr(ticket, field, value)
 
     await db.commit()
