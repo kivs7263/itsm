@@ -66,11 +66,13 @@ class Settings(BaseSettings):
     MINIO_BUCKET: str = "itsm-files"
 
     # ------------------------------------------------------------------
-    # [선택] Keycloak OIDC
-    # 미설정 시 자체 HS256 JWT만 동작
+    # [선택] Keycloak OIDC — 사용자 SSO 로그인 (Authorization Code Flow)
+    # 미설정 시 이메일/비밀번호 로그인만 동작
     # ------------------------------------------------------------------
-    KEYCLOAK_ISSUER: str = ""       # http://10.61.2.151:58080/realms/platform
-    KEYCLOAK_CLIENT_ID: str = ""    # itsm
+    KEYCLOAK_ISSUER: str = ""           # https://sso.apistech.co.kr/realms/platform
+    KEYCLOAK_CLIENT_ID: str = "itsm"
+    KEYCLOAK_CLIENT_SECRET: str = ""    # KC admin에서 발급한 client secret
+    KEYCLOAK_REDIRECT_URI: str = ""     # https://itsm.apistech.co.kr/api/auth/sso/callback
 
     # ------------------------------------------------------------------
     # [선택] GW 결재 연동 (Change Management)

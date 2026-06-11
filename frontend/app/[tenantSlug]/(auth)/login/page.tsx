@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { getErrorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
+
 const loginSchema = z.object({
   email: z
     .string()
@@ -162,6 +163,25 @@ export default function LoginPage() {
             {isLoginPending ? '로그인 중...' : '로그인'}
           </button>
         </form>
+
+        <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-border-default" />
+            <span className="text-xs text-text-secondary">또는</span>
+            <div className="h-px flex-1 bg-border-default" />
+          </div>
+          <a
+            href={`/api/auth/sso${slug ? `?slug=${slug}` : ''}`}
+            className={cn(
+              'flex h-10 w-full items-center justify-center gap-2 rounded-md border text-sm font-medium',
+              'border-border-default bg-surface text-text-primary',
+              'hover:bg-surface-hover transition-colors duration-fast',
+            )}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2Zm-1 14H9V8h2v8Zm4 0h-2V8h2v8Z" />
+            </svg>
+            SSO로 로그인
+          </a>
       </div>
 
       {slug && (

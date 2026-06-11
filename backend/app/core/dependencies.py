@@ -38,8 +38,10 @@ def _extract_token(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None,
 ) -> str | None:
-    """Authorization 헤더에서 Bearer 토큰 추출."""
-    return credentials.credentials if credentials else None
+    """Authorization 헤더(Bearer) 우선, 없으면 itsm.access_token 쿠키 사용."""
+    if credentials:
+        return credentials.credentials
+    return request.cookies.get("itsm.access_token")
 
 
 async def get_current_user(

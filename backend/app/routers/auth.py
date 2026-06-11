@@ -1,26 +1,33 @@
-"""인증 라우터 (회원가입 / 로그인 / 갱신 / 로그아웃 / 내 정보).
+"""인증 라우터 (회원가입 / 로그인 / 갱신 / 로그아웃 / 내 정보 / KC SSO).
 
 prefix : /api/auth
-인증   : 일부 엔드포인트는 공개 (register, login, refresh)
+인증   : 일부 엔드포인트는 공개 (register, login, refresh, sso, sso/callback)
 
 엔드포인트:
-  POST /api/auth/register  — 회원가입 + 테넌트 생성
-  POST /api/auth/login     — 이메일/비밀번호 로그인
-  POST /api/auth/refresh   — refresh token 갱신
-  POST /api/auth/logout    — 서버 side-effect 없음 (200 OK)
-  GET  /api/auth/me        — 현재 사용자 + 테넌트 목록
+  POST /api/auth/register        — 회원가입 + 테넌트 생성
+  POST /api/auth/login           — 이메일/비밀번호 로그인
+  POST /api/auth/refresh         — refresh token 갱신
+  POST /api/auth/logout          — 서버 side-effect 없음 (200 OK)
+  GET  /api/auth/me              — 현재 사용자 + 테넌트 목록
+  GET  /api/auth/sso             — KC Authorization Code Flow 시작 (redirect)
+  GET  /api/auth/sso/callback    — KC 콜백 → ITSM JWT 발급 → 프론트 redirect
 """
 from __future__ import annotations
 
 import logging
+import secrets
 import uuid
 from typing import Annotated
+from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import httpx
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response, status
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.security import (
@@ -39,6 +46,49 @@ router = APIRouter(
     prefix="/auth",
     tags=["auth"],
 )
+
+_COOKIE_SECURE = settings.ENVIRONMENT == "production"
+_COOKIE_SAMESITE = "lax"
+
+
+def _set_auth_cookies(
+    response: Response,
+    access_token: str,
+    refresh_token: str,
+    tenant_slug: str = "",
+) -> None:
+    """액세스·리프레시 토큰을 HttpOnly 쿠키로 설정 + CSRF sentinel."""
+    access_max = settings.JWT_EXPIRE_MINUTES * 60
+    refresh_max = settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400
+
+    response.set_cookie(
+        "itsm.access_token", access_token,
+        httponly=True, secure=_COOKIE_SECURE, samesite=_COOKIE_SAMESITE,
+        max_age=access_max, path="/",
+    )
+    response.set_cookie(
+        "itsm.refresh_token", refresh_token,
+        httponly=True, secure=_COOKIE_SECURE, samesite=_COOKIE_SAMESITE,
+        max_age=refresh_max, path="/api/auth",
+    )
+    response.set_cookie(
+        "csrf.itsm", secrets.token_urlsafe(16),
+        httponly=False, secure=_COOKIE_SECURE, samesite=_COOKIE_SAMESITE,
+        max_age=access_max, path="/",
+    )
+    if tenant_slug:
+        response.set_cookie(
+            "itsm.last.tenant", tenant_slug,
+            httponly=False, secure=False, samesite=_COOKIE_SAMESITE,
+            max_age=30 * 86400, path="/",
+        )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    """로그아웃 시 인증 쿠키 제거."""
+    for name in ("itsm.access_token", "itsm.refresh_token", "csrf.itsm"):
+        response.delete_cookie(name, path="/")
+    response.delete_cookie("itsm.refresh_token", path="/api/auth")
 
 
 # ------------------------------------------------------------------
@@ -61,7 +111,7 @@ class LoginRequest(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    refresh_token: str | None = None  # 쿠키 방식 사용 시 없어도 됨
 
 
 class UserOut(BaseModel):
@@ -138,6 +188,7 @@ def _build_auth_response(user: User, tenant: Tenant) -> AuthResponse:
 )
 async def register(
     data: RegisterRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> AuthResponse:
     # slug 중복 검사
@@ -187,7 +238,9 @@ async def register(
     await db.refresh(user)
     await db.refresh(tenant)
 
-    return _build_auth_response(user, tenant)
+    auth = _build_auth_response(user, tenant)
+    _set_auth_cookies(response, auth.access_token, auth.refresh_token, tenant.slug)
+    return auth
 
 
 # ------------------------------------------------------------------
@@ -202,6 +255,7 @@ async def register(
 )
 async def login(
     data: LoginRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> AuthResponse:
     _INVALID = HTTPException(
@@ -243,7 +297,9 @@ async def login(
     if not user.hashed_password or not verify_password(data.password, user.hashed_password):
         raise _INVALID
 
-    return _build_auth_response(user, tenant)
+    auth = _build_auth_response(user, tenant)
+    _set_auth_cookies(response, auth.access_token, auth.refresh_token, tenant.slug)
+    return auth
 
 
 # ------------------------------------------------------------------
@@ -257,15 +313,22 @@ async def login(
     summary="refresh token 갱신",
 )
 async def refresh_token(
-    data: RefreshRequest,
+    response: Response,
+    data: RefreshRequest | None = None,
+    itsm_refresh_token: str | None = Cookie(default=None, alias="itsm.refresh_token"),
     db: AsyncSession = Depends(get_db),
 ) -> AuthResponse:
     _invalid = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="refresh token이 유효하지 않습니다.",
     )
+    # 쿠키 우선, body fallback
+    token_str = itsm_refresh_token or (data.refresh_token if data else None)
+    if not token_str:
+        raise _invalid
+
     try:
-        payload = decode_token(data.refresh_token)
+        payload = decode_token(token_str)
     except JWTError:
         raise _invalid
 
@@ -293,20 +356,23 @@ async def refresh_token(
     if tenant is None:
         raise _invalid
 
-    return _build_auth_response(user, tenant)
+    auth = _build_auth_response(user, tenant)
+    _set_auth_cookies(response, auth.access_token, auth.refresh_token, tenant.slug)
+    return auth
 
 
 # ------------------------------------------------------------------
-# 로그아웃 (fire-and-forget)
+# 로그아웃
 # ------------------------------------------------------------------
 
 
 @router.post(
     "/logout",
     status_code=status.HTTP_200_OK,
-    summary="로그아웃 (클라이언트 토큰 삭제 책임)",
+    summary="로그아웃 (쿠키 제거)",
 )
-async def logout() -> dict:
+async def logout(response: Response) -> dict:
+    _clear_auth_cookies(response)
     return {"detail": "로그아웃되었습니다."}
 
 
@@ -358,3 +424,153 @@ async def me(
             for t in tenants
         ],
     }
+
+
+# ------------------------------------------------------------------
+# KC SSO — Authorization Code Flow
+# ------------------------------------------------------------------
+
+_SSO_ENABLED_ERR = HTTPException(
+    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+    detail="SSO가 설정되지 않았습니다. KEYCLOAK_ISSUER / KEYCLOAK_CLIENT_SECRET을 환경변수에 추가하세요.",
+)
+
+
+def _kc_oidc_base() -> str:
+    """KC OIDC endpoint base URL."""
+    return f"{settings.KEYCLOAK_ISSUER}/protocol/openid-connect"
+
+
+@router.get(
+    "/sso",
+    summary="KC SSO 로그인 시작 (브라우저 redirect)",
+    include_in_schema=True,
+)
+async def sso_start(
+    slug: str | None = Query(default=None, description="조직 슬러그 (콜백 후 리다이렉트에 사용)"),
+) -> RedirectResponse:
+    if not settings.KEYCLOAK_ISSUER or not settings.KEYCLOAK_CLIENT_SECRET:
+        raise _SSO_ENABLED_ERR
+
+    state = f"{secrets.token_urlsafe(16)}|{slug or ''}"
+    params = {
+        "client_id": settings.KEYCLOAK_CLIENT_ID,
+        "redirect_uri": settings.KEYCLOAK_REDIRECT_URI,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+    }
+    auth_url = f"{_kc_oidc_base()}/auth?{urlencode(params)}"
+    return RedirectResponse(url=auth_url)
+
+
+@router.get(
+    "/sso/callback",
+    summary="KC SSO 콜백 → ITSM JWT 발급 → 프론트 redirect",
+    include_in_schema=True,
+)
+async def sso_callback(
+    code: str = Query(...),
+    state: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+) -> RedirectResponse:
+    if not settings.KEYCLOAK_ISSUER or not settings.KEYCLOAK_CLIENT_SECRET:
+        raise _SSO_ENABLED_ERR
+
+    # state 파싱: "<nonce>|<slug>"
+    state_parts = state.split("|", 1)
+    slug = state_parts[1] if len(state_parts) > 1 else ""
+
+    # 1. code → KC tokens
+    async with httpx.AsyncClient(timeout=10) as client:
+        token_resp = await client.post(
+            f"{_kc_oidc_base()}/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": settings.KEYCLOAK_CLIENT_ID,
+                "client_secret": settings.KEYCLOAK_CLIENT_SECRET,
+                "redirect_uri": settings.KEYCLOAK_REDIRECT_URI,
+                "code": code,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+    if token_resp.status_code != 200:
+        logger.error("KC token exchange failed: %s", token_resp.text)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="KC 토큰 교환 실패")
+
+    kc_tokens = token_resp.json()
+    kc_access = kc_tokens.get("access_token")
+    if not kc_access:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="KC access_token 없음")
+
+    # 2. KC userinfo
+    async with httpx.AsyncClient(timeout=10) as client:
+        ui_resp = await client.get(
+            f"{_kc_oidc_base()}/userinfo",
+            headers={"Authorization": f"Bearer {kc_access}"},
+        )
+
+    if ui_resp.status_code != 200:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="KC userinfo 조회 실패")
+
+    ui = ui_resp.json()
+    email: str = ui.get("email", "")
+    name: str = ui.get("name") or ui.get("preferred_username") or email.split("@")[0]
+    kc_sub: str = ui.get("sub", "")
+
+    if not email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="KC 계정에 이메일이 없습니다.")
+
+    # 3. ITSM 사용자 upsert
+    #    slug 지정 시 해당 테넌트 우선, 없으면 이메일로 첫 번째 테넌트
+    user: User | None = None
+    tenant: Tenant | None = None
+
+    if slug:
+        tenant = await db.scalar(select(Tenant).where(Tenant.slug == slug))
+
+    if tenant:
+        user = await db.scalar(
+            select(User).where(User.tenant_id == tenant.id, User.email == email)
+        )
+        if user is None:
+            # 해당 테넌트에 없으면 신규 생성 (admin — 최초 SSO 진입)
+            user = User(
+                id=uuid.uuid4(),
+                tenant_id=tenant.id,
+                email=email,
+                name=name,
+                role=UserRole.admin,
+                hashed_password=None,
+                is_active=True,
+            )
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+        elif not user.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="비활성화된 계정입니다.")
+    else:
+        # slug 없음: 이메일로 기존 사용자 검색
+        user = await db.scalar(
+            select(User).where(User.email == email, User.is_active.is_(True))
+            .order_by(User.created_at.asc())
+        )
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="ITSM에 등록된 계정이 없습니다. 관리자에게 초대를 요청하세요.",
+            )
+        tenant = await db.scalar(select(Tenant).where(Tenant.id == user.tenant_id))
+
+    if tenant is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="테넌트를 찾을 수 없습니다.")
+
+    # 4. ITSM JWT 발급
+    auth = _build_auth_response(user, tenant)
+
+    # 5. 쿠키 설정 + 대시보드로 redirect
+    redirect_url = f"/{tenant.slug}/tickets"
+    redirect_resp = RedirectResponse(url=redirect_url, status_code=302)
+    _set_auth_cookies(redirect_resp, auth.access_token, auth.refresh_token, tenant.slug)
+    return redirect_resp

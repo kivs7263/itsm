@@ -51,8 +51,11 @@ services:
       MINIO_BUCKET: itsm-files
       SERVICE_BUS_SECRET: ${SERVICE_BUS_SECRET}
       SECRET_KEY: ${SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-}
+      KEYCLOAK_REDIRECT_URI: ${KEYCLOAK_REDIRECT_URI:-}
     depends_on:
       itsm_postgres_ha:
         condition: service_healthy
