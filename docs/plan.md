@@ -86,7 +86,14 @@
 | `P3-1b` | Backend 핵심 라우터 8종 — auth / tickets / customers / assets / contracts / sla / crossapp_auth / cmdb | L | `[ DONE 2026-06-11 ]` |
 | `P3-1c` | Frontend — CMDB 페이지 (CI 목록·상세·관계·이력) + nav 페이지 완성 (customers/assets/contracts/sla/reports) | L | `[ DONE 2026-06-11 ]` |
 
-### P3-2: Change Management (GW 결재 연동) [ PENDING ]
+### P3-2: Change Management (GW 결재 연동) [ DONE 2026-06-11 ]
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `P3-2a` | Migration 007 — change_requests + cr_ci_links 2개 테이블, ENUM 4종 | S | `[ DONE 2026-06-11 ]` |
+| `P3-2b` | Backend — gw_approval_service (KC Bearer + GW bridge) + change_management router (15 endpoints) | L | `[ DONE 2026-06-11 ]` |
+| `P3-2c` | Frontend — 변경 관리 목록/상세 페이지 + 생성 모달 + 사이드바 | M | `[ DONE 2026-06-11 ]` |
+| `P3-2d` | GW service_auth — itsm-svc AZP 추가 | S | `[ DONE 2026-06-11 ]` |
 ### P3-3: 고객 포털 CSAT 설문 [ PENDING ]
 ### P3-4: SLA 리포트 PDF 생성 [ PENDING ]
 ### P3-5: 멀티 채널 (카카오 알림톡, SMS) [ PENDING ]

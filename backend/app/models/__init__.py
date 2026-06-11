@@ -38,6 +38,14 @@ from app.models.cmdb import (  # noqa: F401
     CICriticality,
     CIRelType,
 )
+from app.models.change_request import (  # noqa: F401
+    ChangeRequest,
+    CRCILink,
+    CRChangeType,
+    CRStatus,
+    CRRiskLevel,
+    CRPriority,
+)
 
 __all__ = [
     "Base",
@@ -91,4 +99,11 @@ __all__ = [
     "CIStatus",
     "CICriticality",
     "CIRelType",
+    # change management
+    "ChangeRequest",
+    "CRCILink",
+    "CRChangeType",
+    "CRStatus",
+    "CRRiskLevel",
+    "CRPriority",
 ]

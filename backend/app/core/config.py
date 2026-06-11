@@ -73,6 +73,16 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_ID: str = ""    # itsm
 
     # ------------------------------------------------------------------
+    # [선택] GW 결재 연동 (Change Management)
+    # GW_BACKEND_URL 미설정 시 GW 결재 bridge 비활성 (graceful skip)
+    # KC 서비스 계정: KC realm 에 'itsm-svc' client 생성 후 아래 값 주입
+    # ------------------------------------------------------------------
+    GW_BACKEND_URL: str = ""           # http://gw_backend:8000
+    KC_TOKEN_URL: str = ""             # http://keycloak:8080/realms/platform/protocol/openid-connect/token
+    KC_SERVICE_CLIENT_ID: str = "itsm-svc"
+    KC_SERVICE_CLIENT_SECRET: str = ""
+
+    # ------------------------------------------------------------------
     # [선택] Calendar Service 연동
     # CALENDAR_SERVICE_URL 미설정 시 캘린더 push 비활성 (graceful skip)
     # ------------------------------------------------------------------

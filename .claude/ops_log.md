@@ -33,3 +33,6 @@
 | 2026-06-11 00:59 | build | docker compose build itsm_frontend 2>&1 | ✅ | itsm | build-hook |
 | 2026-06-11 01:05 | build | docker compose build itsm_backend 2>&1 | tail -5 && docker compose up -d itsm_ba | ✅ | itsm | build-hook |
 | 2026-06-11 01:06 | build | docker compose build itsm_frontend 2>&1 | tail -5 && docker compose up -d itsm_f | ✅ | itsm | build-hook |
+| 2026-06-11 01:22 | build | docker compose build itsm_frontend 2>&1 | tail -20 | ✅ | itsm | build-hook |
+| 2026-06-11 01:23 | build | docker compose build itsm_backend 2>&1 | tail -15 | ✅ | itsm | build-hook |
+| 2026-06-11 01:23 | build | docker compose build itsm_frontend 2>&1 | tail -15 | ✅ | itsm | build-hook |

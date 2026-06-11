@@ -26,6 +26,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Server,
+  GitMerge,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSlug } from '@/lib/slug';
@@ -48,13 +49,14 @@ function getInitialCollapsed(): boolean {
 // 네비게이션 항목 정의
 // -----------------------------------------------------------------------
 const NAV_ITEMS = [
-  { label: '티켓',   href: '/tickets',   icon: LifeBuoy  },
-  { label: '고객',   href: '/customers', icon: Users     },
-  { label: '자산',   href: '/assets',    icon: Package   },
-  { label: 'CMDB',   href: '/cmdb',      icon: Server    },
-  { label: '계약',   href: '/contracts', icon: FileText  },
-  { label: 'SLA',    href: '/sla',       icon: Clock     },
-  { label: '리포트', href: '/reports',   icon: BarChart2 },
+  { label: '티켓',    href: '/tickets',         icon: LifeBuoy  },
+  { label: '고객',    href: '/customers',        icon: Users     },
+  { label: '자산',    href: '/assets',           icon: Package   },
+  { label: 'CMDB',    href: '/cmdb',             icon: Server    },
+  { label: '계약',    href: '/contracts',        icon: FileText  },
+  { label: '변경 관리', href: '/change-requests', icon: GitMerge  },
+  { label: 'SLA',     href: '/sla',              icon: Clock     },
+  { label: '리포트',  href: '/reports',          icon: BarChart2 },
 ] as const;
 
 // -----------------------------------------------------------------------

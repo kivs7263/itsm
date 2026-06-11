@@ -209,6 +209,63 @@ export interface SlaDashboard {
 }
 
 // -----------------------------------------------------------------------
+// Change Management 타입
+// -----------------------------------------------------------------------
+export type CRChangeType = 'normal' | 'emergency' | 'standard';
+export type CRStatus =
+  | 'draft'
+  | 'pending_review'
+  | 'pending_approval'
+  | 'approved'
+  | 'scheduled'
+  | 'in_progress'
+  | 'completed'
+  | 'rejected'
+  | 'cancelled';
+export type CRRiskLevel = 'low' | 'medium' | 'high' | 'critical';
+export type CRPriority = 'low' | 'medium' | 'high' | 'critical';
+
+export interface CRLinkedCI {
+  ci_id: string;
+  ci_name: string;
+  notes: string | null;
+}
+
+export interface ChangeRequest {
+  id: string;
+  tenant_id: string;
+  title: string;
+  description: string | null;
+  change_type: CRChangeType;
+  status: CRStatus;
+  risk_level: CRRiskLevel;
+  priority: CRPriority;
+  planned_start: string | null;
+  planned_end: string | null;
+  actual_start: string | null;
+  actual_end: string | null;
+  rollback_plan: string | null;
+  implementation_plan: string | null;
+  test_plan: string | null;
+  requestor_id: string | null;
+  implementor_id: string | null;
+  reviewer_id: string | null;
+  requestor_name: string | null;
+  implementor_name: string | null;
+  reviewer_name: string | null;
+  gw_approval_doc_id: string | null;
+  gw_approval_status: string;
+  linked_cis: CRLinkedCI[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChangeRequestsResponse {
+  items: ChangeRequest[];
+  total: number;
+}
+
+// -----------------------------------------------------------------------
 // 리포트 타입
 // -----------------------------------------------------------------------
 export interface ReportSummary {
