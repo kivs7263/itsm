@@ -18,6 +18,7 @@ prefix : /{tenant_slug}/kb
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime
@@ -208,6 +209,10 @@ async def create_kb_article(
     # Meilisearch 인덱싱 (실패 무시)
     await search_service.index_kb(_to_kb_doc(article, current_user.name))
 
+    # 시맨틱 임베딩 fire-and-forget (OPENAI_API_KEY 없으면 내부에서 조용히 skip)
+    from app.routers.kb_semantic import _embed_article_async  # 순환 import 방지: 런타임 import
+    asyncio.create_task(_embed_article_async(article.id, article.title, article.content))
+
     return KbArticleResponse.model_validate(article)
 
 
@@ -263,6 +268,10 @@ async def update_kb_article(
 
     # Meilisearch 갱신 (실패 무시)
     await search_service.index_kb(_to_kb_doc(article, current_user.name))
+
+    # 시맨틱 임베딩 갱신 fire-and-forget
+    from app.routers.kb_semantic import _embed_article_async  # 런타임 import
+    asyncio.create_task(_embed_article_async(article.id, article.title, article.content))
 
     return KbArticleResponse.model_validate(article)
 

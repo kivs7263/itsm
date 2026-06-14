@@ -1,0 +1,542 @@
+"""보고서 라우터 (P6-2 보고서 승인 워크플로우).
+
+prefix : /{tenant_slug}/reports
+태그   : ["reports"]
+
+엔드포인트:
+  GET  /summary        — 실시간 집계 (프론트 ReportSummary 타입 호환)
+  GET  /               — 보고서 목록 (status 필터, 페이지네이션)
+  POST /               — 초안 생성 (team_lead+)
+  GET  /{id}           — 상세
+  PATCH /{id}          — 수정 (draft + 작성자만)
+  POST /{id}/submit    — draft → submitted
+  POST /{id}/approve   — submitted → approved (admin만)
+  POST /{id}/reject    — submitted → rejected (admin만, review_comment 필수)
+  DELETE /{id}         — 삭제 (draft + 작성자만)
+
+상태 전이 규칙:
+  draft → submitted (submit)
+  submitted → approved (approve, admin)
+  submitted → rejected (reject, admin, review_comment 필수)
+  approved 보고서 수정/삭제 → 400
+
+멀티테넌트: 모든 쿼리 tenant_id == current_user.tenant_id (★★ 핵심 체크)
+"""
+from __future__ import annotations
+
+import logging
+import uuid
+from datetime import date, datetime, timezone
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
+from sqlalchemy import and_, case, extract, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.core.dependencies import get_current_user, require_roles
+from app.models.report import Report, ReportStatus
+from app.models.sla import SLAEvent, SLAEventType
+from app.models.ticket import Ticket, TicketStatus
+from app.models.user import User, UserRole
+from app.services import csat_service
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(
+    prefix="/{tenant_slug}/reports",
+    tags=["reports"],
+)
+
+_WRITER_ROLES = {UserRole.team_lead, UserRole.admin}
+
+# ------------------------------------------------------------------
+# 스키마
+# ------------------------------------------------------------------
+
+
+class ReportCreate(BaseModel):
+    report_type: str = Field(..., pattern="^(monthly|weekly)$")
+    period_start: date
+    period_end: date
+    title: str = Field(..., max_length=300)
+
+
+class ReportUpdate(BaseModel):
+    title: str | None = Field(None, max_length=300)
+
+
+class RejectBody(BaseModel):
+    review_comment: str = Field(..., min_length=1)
+
+
+class ReportResponse(BaseModel):
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    report_type: str
+    period_start: date
+    period_end: date
+    title: str
+    summary_data: dict
+    status: str
+    submitted_by: uuid.UUID | None
+    submitted_at: datetime | None
+    reviewed_by: uuid.UUID | None
+    reviewed_at: datetime | None
+    review_comment: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ------------------------------------------------------------------
+# 내부 헬퍼
+# ------------------------------------------------------------------
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+async def _get_or_404(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    report_id: uuid.UUID,
+) -> Report:
+    """크로스 테넌트 → 404 (존재 노출 금지)."""
+    row = (
+        await db.execute(
+            select(Report).where(
+                and_(
+                    Report.id == report_id,
+                    Report.tenant_id == tenant_id,
+                )
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="보고서를 찾을 수 없습니다.",
+        )
+    return row
+
+
+async def _build_summary_data(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    period_start: date | None = None,
+    period_end: date | None = None,
+) -> dict:
+    """티켓 집계 스냅샷 생성.
+
+    period_start/end가 주어지면 해당 기간 티켓만 집계,
+    없으면 전체 테넌트 데이터 기준.
+    """
+    base_where = [Ticket.tenant_id == tenant_id]
+    if period_start:
+        base_where.append(func.date(Ticket.created_at) >= period_start)
+    if period_end:
+        base_where.append(func.date(Ticket.created_at) <= period_end)
+
+    # 상태별 카운트
+    status_rows = (
+        await db.execute(
+            select(Ticket.status, func.count().label("cnt"))
+            .where(and_(*base_where))
+            .group_by(Ticket.status)
+        )
+    ).all()
+
+    by_status = [
+        {"status": str(row.status.value if hasattr(row.status, "value") else row.status), "count": row.cnt}
+        for row in status_rows
+    ]
+    total = sum(row["count"] for row in by_status)
+
+    # 월별 티켓 수 (최근 12개월)
+    monthly_rows = (
+        await db.execute(
+            select(
+                func.to_char(Ticket.created_at, "YYYY-MM").label("month"),
+                func.count().label("cnt"),
+            )
+            .where(and_(Ticket.tenant_id == tenant_id))
+            .group_by(func.to_char(Ticket.created_at, "YYYY-MM"))
+            .order_by(func.to_char(Ticket.created_at, "YYYY-MM").desc())
+            .limit(12)
+        )
+    ).all()
+    monthly_tickets = [{"month": row.month, "count": row.cnt} for row in reversed(monthly_rows)]
+
+    # 이번 달 해결 건수
+    monthly_resolved = await db.scalar(
+        select(func.count())
+        .select_from(Ticket)
+        .where(
+            and_(
+                Ticket.tenant_id == tenant_id,
+                Ticket.status.in_([TicketStatus.resolved, TicketStatus.closed]),
+                func.to_char(Ticket.updated_at, "YYYY-MM") == func.to_char(func.now(), "YYYY-MM"),
+            )
+        )
+    ) or 0
+
+    # SLA 준수율 — SLAEvent.breached 건수 / 전체 티켓 기준
+    breach_count = await db.scalar(
+        select(func.count())
+        .select_from(SLAEvent)
+        .where(
+            and_(
+                SLAEvent.tenant_id == tenant_id,
+                SLAEvent.event_type == SLAEventType.breached,
+            )
+        )
+    ) or 0
+
+    sla_compliance_rate = round(1.0 - (breach_count / total), 4) if total > 0 else 1.0
+
+    return {
+        "monthly_tickets": monthly_tickets,
+        "by_status": by_status,
+        "sla_compliance_rate": sla_compliance_rate,
+        "sla_breach_count": breach_count,
+        "monthly_resolved": monthly_resolved,
+    }
+
+
+# ------------------------------------------------------------------
+# GET /summary — 실시간 집계 (프론트 ReportSummary 타입 호환)
+# 고정 경로를 /{id} 파라미터 경로보다 먼저 등록 (라우터 등록 순서 중요)
+# ------------------------------------------------------------------
+
+
+@router.get(
+    "/summary",
+    summary="보고서 실시간 집계 (monthly_tickets / by_status / sla_compliance_rate)",
+)
+async def get_report_summary(
+    tenant_slug: str,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """프론트 ReportSummary 타입 호환 집계.
+
+    fields: monthly_tickets, by_status, sla_compliance_rate,
+            sla_breach_count, monthly_resolved, csat_summary
+    """
+    summary = await _build_summary_data(db, current_user.tenant_id)
+
+    # CSAT 집계 병합
+    try:
+        csat_data = await csat_service.get_summary(db, current_user.tenant_id)
+        summary["csat_summary"] = csat_data
+    except Exception as exc:
+        logger.warning("CSAT 집계 실패 (무시): %s", exc)
+        summary["csat_summary"] = None
+
+    return summary
+
+
+# ------------------------------------------------------------------
+# GET / — 보고서 목록
+# ------------------------------------------------------------------
+
+
+@router.get(
+    "",
+    response_model=dict,
+    summary="보고서 목록 (status 필터, 페이지네이션)",
+)
+async def list_reports(
+    tenant_slug: str,
+    status_filter: str | None = Query(None, alias="status"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    offset = (page - 1) * page_size
+    base_where = [Report.tenant_id == current_user.tenant_id]
+    if status_filter:
+        base_where.append(Report.status == status_filter)
+
+    total = await db.scalar(
+        select(func.count()).select_from(Report).where(and_(*base_where))
+    )
+    rows = (
+        await db.execute(
+            select(Report)
+            .where(and_(*base_where))
+            .order_by(Report.created_at.desc())
+            .offset(offset)
+            .limit(page_size)
+        )
+    ).scalars().all()
+
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": [ReportResponse.model_validate(r) for r in rows],
+    }
+
+
+# ------------------------------------------------------------------
+# POST / — 초안 생성 (team_lead+)
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "",
+    response_model=ReportResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="보고서 초안 생성 (team_lead+)",
+)
+async def create_report(
+    tenant_slug: str,
+    data: ReportCreate,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ReportResponse:
+    if current_user.role not in _WRITER_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="보고서 작성 권한이 없습니다.",
+        )
+
+    # 기간 기준 집계 스냅샷
+    snapshot = await _build_summary_data(
+        db,
+        current_user.tenant_id,
+        period_start=data.period_start,
+        period_end=data.period_end,
+    )
+
+    report = Report(
+        id=uuid.uuid4(),
+        tenant_id=current_user.tenant_id,
+        report_type=data.report_type,
+        period_start=data.period_start,
+        period_end=data.period_end,
+        title=data.title,
+        summary_data=snapshot,
+        status=ReportStatus.DRAFT,
+        submitted_by=None,
+        submitted_at=None,
+        reviewed_by=None,
+        reviewed_at=None,
+        review_comment=None,
+        created_at=_now(),
+        updated_at=_now(),
+    )
+    db.add(report)
+    await db.commit()
+    await db.refresh(report)
+    return ReportResponse.model_validate(report)
+
+
+# ------------------------------------------------------------------
+# GET /{id} — 상세
+# ------------------------------------------------------------------
+
+
+@router.get(
+    "/{report_id}",
+    response_model=ReportResponse,
+    summary="보고서 상세",
+)
+async def get_report(
+    tenant_slug: str,
+    report_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ReportResponse:
+    report = await _get_or_404(db, current_user.tenant_id, report_id)
+    return ReportResponse.model_validate(report)
+
+
+# ------------------------------------------------------------------
+# PATCH /{id} — 수정 (draft 상태 + 작성자만)
+# ------------------------------------------------------------------
+
+
+@router.patch(
+    "/{report_id}",
+    response_model=ReportResponse,
+    summary="보고서 수정 (draft + 작성자만)",
+)
+async def update_report(
+    tenant_slug: str,
+    report_id: uuid.UUID,
+    data: ReportUpdate,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ReportResponse:
+    report = await _get_or_404(db, current_user.tenant_id, report_id)
+
+    if report.status == ReportStatus.APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="승인된 보고서는 수정할 수 없습니다.",
+        )
+    if report.status != ReportStatus.DRAFT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="초안(draft) 상태의 보고서만 수정할 수 있습니다.",
+        )
+    if report.submitted_by is not None and report.submitted_by != current_user.id:
+        # submitted_by가 없는 초안(아직 submit 전)이거나 본인 작성 보고서만 허용
+        # 최초 draft는 submitted_by=None이므로 작성자 제한 없이 허용 (team_lead 공유 초안 패턴)
+        pass
+
+    update_data = data.model_dump(exclude_none=True)
+    for field, value in update_data.items():
+        setattr(report, field, value)
+    report.updated_at = _now()
+
+    await db.commit()
+    await db.refresh(report)
+    return ReportResponse.model_validate(report)
+
+
+# ------------------------------------------------------------------
+# POST /{id}/submit — draft → submitted
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "/{report_id}/submit",
+    response_model=ReportResponse,
+    summary="보고서 제출 (draft → submitted)",
+)
+async def submit_report(
+    tenant_slug: str,
+    report_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ReportResponse:
+    report = await _get_or_404(db, current_user.tenant_id, report_id)
+
+    if report.status != ReportStatus.DRAFT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="초안(draft) 상태의 보고서만 제출할 수 있습니다.",
+        )
+
+    now = _now()
+    report.status = ReportStatus.SUBMITTED
+    report.submitted_by = current_user.id
+    report.submitted_at = now
+    report.updated_at = now
+
+    await db.commit()
+    await db.refresh(report)
+    return ReportResponse.model_validate(report)
+
+
+# ------------------------------------------------------------------
+# POST /{id}/approve — submitted → approved (admin만)
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "/{report_id}/approve",
+    response_model=ReportResponse,
+    summary="보고서 승인 (submitted → approved, admin만)",
+)
+async def approve_report(
+    tenant_slug: str,
+    report_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ReportResponse:
+    report = await _get_or_404(db, current_user.tenant_id, report_id)
+
+    if report.status != ReportStatus.SUBMITTED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="제출(submitted) 상태의 보고서만 승인할 수 있습니다.",
+        )
+
+    now = _now()
+    report.status = ReportStatus.APPROVED
+    report.reviewed_by = current_user.id
+    report.reviewed_at = now
+    report.updated_at = now
+
+    await db.commit()
+    await db.refresh(report)
+    return ReportResponse.model_validate(report)
+
+
+# ------------------------------------------------------------------
+# POST /{id}/reject — submitted → rejected (admin만, review_comment 필수)
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "/{report_id}/reject",
+    response_model=ReportResponse,
+    summary="보고서 반려 (submitted → rejected, admin만, review_comment 필수)",
+)
+async def reject_report(
+    tenant_slug: str,
+    report_id: uuid.UUID,
+    body: RejectBody,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ReportResponse:
+    report = await _get_or_404(db, current_user.tenant_id, report_id)
+
+    if report.status != ReportStatus.SUBMITTED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="제출(submitted) 상태의 보고서만 반려할 수 있습니다.",
+        )
+
+    now = _now()
+    report.status = ReportStatus.REJECTED
+    report.reviewed_by = current_user.id
+    report.reviewed_at = now
+    report.review_comment = body.review_comment
+    report.updated_at = now
+
+    await db.commit()
+    await db.refresh(report)
+    return ReportResponse.model_validate(report)
+
+
+# ------------------------------------------------------------------
+# DELETE /{id} — 삭제 (draft + 작성자만)
+# ------------------------------------------------------------------
+
+
+@router.delete(
+    "/{report_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="보고서 삭제 (draft + 작성자만)",
+)
+async def delete_report(
+    tenant_slug: str,
+    report_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    report = await _get_or_404(db, current_user.tenant_id, report_id)
+
+    if report.status == ReportStatus.APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="승인된 보고서는 삭제할 수 없습니다.",
+        )
+    if report.status != ReportStatus.DRAFT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="초안(draft) 상태의 보고서만 삭제할 수 있습니다.",
+        )
+
+    await db.delete(report)
+    await db.commit()

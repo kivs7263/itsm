@@ -27,12 +27,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import and_, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_roles
-from app.models import Customer, CustomerNote, User, UserRole
+from app.models import Customer, CustomerContact, CustomerNote, User, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -622,3 +622,269 @@ async def delete_note(
     note = await _get_note_or_404(db, current_user.tenant_id, customer_id, note_id)
     await db.delete(note)
     await db.commit()
+
+
+# ------------------------------------------------------------------
+# 연락처 스키마 (P6-3)
+# ------------------------------------------------------------------
+
+
+class ContactCreate(BaseModel):
+    name: str = Field(..., max_length=100)
+    role: str | None = Field(None, max_length=100)
+    email: str | None = Field(None, max_length=255)
+    phone: str | None = Field(None, max_length=50)
+    is_primary: bool = False
+    memo: str | None = None
+
+
+class ContactUpdate(BaseModel):
+    name: str | None = Field(None, max_length=100)
+    role: str | None = Field(None, max_length=100)
+    email: str | None = Field(None, max_length=255)
+    phone: str | None = Field(None, max_length=50)
+    memo: str | None = None
+
+
+class ContactOut(BaseModel):
+    id: uuid.UUID
+    customer_id: uuid.UUID
+    name: str
+    role: str | None
+    email: str | None
+    phone: str | None
+    is_primary: bool
+    memo: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ------------------------------------------------------------------
+# 연락처 헬퍼 (P6-3)
+# ------------------------------------------------------------------
+
+
+async def _get_contact_or_404(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    customer_id: uuid.UUID,
+    contact_id: uuid.UUID,
+) -> CustomerContact:
+    row = await db.scalar(
+        select(CustomerContact).where(
+            and_(
+                CustomerContact.id == contact_id,
+                CustomerContact.customer_id == customer_id,
+                CustomerContact.tenant_id == tenant_id,
+            )
+        )
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="연락처를 찾을 수 없습니다.")
+    return row
+
+
+async def _sync_primary_to_customer(
+    db: AsyncSession,
+    customer_id: uuid.UUID,
+    contact: CustomerContact,
+) -> None:
+    """주 연락처 변경 시 customers.email/phone 동기화."""
+    await db.execute(
+        update(Customer)
+        .where(Customer.id == customer_id)
+        .values(email=contact.email, phone=contact.phone)
+    )
+
+
+# ------------------------------------------------------------------
+# 연락처 목록 (P6-3)
+# ------------------------------------------------------------------
+
+
+@router.get(
+    "/{customer_id}/contacts",
+    response_model=list[ContactOut],
+    summary="고객 연락처 목록",
+)
+async def list_contacts(
+    tenant_slug: str,
+    customer_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> list[ContactOut]:
+    await _get_or_404(db, current_user.tenant_id, customer_id)
+    rows = (
+        await db.execute(
+            select(CustomerContact)
+            .where(
+                and_(
+                    CustomerContact.customer_id == customer_id,
+                    CustomerContact.tenant_id == current_user.tenant_id,
+                )
+            )
+            .order_by(CustomerContact.is_primary.desc(), CustomerContact.created_at.asc())
+        )
+    ).scalars().all()
+    return [ContactOut.model_validate(r) for r in rows]
+
+
+# ------------------------------------------------------------------
+# 연락처 추가 (P6-3)
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "/{customer_id}/contacts",
+    response_model=ContactOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="고객 연락처 추가 (engineer+)",
+)
+async def create_contact(
+    tenant_slug: str,
+    customer_id: uuid.UUID,
+    data: ContactCreate,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead, UserRole.engineer))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ContactOut:
+    await _get_or_404(db, current_user.tenant_id, customer_id)
+
+    # is_primary=True이면 기존 primary를 먼저 False로 전환
+    if data.is_primary:
+        await db.execute(
+            update(CustomerContact)
+            .where(
+                and_(
+                    CustomerContact.customer_id == customer_id,
+                    CustomerContact.tenant_id == current_user.tenant_id,
+                    CustomerContact.is_primary == True,  # noqa: E712
+                )
+            )
+            .values(is_primary=False)
+        )
+
+    contact = CustomerContact(
+        id=uuid.uuid4(),
+        tenant_id=current_user.tenant_id,
+        customer_id=customer_id,
+        name=data.name,
+        role=data.role,
+        email=data.email,
+        phone=data.phone,
+        is_primary=data.is_primary,
+        memo=data.memo,
+    )
+    db.add(contact)
+    await db.flush()  # contact.id 확보
+
+    if data.is_primary:
+        await _sync_primary_to_customer(db, customer_id, contact)
+
+    await db.commit()
+    await db.refresh(contact)
+    return ContactOut.model_validate(contact)
+
+
+# ------------------------------------------------------------------
+# 연락처 수정 (P6-3)
+# ------------------------------------------------------------------
+
+
+@router.patch(
+    "/{customer_id}/contacts/{contact_id}",
+    response_model=ContactOut,
+    summary="고객 연락처 수정 (engineer+) — is_primary 변경 불가",
+)
+async def update_contact(
+    tenant_slug: str,
+    customer_id: uuid.UUID,
+    contact_id: uuid.UUID,
+    data: ContactUpdate,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead, UserRole.engineer))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ContactOut:
+    await _get_or_404(db, current_user.tenant_id, customer_id)
+    contact = await _get_contact_or_404(db, current_user.tenant_id, customer_id, contact_id)
+
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(contact, field, value)
+
+    await db.commit()
+    await db.refresh(contact)
+    return ContactOut.model_validate(contact)
+
+
+# ------------------------------------------------------------------
+# 연락처 삭제 (P6-3)
+# ------------------------------------------------------------------
+
+
+@router.delete(
+    "/{customer_id}/contacts/{contact_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="고객 연락처 삭제 (team_lead+)",
+)
+async def delete_contact(
+    tenant_slug: str,
+    customer_id: uuid.UUID,
+    contact_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    await _get_or_404(db, current_user.tenant_id, customer_id)
+    contact = await _get_contact_or_404(db, current_user.tenant_id, customer_id, contact_id)
+
+    if contact.is_primary:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="다른 주 연락처를 지정한 후 삭제하세요.",
+        )
+
+    await db.delete(contact)
+    await db.commit()
+
+
+# ------------------------------------------------------------------
+# 주 연락처 지정 (P6-3)
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "/{customer_id}/contacts/{contact_id}/set-primary",
+    response_model=ContactOut,
+    summary="주 연락처 지정 (engineer+)",
+)
+async def set_primary_contact(
+    tenant_slug: str,
+    customer_id: uuid.UUID,
+    contact_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead, UserRole.engineer))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ContactOut:
+    await _get_or_404(db, current_user.tenant_id, customer_id)
+    contact = await _get_contact_or_404(db, current_user.tenant_id, customer_id, contact_id)
+
+    # 기존 primary 먼저 False (unique 위반 방지)
+    await db.execute(
+        update(CustomerContact)
+        .where(
+            and_(
+                CustomerContact.customer_id == customer_id,
+                CustomerContact.tenant_id == current_user.tenant_id,
+                CustomerContact.is_primary == True,  # noqa: E712
+            )
+        )
+        .values(is_primary=False)
+    )
+
+    # 대상 contact → True
+    contact.is_primary = True
+    await db.flush()
+
+    # customers.email/phone 동기화
+    await _sync_primary_to_customer(db, customer_id, contact)
+
+    await db.commit()
+    await db.refresh(contact)
+    return ContactOut.model_validate(contact)

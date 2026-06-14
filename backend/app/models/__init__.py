@@ -9,6 +9,7 @@ from app.models.sso_config import SSOConfig  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.team import Team, TeamMember  # noqa: F401
 from app.models.customer import Customer, CustomerNote  # noqa: F401
+from app.models.customer_contact import CustomerContact  # noqa: F401
 from app.models.asset import Asset, AssetType  # noqa: F401
 from app.models.contract import Contract, ContractType  # noqa: F401
 from app.models.ticket import (  # noqa: F401
@@ -62,6 +63,7 @@ from app.models.work_log import TicketWorkLog, WorkType  # noqa: F401
 from app.models.reply_template import ReplyTemplate  # noqa: F401
 from app.models.recurring_alert import RecurringAlert  # noqa: F401
 from app.models.ticket_known_issue import TicketKnownIssue  # noqa: F401
+from app.models.report import Report, ReportStatus  # noqa: F401
 
 __all__ = [
     "Base",
@@ -83,6 +85,7 @@ __all__ = [
     # customer
     "Customer",
     "CustomerNote",
+    "CustomerContact",
     # asset
     "Asset",
     "AssetType",
@@ -142,4 +145,7 @@ __all__ = [
     "RecurringAlert",
     # ticket known issues (P5-4)
     "TicketKnownIssue",
+    # reports (P6-2)
+    "Report",
+    "ReportStatus",
 ]

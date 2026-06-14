@@ -199,3 +199,11 @@ app.include_router(recurring_alerts_router.router, prefix="/api")          # /ap
 from app.routers import known_issues as known_issues_router  # noqa: E402
 app.include_router(known_issues_router.router, prefix="/api")              # /api/{slug}/kb/known-issues
 app.include_router(known_issues_router.router_ticket, prefix="/api")       # /api/{slug}/tickets/{id}/known-issues
+
+# P6-1 KB 시맨틱 검색
+from app.routers import kb_semantic as kb_semantic_router  # noqa: E402
+app.include_router(kb_semantic_router.router, prefix="/api")               # /api/{slug}/kb/search/semantic
+
+# P6-2 보고서 승인 워크플로우
+from app.routers import reports as reports_router  # noqa: E402
+app.include_router(reports_router.router, prefix="/api")                   # /api/{slug}/reports

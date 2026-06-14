@@ -416,3 +416,82 @@ export interface SymptomCategory {
   id: string;
   name: string;
 }
+
+// -----------------------------------------------------------------------
+// 고객 연락처 타입
+// -----------------------------------------------------------------------
+export interface CustomerContact {
+  id: string;
+  customer_id: string;
+  name: string;
+  role: string | null;
+  email: string | null;
+  phone: string | null;
+  is_primary: boolean;
+  memo: string | null;
+  created_at: string;
+}
+
+export interface CustomerContactsResponse {
+  items: CustomerContact[];
+  total: number;
+}
+
+// -----------------------------------------------------------------------
+// 보고서 승인 워크플로우 타입
+// -----------------------------------------------------------------------
+export type ReportStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
+
+export interface Report {
+  id: string;
+  tenant_id: string;
+  report_type: 'monthly' | 'weekly';
+  period_start: string;  // YYYY-MM-DD
+  period_end: string;    // YYYY-MM-DD
+  title: string;
+  summary_data: Record<string, unknown>;
+  status: ReportStatus;
+  submitted_by: string | null;
+  submitted_at: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_comment: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReportsResponse {
+  items: Report[];
+  total: number;
+}
+
+// -----------------------------------------------------------------------
+// KB 지식베이스 타입
+// -----------------------------------------------------------------------
+export interface KbArticle {
+  id: string;
+  tenant_id: string;
+  title: string;
+  content: string;
+  tags: string[];
+  linked_ticket_id: string | null;
+  author_id: string;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KbArticlesResponse {
+  items: KbArticle[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface SemanticSearchResult {
+  id: string;
+  title: string;
+  content: string | null;
+  category: string | null;
+  similarity: number; // 0.0 ~ 1.0
+}

@@ -620,11 +620,167 @@ P4-6 (공유 큐)          P4-5 완료 후 (역할별 접수 로직 필요)
 
 ---
 
-## 다음 Phase (예고)
+---
 
-| Phase | 주요 내용 |
+## Phase 6 — KB 시맨틱 검색 · 보고서 승인 · 다중 연락처
+
+> 마이그레이션 헤드: `019_known_issues` (Phase 6 시작점)
+
+### 작업 목록
+
+| ID | 작업 | 크기 | 마이그레이션 | 상태 |
+|---|---|---|---|---|
+| P6-1 | KB 시맨틱 검색 (pgvector + OpenAI) | M | 020 | [ DONE 2026-06-14 ] |
+| P6-2 | 보고서 승인 워크플로우 | M | 021 | [ DONE 2026-06-14 ] |
+| P6-3 | 다중 연락처 | M | 022 | [ DONE 2026-06-14 ] |
+
+---
+
+### P6-1: KB 시맨틱 검색 (pgvector)
+
+**목적**: `kb_articles`에 OpenAI 임베딩 저장, 의미 기반 유사도 검색 제공.
+
+#### Migration 020
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+ALTER TABLE kb_articles ADD COLUMN embedding vector(1536);
+CREATE INDEX ix_kb_articles_embedding ON kb_articles
+  USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+```
+주의: IVFFlat은 non-null 행 3,900+ 필요. 초기 배포 시 데이터 부족이면 sequential scan fallback 허용.
+IVFFlat CREATE INDEX는 Alembic 트랜잭션 밖 `op.execute()` 직접 실행 패턴 사용.
+
+#### Backend
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| GET | `/{tenant}/kb/search/semantic?q=&limit=5` | 쿼리 임베딩 → cosine top-N |
+
+- 아티클 POST/PATCH 시 `asyncio.create_task(_embed_article(...))` fire-and-forget
+- `OPENAI_API_KEY` 없으면 임베딩 스킵 + 검색 시 503 graceful return
+- SQL: `ORDER BY embedding <=> :query_vec LIMIT :limit` (WHERE embedding IS NOT NULL)
+- 기존 Meilisearch 키워드 검색 `/kb/search?q=` 유지 (교체 아님)
+- 신규 파일: `backend/app/routers/kb_semantic.py`; `main.py`에 등록
+
+#### Frontend
+
+- KB 검색 페이지에 "키워드" / "의미 검색" 탭 토글 추가
+- 의미 검색 결과: similarity 점수 퍼센트 표시
+- `OPENAI_API_KEY` 미설정 시 탭 비활성화 + 툴팁
+
+---
+
+### P6-2: 보고서 승인 워크플로우
+
+**목적**: 팀장이 월간/주간 보고서를 제출 → admin이 승인/반려.
+⚠️ 현재 `GET /reports/summary` 백엔드 라우터 **미등록** 상태 (프론트 404). P6-2에서 같이 이식.
+
+#### Migration 021
+
+```sql
+CREATE TABLE reports (
+  id           UUID PK DEFAULT gen_random_uuid(),
+  tenant_id    UUID NOT NULL FK tenants CASCADE,
+  report_type  VARCHAR(20) NOT NULL,   -- 'monthly' | 'weekly'
+  period_start DATE NOT NULL,
+  period_end   DATE NOT NULL,
+  title        VARCHAR(300) NOT NULL,
+  summary_data JSONB NOT NULL DEFAULT '{}',
+  status       VARCHAR(20) NOT NULL DEFAULT 'draft',
+  -- draft → submitted → approved | rejected
+  submitted_by UUID FK users SET NULL,
+  submitted_at TIMESTAMPTZ,
+  reviewed_by  UUID FK users SET NULL,
+  reviewed_at  TIMESTAMPTZ,
+  review_comment TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+#### Backend
+
+| 메서드 | 경로 | 설명 | 권한 |
+|---|---|---|---|
+| GET | `/{tenant}/reports/summary` | 실시간 집계 (기존 미등록 이식) | 전체 |
+| GET | `/{tenant}/reports` | 보고서 목록 (status 필터) | 전체 |
+| POST | `/{tenant}/reports` | 초안 생성 + 집계 스냅샷 | team_lead+ |
+| GET | `/{tenant}/reports/{id}` | 상세 | 전체 |
+| PATCH | `/{tenant}/reports/{id}` | 초안 수정 (draft만) | 작성자 |
+| POST | `/{tenant}/reports/{id}/submit` | draft → submitted | 작성자(team_lead+) |
+| POST | `/{tenant}/reports/{id}/approve` | submitted → approved | admin |
+| POST | `/{tenant}/reports/{id}/reject` | submitted → rejected (comment 필수) | admin |
+| DELETE | `/{tenant}/reports/{id}` | 삭제 (draft만) | 작성자 |
+
+#### Frontend
+
+- `reports/page.tsx` 확장: 보고서 목록 테이블 + 상태 배지 + 생성 모달
+- team_lead: "제출" 버튼 / admin: "승인" / "반려" 버튼 + 코멘트 입력
+
+---
+
+### P6-3: 다중 연락처
+
+**목적**: 고객(customer)에 연락처 여러 개 등록. 기존 customers.email/phone 하위 호환 유지.
+
+#### Migration 022
+
+```sql
+CREATE TABLE customer_contacts (
+  id          UUID PK DEFAULT gen_random_uuid(),
+  tenant_id   UUID NOT NULL FK tenants CASCADE,
+  customer_id UUID NOT NULL FK customers CASCADE,
+  name        VARCHAR(100) NOT NULL,
+  role        VARCHAR(100),
+  email       VARCHAR(255),
+  phone       VARCHAR(50),
+  is_primary  BOOLEAN NOT NULL DEFAULT false,
+  memo        TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- 주 연락처 1명 DB 레벨 보장
+CREATE UNIQUE INDEX uq_customer_contacts_primary ON customer_contacts(customer_id) WHERE is_primary = true;
+CREATE INDEX ix_customer_contacts_tenant_customer ON customer_contacts(tenant_id, customer_id);
+```
+
+is_primary=true 설정 시 customers.email/phone 자동 동기화 (하위 호환).
+
+#### Backend
+
+| 메서드 | 경로 | 설명 | 권한 |
+|---|---|---|---|
+| GET | `/{tenant}/customers/{id}/contacts` | 연락처 목록 | 전체 |
+| POST | `/{tenant}/customers/{id}/contacts` | 연락처 추가 | engineer+ |
+| PATCH | `/{tenant}/customers/{id}/contacts/{cid}` | 연락처 수정 | engineer+ |
+| DELETE | `/{tenant}/customers/{id}/contacts/{cid}` | 삭제 (primary 직접 삭제 불가) | team_lead+ |
+| POST | `/{tenant}/customers/{id}/contacts/{cid}/set-primary` | 주 연락처 지정 + 기존 해제 + 동기화 | engineer+ |
+
+기존 파일 수정: `backend/app/routers/customers.py`
+
+#### Frontend
+
+- `customers/[customerId]/page.tsx` Overview 탭에 연락처 섹션 추가
+- 카드 목록: 이름/역할/이메일/전화 + 주 연락처 배지 + 수정/삭제/지정 액션
+
+---
+
+### Phase 6 마이그레이션 리스크
+
+| 마이그레이션 | 변경 | 리스크 |
+|---|---|---|
+| 020 pgvector + embedding | CREATE EXTENSION + ALTER ADD COLUMN nullable | 낮음 (IVFFlat CONCURRENTLY 제한 — 빈 테이블이면 문제 없음) |
+| 021 reports 신규 | 없음 | 낮음 |
+| 022 customer_contacts 신규 | 없음 | 낮음 |
+
+### Phase 6 완료 기준
+
+| 항목 | 기준 |
 |---|---|
-| Phase 6 | KB 시맨틱 검색 (pgvector), 보고서 승인 워크플로우, 다중 연락처 |
+| 시맨틱 검색 | KB 아티클 생성 후 embedding IS NOT NULL, `/kb/search/semantic?q=` 200 반환 |
+| 보고서 승인 | draft→submitted→approved 전이 정상, engineer reject 시도 → 403 |
+| 다중 연락처 | is_primary=true 추가 시 customers.email/phone 자동 동기화 확인 |
 
 ---
 

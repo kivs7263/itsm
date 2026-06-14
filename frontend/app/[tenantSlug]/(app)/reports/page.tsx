@@ -1,18 +1,63 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { BarChart2, Clock, Construction, Star, MessageSquare, Users, CheckSquare } from 'lucide-react';
-import { api } from '@/lib/api';
-import type { ReportSummary, TicketStatus, CSATSummary } from '@/lib/types';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  BarChart2,
+  Clock,
+  Construction,
+  Star,
+  MessageSquare,
+  Users,
+  CheckSquare,
+  Plus,
+  X,
+  FileText,
+  ChevronRight,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { api, getErrorMessage } from '@/lib/api';
+import type {
+  ReportSummary,
+  TicketStatus,
+  CSATSummary,
+  Report,
+  ReportsResponse,
+  ReportStatus,
+} from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { getUser, isTeamLeadOrAbove, isAdminRole } from '@/lib/auth';
 
 // -----------------------------------------------------------------------
-// 상태 배지
+// 날짜 포맷 유틸
 // -----------------------------------------------------------------------
-const STATUS_STYLES: Record<TicketStatus, string> = {
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '-';
+  try {
+    const d = new Date(dateStr);
+    const y = d.getFullYear();
+    const m = (d.getMonth() + 1).toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, '0');
+    return `${y}.${m}.${day}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+// -----------------------------------------------------------------------
+// 기존 실시간 집계 - 상태 배지
+// -----------------------------------------------------------------------
+const TICKET_STATUS_STYLES: Record<TicketStatus, string> = {
   open:        'bg-status-open-bg text-status-open',
   in_progress: 'bg-purple-50 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400',
   pending:     'bg-status-pending-bg text-status-pending',
@@ -20,12 +65,34 @@ const STATUS_STYLES: Record<TicketStatus, string> = {
   closed:      'bg-status-closed-bg text-status-closed',
 };
 
-const STATUS_LABELS: Record<TicketStatus, string> = {
+const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
   open:        '열림',
   in_progress: '진행 중',
   pending:     '대기',
   resolved:    '해결됨',
   closed:      '닫힘',
+};
+
+// -----------------------------------------------------------------------
+// 보고서 상태 배지
+// -----------------------------------------------------------------------
+const REPORT_STATUS_STYLES: Record<ReportStatus, string> = {
+  draft:     'bg-neutral-100 text-neutral-600',
+  submitted: 'bg-blue-100 text-blue-700',
+  approved:  'bg-green-100 text-green-700',
+  rejected:  'bg-red-100 text-red-700',
+};
+
+const REPORT_STATUS_LABELS: Record<ReportStatus, string> = {
+  draft:     '초안',
+  submitted: '제출됨',
+  approved:  '승인됨',
+  rejected:  '반려됨',
+};
+
+const REPORT_TYPE_LABELS: Record<'monthly' | 'weekly', string> = {
+  monthly: '월간',
+  weekly:  '주간',
 };
 
 // -----------------------------------------------------------------------
@@ -114,6 +181,521 @@ function ScoreBar({ star, count, max }: { star: number; count: number; max: numb
 }
 
 // -----------------------------------------------------------------------
+// 보고서 목록 스켈레톤 행
+// -----------------------------------------------------------------------
+function ReportSkeletonRows() {
+  return (
+    <>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <tr key={i} className="border-b border-border-subtle">
+          <td className="px-4 py-3"><Skeleton className="h-4 w-40" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-4 w-12" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-5 w-14 rounded-full" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-4 w-6" /></td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
+// -----------------------------------------------------------------------
+// 보고서 생성 모달
+// -----------------------------------------------------------------------
+interface CreateReportModalProps {
+  open: boolean;
+  onClose: () => void;
+  tenantSlug: string;
+}
+
+function CreateReportModal({ open, onClose, tenantSlug }: CreateReportModalProps) {
+  const queryClient = useQueryClient();
+  const [title, setTitle] = useState('');
+  const [reportType, setReportType] = useState<'monthly' | 'weekly'>('monthly');
+  const [periodStart, setPeriodStart] = useState('');
+  const [periodEnd, setPeriodEnd] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  function handleClose() {
+    setTitle('');
+    setReportType('monthly');
+    setPeriodStart('');
+    setPeriodEnd('');
+    onClose();
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim() || !periodStart || !periodEnd) {
+      toast.error('모든 필드를 입력해주세요.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api.post(`/${tenantSlug}/reports`, {
+        title: title.trim(),
+        report_type: reportType,
+        period_start: periodStart,
+        period_end: periodEnd,
+      });
+      toast.success('보고서가 생성되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['reports-list', tenantSlug] });
+      handleClose();
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>새 보고서 생성</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 pt-2">
+          {/* 제목 */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-text-primary">제목</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="보고서 제목을 입력하세요"
+              className="h-9 rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+
+          {/* 유형 */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-text-primary">유형</label>
+            <select
+              value={reportType}
+              onChange={(e) => setReportType(e.target.value as 'monthly' | 'weekly')}
+              className="h-9 rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="monthly">월간</option>
+              <option value="weekly">주간</option>
+            </select>
+          </div>
+
+          {/* 기간 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-text-primary">기간 시작</label>
+              <input
+                type="date"
+                value={periodStart}
+                onChange={(e) => setPeriodStart(e.target.value)}
+                className="h-9 rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-text-primary">기간 종료</label>
+              <input
+                type="date"
+                value={periodEnd}
+                onChange={(e) => setPeriodEnd(e.target.value)}
+                className="h-9 rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button type="button" variant="outline" onClick={handleClose} disabled={submitting}>
+              취소
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? '생성 중...' : '생성'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// -----------------------------------------------------------------------
+// 보고서 상세 Side Panel
+// -----------------------------------------------------------------------
+interface ReportPanelProps {
+  report: Report | null;
+  onClose: () => void;
+  tenantSlug: string;
+}
+
+function ReportDetailPanel({ report, onClose, tenantSlug }: ReportPanelProps) {
+  const queryClient = useQueryClient();
+  const user = getUser();
+  const userRole = user?.role;
+  const [showRejectInput, setShowRejectInput] = useState(false);
+  const [rejectComment, setRejectComment] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // panel이 닫힐 때 상태 초기화
+  function handleClose() {
+    setShowRejectInput(false);
+    setRejectComment('');
+    onClose();
+  }
+
+  // report 변경 시 reject input 초기화
+  React.useEffect(() => {
+    setShowRejectInput(false);
+    setRejectComment('');
+  }, [report?.id]);
+
+  async function handleAction(action: 'submit' | 'approve' | 'reject') {
+    if (!report) return;
+    if (action === 'reject' && !rejectComment.trim()) {
+      toast.error('반려 사유를 입력해주세요.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const endpoint = `/${tenantSlug}/reports/${report.id}/${action}`;
+      if (action === 'reject') {
+        await api.post(endpoint, { review_comment: rejectComment.trim() });
+      } else {
+        await api.post(endpoint);
+      }
+      const ACTION_LABELS = { submit: '제출', approve: '승인', reject: '반려' };
+      toast.success(`보고서가 ${ACTION_LABELS[action]}되었습니다.`);
+      queryClient.invalidateQueries({ queryKey: ['reports-list', tenantSlug] });
+      handleClose();
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  const summaryEntries = report
+    ? Object.entries(report.summary_data).slice(0, 8)
+    : [];
+
+  return (
+    <>
+      {/* 오버레이 */}
+      {report && (
+        <div
+          className="fixed inset-0 z-40 bg-black/20"
+          onClick={handleClose}
+        />
+      )}
+
+      {/* 슬라이드인 패널 */}
+      <div
+        className={cn(
+          'fixed top-0 right-0 z-50 h-full w-[420px] bg-surface border-l border-border-default shadow-xl',
+          'flex flex-col transition-transform duration-200 ease-out',
+          report ? 'translate-x-0' : 'translate-x-full',
+        )}
+      >
+        {report && (
+          <>
+            {/* 패널 헤더 */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border-default shrink-0">
+              <div className="flex items-center gap-2">
+                <FileText size={16} className="text-text-secondary" />
+                <h2 className="text-sm font-semibold text-text-primary">보고서 상세</h2>
+              </div>
+              <button
+                onClick={handleClose}
+                className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-surface-raised transition-colors"
+              >
+                <X size={15} className="text-text-secondary" />
+              </button>
+            </div>
+
+            {/* 패널 본문 */}
+            <div className="flex-1 overflow-auto p-5 flex flex-col gap-5">
+              {/* 기본 정보 */}
+              <div className="flex flex-col gap-3">
+                <h3 className="text-base font-semibold text-text-primary leading-snug">
+                  {report.title}
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  <span
+                    className={cn(
+                      'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                      REPORT_STATUS_STYLES[report.status],
+                    )}
+                  >
+                    {REPORT_STATUS_LABELS[report.status]}
+                  </span>
+                  <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-neutral-100 text-neutral-600">
+                    {REPORT_TYPE_LABELS[report.report_type]}
+                  </span>
+                </div>
+              </div>
+
+              {/* 상세 필드 */}
+              <div className="rounded-lg border border-border-subtle bg-surface-raised p-4 flex flex-col gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[11px] text-text-tertiary mb-0.5">기간 시작</p>
+                    <p className="text-sm text-text-primary">{formatDate(report.period_start)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-text-tertiary mb-0.5">기간 종료</p>
+                    <p className="text-sm text-text-primary">{formatDate(report.period_end)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-text-tertiary mb-0.5">생성일</p>
+                    <p className="text-sm text-text-primary">{formatDate(report.created_at)}</p>
+                  </div>
+                  {report.submitted_at && (
+                    <div>
+                      <p className="text-[11px] text-text-tertiary mb-0.5">제출일</p>
+                      <p className="text-sm text-text-primary">{formatDate(report.submitted_at)}</p>
+                    </div>
+                  )}
+                  {report.reviewed_at && (
+                    <div>
+                      <p className="text-[11px] text-text-tertiary mb-0.5">검토일</p>
+                      <p className="text-sm text-text-primary">{formatDate(report.reviewed_at)}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 반려 사유 */}
+              {report.status === 'rejected' && report.review_comment && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                  <p className="text-xs font-medium text-red-700 mb-1">반려 사유</p>
+                  <p className="text-sm text-red-600">{report.review_comment}</p>
+                </div>
+              )}
+
+              {/* summary_data */}
+              {summaryEntries.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs font-medium text-text-secondary">요약 데이터</p>
+                  <div className="rounded-lg border border-border-subtle bg-surface-raised divide-y divide-border-subtle">
+                    {summaryEntries.map(([key, val]) => (
+                      <div key={key} className="flex items-center justify-between px-4 py-2.5">
+                        <span className="text-xs text-text-secondary">{key}</span>
+                        <span className="text-xs font-medium text-text-primary">
+                          {typeof val === 'object' ? JSON.stringify(val) : String(val)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 반려 사유 입력창 (반려 버튼 클릭 후) */}
+              {showRejectInput && (
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-medium text-text-primary">반려 사유 입력</label>
+                  <textarea
+                    value={rejectComment}
+                    onChange={(e) => setRejectComment(e.target.value)}
+                    placeholder="반려 사유를 입력해주세요..."
+                    rows={3}
+                    className="rounded-md border border-border-default bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* 패널 하단 액션 버튼 */}
+            <div className="shrink-0 border-t border-border-default p-4 flex flex-col gap-2">
+              {/* 제출 버튼: draft 상태 + team_lead 이상 */}
+              {report.status === 'draft' && isTeamLeadOrAbove(userRole) && (
+                <Button
+                  className="w-full"
+                  onClick={() => handleAction('submit')}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? '처리 중...' : '제출'}
+                </Button>
+              )}
+
+              {/* 승인/반려 버튼: submitted 상태 + admin */}
+              {report.status === 'submitted' && isAdminRole(userRole) && (
+                <>
+                  <Button
+                    className="w-full"
+                    onClick={() => handleAction('approve')}
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? '처리 중...' : '승인'}
+                  </Button>
+
+                  {!showRejectInput ? (
+                    <Button
+                      variant="outline"
+                      className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                      onClick={() => setShowRejectInput(true)}
+                      disabled={actionLoading}
+                    >
+                      반려
+                    </Button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => { setShowRejectInput(false); setRejectComment(''); }}
+                        disabled={actionLoading}
+                      >
+                        취소
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                        onClick={() => handleAction('reject')}
+                        disabled={actionLoading}
+                      >
+                        {actionLoading ? '처리 중...' : '반려 확인'}
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+// -----------------------------------------------------------------------
+// 보고서 목록 섹션
+// -----------------------------------------------------------------------
+function ReportManagementSection({ tenantSlug }: { tenantSlug: string }) {
+  const user = getUser();
+  const userRole = user?.role;
+  const [createOpen, setCreateOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+
+  const { data: reportsData, isLoading: reportsLoading } = useQuery<ReportsResponse>({
+    queryKey: ['reports-list', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/reports`).then((r) => r.data),
+    enabled: !!tenantSlug,
+  });
+
+  const reports = reportsData?.items ?? [];
+
+  return (
+    <>
+      {/* 보고서 관리 헤더 */}
+      <div className="rounded-lg border border-border-default bg-surface">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
+          <div className="flex items-center gap-2">
+            <FileText size={16} className="text-text-secondary" />
+            <h2 className="text-sm font-semibold text-text-primary">보고서 관리</h2>
+            {reportsData && (
+              <span className="text-xs text-text-tertiary tabular-nums">
+                총 {reportsData.total}건
+              </span>
+            )}
+          </div>
+          {isTeamLeadOrAbove(userRole) && (
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus size={14} className="mr-1" />
+              새 보고서 생성
+            </Button>
+          )}
+        </div>
+
+        {/* 보고서 목록 테이블 */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border-subtle bg-surface-raised">
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-text-secondary">제목</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-text-secondary">기간</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-text-secondary">유형</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-text-secondary">상태</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-text-secondary">제출자</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-text-secondary">검토일</th>
+                <th className="px-4 py-2.5 text-right text-xs font-medium text-text-secondary"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {reportsLoading ? (
+                <ReportSkeletonRows />
+              ) : reports.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-text-secondary">
+                    보고서가 없습니다.
+                  </td>
+                </tr>
+              ) : (
+                reports.map((report) => (
+                  <tr
+                    key={report.id}
+                    className="border-b border-border-subtle hover:bg-surface-raised cursor-pointer transition-colors"
+                    onClick={() => setSelectedReport(report)}
+                  >
+                    <td className="px-4 py-3">
+                      <span className="font-medium text-text-primary line-clamp-1 max-w-[200px]">
+                        {report.title}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
+                      {formatDate(report.period_start)} ~ {formatDate(report.period_end)}
+                    </td>
+                    <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
+                      {REPORT_TYPE_LABELS[report.report_type]}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={cn(
+                          'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium',
+                          REPORT_STATUS_STYLES[report.status],
+                        )}
+                      >
+                        {REPORT_STATUS_LABELS[report.status]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-text-secondary">
+                      {report.submitted_by ?? '-'}
+                    </td>
+                    <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
+                      {formatDate(report.reviewed_at)}
+                    </td>
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="flex h-6 w-6 items-center justify-center rounded hover:bg-surface transition-colors ml-auto"
+                        onClick={(e) => { e.stopPropagation(); setSelectedReport(report); }}
+                      >
+                        <ChevronRight size={14} className="text-text-tertiary" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 생성 모달 */}
+      <CreateReportModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        tenantSlug={tenantSlug}
+      />
+
+      {/* 상세 Side Panel */}
+      <ReportDetailPanel
+        report={selectedReport}
+        onClose={() => setSelectedReport(null)}
+        tenantSlug={tenantSlug}
+      />
+    </>
+  );
+}
+
+// -----------------------------------------------------------------------
 // 리포트 대시보드 페이지
 // -----------------------------------------------------------------------
 export default function ReportsPage() {
@@ -171,6 +753,9 @@ export default function ReportsPage() {
             Coming Soon
           </span>
         </div>
+
+        {/* 보고서 관리 섹션 */}
+        {tenantSlug && <ReportManagementSection tenantSlug={tenantSlug} />}
 
         {/* 2컬럼 */}
         <div className="grid grid-cols-2 gap-6">
@@ -231,10 +816,10 @@ export default function ReportsPage() {
                         <span
                           className={cn(
                             'inline-flex items-center self-start rounded-full px-2 py-0.5 text-[10px] font-medium',
-                            STATUS_STYLES[status as TicketStatus],
+                            TICKET_STATUS_STYLES[status as TicketStatus],
                           )}
                         >
-                          {STATUS_LABELS[status as TicketStatus] ?? status}
+                          {TICKET_STATUS_LABELS[status as TicketStatus] ?? status}
                         </span>
                         <span className="text-2xl font-bold text-text-primary tabular-nums">{count}</span>
                       </div>
