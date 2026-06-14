@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import {
@@ -13,14 +13,20 @@ import {
   Building2,
   Users,
   FileText,
-  BarChart3,
   Package,
   ScrollText,
   Clock,
   Star,
   Phone,
   Mail,
-  Contact,
+  Info,
+  Cpu,
+  Server,
+  Wifi,
+  HardDrive,
+  AppWindow,
+  Database,
+  Layers,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
@@ -33,6 +39,7 @@ import type {
   Ticket,
   Asset,
   Contract,
+  CI,
 } from '@/lib/types';
 import { getUser } from '@/lib/auth';
 import { isEngineerOrAbove, isTeamLeadOrAbove } from '@/lib/auth';
@@ -127,28 +134,756 @@ function TreeNode({
 }
 
 // -----------------------------------------------------------------------
-// 탭: Overview
+// 탭: 고객 정보 (InfoTab) — 기본 정보 수정 + 연락처 통합
 // -----------------------------------------------------------------------
-function OverviewTab({ customer }: { customer: Customer }) {
-  const fields: { label: string; value: string | null }[] = [
-    { label: '이름', value: customer.name },
-    { label: '종류', value: customer.kind === 'account' ? '최상위 고객사' : '하위 부서' },
-    { label: '이메일', value: customer.email },
-    { label: '전화', value: customer.phone },
-    { label: '계약 등급', value: customer.contract_grade },
-    { label: '생성일', value: formatRelativeTime(customer.created_at) },
-  ];
+interface ContactFormState {
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+  is_primary: boolean;
+  memo: string;
+}
+
+const EMPTY_FORM: ContactFormState = {
+  name: '',
+  role: '',
+  email: '',
+  phone: '',
+  is_primary: false,
+  memo: '',
+};
+
+interface InfoFormState {
+  name: string;
+  company: string;
+  email: string;
+  phone: string;
+  contract_grade: string;
+  kind: string;
+}
+
+function InfoTab({
+  tenantSlug,
+  customerId,
+  customer,
+  onCustomerUpdated,
+}: {
+  tenantSlug: string;
+  customerId: string;
+  customer: Customer;
+  onCustomerUpdated: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const user = getUser();
+  const canWrite = isEngineerOrAbove(user?.role);
+  const canDelete = isTeamLeadOrAbove(user?.role);
+
+  // ---- 기본 정보 편집 ----
+  const [isEditing, setIsEditing] = useState(false);
+  const [infoForm, setInfoForm] = useState<InfoFormState>({
+    name: customer.name ?? '',
+    company: (customer as { company?: string }).company ?? '',
+    email: customer.email ?? '',
+    phone: customer.phone ?? '',
+    contract_grade: customer.contract_grade ?? '',
+    kind: customer.kind ?? 'account',
+  });
+
+  useEffect(() => {
+    setInfoForm({
+      name: customer.name ?? '',
+      company: (customer as { company?: string }).company ?? '',
+      email: customer.email ?? '',
+      phone: customer.phone ?? '',
+      contract_grade: customer.contract_grade ?? '',
+      kind: customer.kind ?? 'account',
+    });
+  }, [customer]);
+
+  const patchMutation = useMutation({
+    mutationFn: (data: Partial<InfoFormState>) =>
+      api.patch(`/${tenantSlug}/customers/${customerId}`, data).then((r) => r.data),
+    onSuccess: () => {
+      toast.success('고객 정보가 수정되었습니다.');
+      setIsEditing(false);
+      onCustomerUpdated();
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const inputCls = 'h-8 w-full rounded-md border border-border-default bg-surface px-2.5 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong';
+
+  // ---- 연락처 ----
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState<ContactFormState>(EMPTY_FORM);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<ContactFormState>(EMPTY_FORM);
+
+  const CONTACTS_KEY = ['customer-contacts', tenantSlug, customerId] as const;
+
+  const { data: contactsData, isLoading: contactsLoading } = useQuery<CustomerContact[]>({
+    queryKey: CONTACTS_KEY,
+    queryFn: () =>
+      api.get(`/${tenantSlug}/customers/${customerId}/contacts`).then((r) => {
+        const d = r.data;
+        return Array.isArray(d) ? d : (d?.items ?? []);
+      }),
+  });
+
+  const contacts = contactsData ?? [];
+
+  const createContactMutation = useMutation({
+    mutationFn: (body: ContactFormState) =>
+      api.post(`/${tenantSlug}/customers/${customerId}/contacts`, {
+        name: body.name,
+        role: body.role || null,
+        email: body.email || null,
+        phone: body.phone || null,
+        is_primary: body.is_primary,
+        memo: body.memo || null,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CONTACTS_KEY });
+      setShowAddForm(false);
+      setAddForm(EMPTY_FORM);
+      toast.success('연락처가 추가되었습니다.');
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const updateContactMutation = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: ContactFormState }) =>
+      api.patch(`/${tenantSlug}/customers/${customerId}/contacts/${id}`, {
+        name: body.name,
+        role: body.role || null,
+        email: body.email || null,
+        phone: body.phone || null,
+        is_primary: body.is_primary,
+        memo: body.memo || null,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CONTACTS_KEY });
+      setEditingId(null);
+      toast.success('연락처가 수정되었습니다.');
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const deleteContactMutation = useMutation({
+    mutationFn: (id: string) =>
+      api.delete(`/${tenantSlug}/customers/${customerId}/contacts/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CONTACTS_KEY });
+      toast.success('연락처가 삭제되었습니다.');
+    },
+    onError: (err) => {
+      const msg = getErrorMessage(err);
+      if (msg.toLowerCase().includes('primary') || (err as { response?: { status?: number } })?.response?.status === 400) {
+        toast.error('다른 주 연락처를 지정한 후 삭제하세요.');
+      } else {
+        toast.error(msg);
+      }
+    },
+  });
+
+  const setPrimaryMutation = useMutation({
+    mutationFn: (id: string) =>
+      api.post(`/${tenantSlug}/customers/${customerId}/contacts/${id}/set-primary`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CONTACTS_KEY });
+      toast.success('주 연락처로 지정되었습니다.');
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  function startEdit(contact: CustomerContact) {
+    setEditingId(contact.id);
+    setEditForm({
+      name: contact.name,
+      role: contact.role ?? '',
+      email: contact.email ?? '',
+      phone: contact.phone ?? '',
+      is_primary: contact.is_primary,
+      memo: contact.memo ?? '',
+    });
+  }
 
   return (
-    <div className="p-6 max-w-lg">
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
-        {fields.map(({ label, value }) => (
-          <div key={label}>
-            <dt className="text-xs text-text-secondary">{label}</dt>
-            <dd className="mt-0.5 text-sm text-text-primary">{value ?? '-'}</dd>
+    <div className="p-6 flex flex-col gap-6 max-w-2xl">
+      {/* ---- 고객 기본 정보 카드 ---- */}
+      <div className="rounded-lg border border-border-default bg-surface p-5">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-base text-text-primary">{customer.name}</span>
+            <span className="text-xs text-text-disabled bg-surface-raised border border-border-subtle rounded px-2 py-0.5">
+              {customer.kind === 'account' ? '고객사' : '부서'}
+            </span>
+            {customer.contract_grade && (
+              <span className="text-xs font-medium text-text-secondary bg-surface-raised border border-border-subtle rounded-full px-2 py-0.5 capitalize">
+                {customer.contract_grade}
+              </span>
+            )}
+          </div>
+          {!isEditing && canWrite && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="shrink-0 p-1.5 rounded hover:bg-surface-hover text-text-disabled hover:text-text-secondary transition-colors"
+              title="편집"
+            >
+              <Pencil size={14} />
+            </button>
+          )}
+        </div>
+
+        {isEditing ? (
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="text-xs text-text-secondary mb-1 block">이름 *</label>
+                <input
+                  className={inputCls}
+                  value={infoForm.name}
+                  onChange={(e) => setInfoForm((f) => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-text-secondary mb-1 block">회사명</label>
+                <input
+                  className={inputCls}
+                  value={infoForm.company}
+                  onChange={(e) => setInfoForm((f) => ({ ...f, company: e.target.value }))}
+                  placeholder="Samsung Electronics"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-text-secondary mb-1 block">이메일</label>
+                <input
+                  type="email"
+                  className={inputCls}
+                  value={infoForm.email}
+                  onChange={(e) => setInfoForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="contact@company.com"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-text-secondary mb-1 block">전화</label>
+                <input
+                  type="tel"
+                  className={inputCls}
+                  value={infoForm.phone}
+                  onChange={(e) => setInfoForm((f) => ({ ...f, phone: e.target.value }))}
+                  placeholder="02-1234-5678"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-text-secondary mb-1 block">계약 등급</label>
+                <select
+                  className={inputCls}
+                  value={infoForm.contract_grade}
+                  onChange={(e) => setInfoForm((f) => ({ ...f, contract_grade: e.target.value }))}
+                >
+                  <option value="">없음</option>
+                  <option value="bronze">Bronze</option>
+                  <option value="silver">Silver</option>
+                  <option value="gold">Gold</option>
+                  <option value="platinum">Platinum</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-text-secondary mb-1 block">종류</label>
+                <select
+                  className={inputCls}
+                  value={infoForm.kind}
+                  onChange={(e) => setInfoForm((f) => ({ ...f, kind: e.target.value }))}
+                >
+                  <option value="account">최상위 고객사</option>
+                  <option value="division">하위 부서</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="ghost" size="sm" onClick={() => { setIsEditing(false); setInfoForm({ name: customer.name ?? '', company: (customer as { company?: string }).company ?? '', email: customer.email ?? '', phone: customer.phone ?? '', contract_grade: customer.contract_grade ?? '', kind: customer.kind ?? 'account' }); }}>
+                취소
+              </Button>
+              <Button
+                size="sm"
+                disabled={!infoForm.name.trim()}
+                onClick={() => patchMutation.mutate(infoForm)}
+                isLoading={patchMutation.isPending}
+              >
+                저장
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
+            {(customer as { company?: string }).company && (
+              <div className="col-span-2">
+                <dt className="text-xs text-text-secondary">회사</dt>
+                <dd className="mt-0.5 text-sm text-text-primary">{(customer as { company?: string }).company}</dd>
+              </div>
+            )}
+            <div>
+              <dt className="text-xs text-text-secondary">이메일</dt>
+              <dd className="mt-0.5 text-sm text-text-primary">{customer.email ?? '-'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-text-secondary">전화</dt>
+              <dd className="mt-0.5 text-sm text-text-primary">{customer.phone ?? '-'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-text-secondary">생성</dt>
+              <dd className="mt-0.5 text-sm text-text-primary">{formatRelativeTime(customer.created_at)}</dd>
+            </div>
+          </dl>
+        )}
+      </div>
+
+      {/* ---- 구분선 + 담당 연락처 섹션 ---- */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium text-text-primary">담당 연락처</h3>
+          {canWrite && !showAddForm && (
+            <Button
+              size="sm"
+              variant="ghost"
+              leftIcon={<Plus size={13} />}
+              onClick={() => setShowAddForm(true)}
+            >
+              연락처 추가
+            </Button>
+          )}
+        </div>
+
+        {/* 추가 폼 */}
+        {showAddForm && (
+          <div className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-3 mb-3">
+            <p className="text-sm font-medium text-text-primary">새 연락처</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="text-xs text-text-secondary mb-1 block">이름 *</label>
+                <input
+                  value={addForm.name}
+                  onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="홍길동"
+                  className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-text-secondary mb-1 block">직책 (선택)</label>
+                <input
+                  value={addForm.role}
+                  onChange={(e) => setAddForm((f) => ({ ...f, role: e.target.value }))}
+                  placeholder="IT 담당자"
+                  className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-text-secondary mb-1 block">이메일 (선택)</label>
+                <input
+                  type="email"
+                  value={addForm.email}
+                  onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="name@company.com"
+                  className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-text-secondary mb-1 block">전화 (선택)</label>
+                <input
+                  type="tel"
+                  value={addForm.phone}
+                  onChange={(e) => setAddForm((f) => ({ ...f, phone: e.target.value }))}
+                  placeholder="010-1234-5678"
+                  className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-text-secondary mb-1 block">메모 (선택)</label>
+                <input
+                  value={addForm.memo}
+                  onChange={(e) => setAddForm((f) => ({ ...f, memo: e.target.value }))}
+                  placeholder="추가 메모"
+                  className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  id="add-primary"
+                  type="checkbox"
+                  checked={addForm.is_primary}
+                  onChange={(e) => setAddForm((f) => ({ ...f, is_primary: e.target.checked }))}
+                  className="rounded border-border-default"
+                />
+                <label htmlFor="add-primary" className="text-sm text-text-secondary cursor-pointer">
+                  주 연락처
+                </label>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setShowAddForm(false); setAddForm(EMPTY_FORM); }}
+              >
+                취소
+              </Button>
+              <Button
+                size="sm"
+                disabled={!addForm.name.trim()}
+                onClick={() => createContactMutation.mutate(addForm)}
+                isLoading={createContactMutation.isPending}
+              >
+                저장
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {contactsLoading && (
+          <div className="p-3">
+            <Skeleton className="h-24 w-full" />
+          </div>
+        )}
+
+        {!contactsLoading && contacts.length === 0 && !showAddForm && (
+          <div className="flex flex-col items-center justify-center py-10 text-text-secondary text-sm">
+            등록된 연락처가 없습니다.
+          </div>
+        )}
+
+        {/* 연락처 카드 목록 */}
+        <div className="flex flex-col gap-2">
+          {contacts.map((contact) => (
+            <div
+              key={contact.id}
+              className="rounded-lg border border-border-default bg-surface p-4"
+            >
+              {editingId === contact.id ? (
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm font-medium text-text-primary">연락처 수정</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <label className="text-xs text-text-secondary mb-1 block">이름 *</label>
+                      <input
+                        value={editForm.name}
+                        onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                        className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-text-secondary mb-1 block">직책</label>
+                      <input
+                        value={editForm.role}
+                        onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))}
+                        className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-text-secondary mb-1 block">이메일</label>
+                      <input
+                        type="email"
+                        value={editForm.email}
+                        onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+                        className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-text-secondary mb-1 block">전화</label>
+                      <input
+                        type="tel"
+                        value={editForm.phone}
+                        onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+                        className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-text-secondary mb-1 block">메모</label>
+                      <input
+                        value={editForm.memo}
+                        onChange={(e) => setEditForm((f) => ({ ...f, memo: e.target.value }))}
+                        className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id={`edit-primary-${contact.id}`}
+                        type="checkbox"
+                        checked={editForm.is_primary}
+                        onChange={(e) => setEditForm((f) => ({ ...f, is_primary: e.target.checked }))}
+                        className="rounded border-border-default"
+                      />
+                      <label
+                        htmlFor={`edit-primary-${contact.id}`}
+                        className="text-sm text-text-secondary cursor-pointer"
+                      >
+                        주 연락처
+                      </label>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="ghost" size="sm" onClick={() => setEditingId(null)}>
+                      취소
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={!editForm.name.trim()}
+                      onClick={() => updateContactMutation.mutate({ id: contact.id, body: editForm })}
+                      isLoading={updateContactMutation.isPending}
+                    >
+                      저장
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm text-text-primary">{contact.name}</span>
+                      {contact.is_primary && (
+                        <span className="inline-flex items-center gap-0.5 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                          <Star size={10} className="fill-green-600 text-green-600" />
+                          주 연락처
+                        </span>
+                      )}
+                      {contact.role && (
+                        <span className="text-xs text-text-disabled">{contact.role}</span>
+                      )}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                      {contact.email && (
+                        <a
+                          href={`mailto:${contact.email}`}
+                          className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
+                        >
+                          <Mail size={11} />
+                          {contact.email}
+                        </a>
+                      )}
+                      {contact.phone && (
+                        <a
+                          href={`tel:${contact.phone}`}
+                          className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
+                        >
+                          <Phone size={11} />
+                          {contact.phone}
+                        </a>
+                      )}
+                    </div>
+                    {contact.memo && (
+                      <p className="mt-1.5 text-xs text-text-disabled leading-relaxed">
+                        {contact.memo}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    {canWrite && !contact.is_primary && (
+                      <button
+                        title="주 연락처로 지정"
+                        onClick={() => setPrimaryMutation.mutate(contact.id)}
+                        className="p-1.5 rounded hover:bg-surface-hover text-text-disabled hover:text-yellow-500 transition-colors"
+                      >
+                        <Star size={13} />
+                      </button>
+                    )}
+                    {canWrite && (
+                      <button
+                        title="수정"
+                        onClick={() => startEdit(contact)}
+                        className="p-1.5 rounded hover:bg-surface-hover text-text-disabled hover:text-text-secondary transition-colors"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        title="삭제"
+                        onClick={() => deleteContactMutation.mutate(contact.id)}
+                        className="p-1.5 rounded hover:bg-error-bg text-text-disabled hover:text-error-text transition-colors"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
+// 탭: 인프라 (InfraTab) — CMDB CI + Assets 통합
+// -----------------------------------------------------------------------
+const HW_TYPES = new Set(['server', 'network_device', 'storage', 'firewall', 'router_switch', 'workstation']);
+const SW_TYPES = new Set(['application', 'database', 'middleware', 'service', 'virtual_machine', 'cloud_resource']);
+
+const STATUS_COLORS: Record<string, string> = {
+  active:         'bg-status-resolved-bg text-status-resolved',
+  maintenance:    'bg-warning-bg text-warning-text',
+  inactive:       'bg-error-bg text-error-text',
+  decommissioned: 'bg-border-subtle text-text-disabled',
+};
+const STATUS_LABELS: Record<string, string> = {
+  active: '운영중', maintenance: '점검중', inactive: '중단', decommissioned: '폐기',
+};
+
+function getCiIcon(ciType: string) {
+  if (ciType === 'server' || ciType === 'workstation') return <Server size={14} className="shrink-0 text-text-secondary" />;
+  if (ciType === 'network_device' || ciType === 'firewall' || ciType === 'router_switch') return <Wifi size={14} className="shrink-0 text-text-secondary" />;
+  if (ciType === 'storage') return <HardDrive size={14} className="shrink-0 text-text-secondary" />;
+  if (ciType === 'application' || ciType === 'service') return <AppWindow size={14} className="shrink-0 text-text-secondary" />;
+  if (ciType === 'database') return <Database size={14} className="shrink-0 text-text-secondary" />;
+  return <Layers size={14} className="shrink-0 text-text-secondary" />;
+}
+
+type InfraFilter = 'all' | 'hw' | 'sw' | 'asset';
+
+function InfraTab({ tenantSlug, customerId }: { tenantSlug: string; customerId: string }) {
+  const [filter, setFilter] = useState<InfraFilter>('all');
+
+  const { data: ciData, isLoading: ciLoading } = useQuery({
+    queryKey: ['customer-cis', tenantSlug, customerId],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/cmdb`, { params: { customer_id: customerId, page_size: 100 } })
+        .then((r) => r.data),
+  });
+
+  const { data: assetData, isLoading: assetLoading } = useQuery({
+    queryKey: ['customer-assets', tenantSlug, customerId],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/assets`, { params: { customer_id: customerId, page_size: 100 } })
+        .then((r) => r.data),
+  });
+
+  const cis: CI[] = ciData?.items ?? [];
+  const assets: Asset[] = assetData?.items ?? [];
+
+  const hwCis = cis.filter((ci) => HW_TYPES.has(ci.ci_type));
+  const swCis = cis.filter((ci) => SW_TYPES.has(ci.ci_type));
+
+  const isLoading = ciLoading || assetLoading;
+
+  if (isLoading) {
+    return (
+      <div className="p-6 flex flex-col gap-3">
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
+  }
+
+  const filterTabs: { id: InfraFilter; label: string }[] = [
+    { id: 'all', label: `전체 (${cis.length + assets.length})` },
+    { id: 'hw', label: `HW (${hwCis.length})` },
+    { id: 'sw', label: `SW (${swCis.length})` },
+    { id: 'asset', label: `자산 (${assets.length})` },
+  ];
+
+  const showCis = filter === 'all' || filter === 'hw' || filter === 'sw';
+  const showAssets = filter === 'all' || filter === 'asset';
+
+  const displayCis = filter === 'hw' ? hwCis : filter === 'sw' ? swCis : cis;
+
+  return (
+    <div className="flex flex-col h-full overflow-auto">
+      {/* 상태 요약 바 */}
+      <div className="flex gap-4 px-6 py-4 border-b border-border-subtle bg-surface-raised shrink-0">
+        <div className="flex flex-col items-center px-4 py-2 rounded-lg bg-surface border border-border-subtle">
+          <span className="text-xl font-bold text-text-primary">{hwCis.length}</span>
+          <span className="text-xs text-text-secondary mt-0.5">HW 총 {hwCis.length}대</span>
+        </div>
+        <div className="flex flex-col items-center px-4 py-2 rounded-lg bg-surface border border-border-subtle">
+          <span className="text-xl font-bold text-text-primary">{swCis.length}</span>
+          <span className="text-xs text-text-secondary mt-0.5">SW 총 {swCis.length}개</span>
+        </div>
+        <div className="flex flex-col items-center px-4 py-2 rounded-lg bg-surface border border-border-subtle">
+          <span className="text-xl font-bold text-text-primary">{assets.length}</span>
+          <span className="text-xs text-text-secondary mt-0.5">자산 {assets.length}개</span>
+        </div>
+      </div>
+
+      {/* 필터 탭 */}
+      <div className="flex gap-1 px-4 py-2 border-b border-border-subtle shrink-0">
+        {filterTabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setFilter(tab.id)}
+            className={cn(
+              'px-3 py-1.5 text-xs rounded-md transition-colors',
+              filter === tab.id
+                ? 'bg-surface-selected text-text-primary font-medium'
+                : 'text-text-secondary hover:bg-surface-hover',
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 아이템 목록 */}
+      <div className="flex-1 divide-y divide-border-subtle">
+        {showCis && displayCis.map((ci) => (
+          <div key={`ci-${ci.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover">
+            {getCiIcon(ci.ci_type)}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-text-primary truncate">{ci.name}</span>
+                <span className="text-xs text-text-disabled shrink-0">{ci.ci_type}</span>
+              </div>
+              <div className="flex items-center gap-3 mt-0.5">
+                {ci.hostname && (
+                  <span className="text-xs text-text-secondary">{ci.hostname}</span>
+                )}
+                {ci.ip_address && (
+                  <span className="text-xs text-text-disabled font-mono">{ci.ip_address}</span>
+                )}
+                {ci.environment && (
+                  <span className="text-xs text-text-disabled capitalize">{ci.environment}</span>
+                )}
+              </div>
+            </div>
+            {ci.status && (
+              <span className={cn(
+                'shrink-0 rounded-full px-2 py-0.5 text-xs font-medium',
+                STATUS_COLORS[ci.status] ?? 'bg-border-subtle text-text-disabled',
+              )}>
+                {STATUS_LABELS[ci.status] ?? ci.status}
+              </span>
+            )}
           </div>
         ))}
-      </dl>
+
+        {showAssets && assets.map((a) => (
+          <div key={`asset-${a.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover">
+            <Package size={14} className="shrink-0 text-text-secondary" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-text-primary truncate">{a.model}</span>
+                <span className="text-xs text-text-disabled shrink-0">{a.asset_type}</span>
+              </div>
+              <div className="flex items-center gap-3 mt-0.5">
+                {a.asset_tag && (
+                  <span className="text-xs font-mono text-text-secondary">{a.asset_tag}</span>
+                )}
+                {a.warranty_end && (
+                  <span className="text-xs text-text-disabled">보증만료 {formatRelativeTime(a.warranty_end)}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {(filter === 'all' ? (cis.length + assets.length) : filter === 'hw' ? hwCis.length : filter === 'sw' ? swCis.length : assets.length) === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-text-secondary text-sm">
+            등록된 항목이 없습니다.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -763,431 +1498,12 @@ function NotesTab({
 }
 
 // -----------------------------------------------------------------------
-// 탭: 연락처
-// -----------------------------------------------------------------------
-interface ContactFormState {
-  name: string;
-  role: string;
-  email: string;
-  phone: string;
-  is_primary: boolean;
-  memo: string;
-}
-
-const EMPTY_FORM: ContactFormState = {
-  name: '',
-  role: '',
-  email: '',
-  phone: '',
-  is_primary: false,
-  memo: '',
-};
-
-function ContactsTab({
-  tenantSlug,
-  customerId,
-}: {
-  tenantSlug: string;
-  customerId: string;
-}) {
-  const queryClient = useQueryClient();
-  const user = getUser();
-  const canWrite = isEngineerOrAbove(user?.role);
-  const canDelete = isTeamLeadOrAbove(user?.role);
-
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [addForm, setAddForm] = useState<ContactFormState>(EMPTY_FORM);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<ContactFormState>(EMPTY_FORM);
-
-  const CONTACTS_KEY = ['customer-contacts', tenantSlug, customerId] as const;
-
-  const { data, isLoading } = useQuery<CustomerContact[]>({
-    queryKey: CONTACTS_KEY,
-    queryFn: () =>
-      api.get(`/${tenantSlug}/customers/${customerId}/contacts`).then((r) => {
-        const d = r.data;
-        // 서버가 { items: [...] } 또는 [] 형태 모두 허용
-        return Array.isArray(d) ? d : (d?.items ?? []);
-      }),
-  });
-
-  const contacts = data ?? [];
-
-  const createMutation = useMutation({
-    mutationFn: (body: ContactFormState) =>
-      api.post(`/${tenantSlug}/customers/${customerId}/contacts`, {
-        name: body.name,
-        role: body.role || null,
-        email: body.email || null,
-        phone: body.phone || null,
-        is_primary: body.is_primary,
-        memo: body.memo || null,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: CONTACTS_KEY });
-      setShowAddForm(false);
-      setAddForm(EMPTY_FORM);
-      toast.success('연락처가 추가되었습니다.');
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: ContactFormState }) =>
-      api.patch(`/${tenantSlug}/customers/${customerId}/contacts/${id}`, {
-        name: body.name,
-        role: body.role || null,
-        email: body.email || null,
-        phone: body.phone || null,
-        is_primary: body.is_primary,
-        memo: body.memo || null,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: CONTACTS_KEY });
-      setEditingId(null);
-      toast.success('연락처가 수정되었습니다.');
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.delete(`/${tenantSlug}/customers/${customerId}/contacts/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: CONTACTS_KEY });
-      toast.success('연락처가 삭제되었습니다.');
-    },
-    onError: (err) => {
-      const msg = getErrorMessage(err);
-      // 서버 400: 주 연락처 삭제 시도
-      if (msg.toLowerCase().includes('primary') || (err as { response?: { status?: number } })?.response?.status === 400) {
-        toast.error('다른 주 연락처를 지정한 후 삭제하세요.');
-      } else {
-        toast.error(msg);
-      }
-    },
-  });
-
-  const setPrimaryMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.post(`/${tenantSlug}/customers/${customerId}/contacts/${id}/set-primary`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: CONTACTS_KEY });
-      toast.success('주 연락처로 지정되었습니다.');
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
-
-  function startEdit(contact: CustomerContact) {
-    setEditingId(contact.id);
-    setEditForm({
-      name: contact.name,
-      role: contact.role ?? '',
-      email: contact.email ?? '',
-      phone: contact.phone ?? '',
-      is_primary: contact.is_primary,
-      memo: contact.memo ?? '',
-    });
-  }
-
-  if (isLoading) {
-    return (
-      <div className="p-6">
-        <Skeleton className="h-40 w-full" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-6 flex flex-col gap-4 max-w-2xl">
-      {/* 추가 폼 */}
-      {showAddForm && (
-        <div className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-3">
-          <p className="text-sm font-medium text-text-primary">새 연락처</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <label className="text-xs text-text-secondary mb-1 block">이름 *</label>
-              <input
-                value={addForm.name}
-                onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="홍길동"
-                className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-text-secondary mb-1 block">직책 (선택)</label>
-              <input
-                value={addForm.role}
-                onChange={(e) => setAddForm((f) => ({ ...f, role: e.target.value }))}
-                placeholder="IT 담당자"
-                className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-text-secondary mb-1 block">이메일 (선택)</label>
-              <input
-                type="email"
-                value={addForm.email}
-                onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="name@company.com"
-                className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-text-secondary mb-1 block">전화 (선택)</label>
-              <input
-                type="tel"
-                value={addForm.phone}
-                onChange={(e) => setAddForm((f) => ({ ...f, phone: e.target.value }))}
-                placeholder="010-1234-5678"
-                className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-text-secondary mb-1 block">메모 (선택)</label>
-              <input
-                value={addForm.memo}
-                onChange={(e) => setAddForm((f) => ({ ...f, memo: e.target.value }))}
-                placeholder="추가 메모"
-                className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                id="add-primary"
-                type="checkbox"
-                checked={addForm.is_primary}
-                onChange={(e) => setAddForm((f) => ({ ...f, is_primary: e.target.checked }))}
-                className="rounded border-border-default"
-              />
-              <label htmlFor="add-primary" className="text-sm text-text-secondary cursor-pointer">
-                주 연락처
-              </label>
-            </div>
-          </div>
-          <div className="flex gap-2 justify-end">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => { setShowAddForm(false); setAddForm(EMPTY_FORM); }}
-            >
-              취소
-            </Button>
-            <Button
-              size="sm"
-              disabled={!addForm.name.trim()}
-              onClick={() => createMutation.mutate(addForm)}
-              isLoading={createMutation.isPending}
-            >
-              저장
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* 추가 버튼 */}
-      {!showAddForm && canWrite && (
-        <Button
-          variant="ghost"
-          size="sm"
-          leftIcon={<Plus size={13} />}
-          className="self-start"
-          onClick={() => setShowAddForm(true)}
-        >
-          연락처 추가
-        </Button>
-      )}
-
-      {/* 빈 상태 */}
-      {contacts.length === 0 && !showAddForm && (
-        <div className="flex flex-col items-center justify-center py-16 text-text-secondary text-sm">
-          등록된 연락처가 없습니다.
-        </div>
-      )}
-
-      {/* 연락처 카드 목록 */}
-      <div className="flex flex-col gap-2">
-        {contacts.map((contact) => (
-          <div
-            key={contact.id}
-            className="rounded-lg border border-border-default bg-surface p-4"
-          >
-            {editingId === contact.id ? (
-              /* ---- 수정 인라인 폼 ---- */
-              <div className="flex flex-col gap-3">
-                <p className="text-sm font-medium text-text-primary">연락처 수정</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2">
-                    <label className="text-xs text-text-secondary mb-1 block">이름 *</label>
-                    <input
-                      value={editForm.name}
-                      onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                      className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-text-secondary mb-1 block">직책</label>
-                    <input
-                      value={editForm.role}
-                      onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))}
-                      className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-text-secondary mb-1 block">이메일</label>
-                    <input
-                      type="email"
-                      value={editForm.email}
-                      onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
-                      className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-text-secondary mb-1 block">전화</label>
-                    <input
-                      type="tel"
-                      value={editForm.phone}
-                      onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
-                      className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-text-secondary mb-1 block">메모</label>
-                    <input
-                      value={editForm.memo}
-                      onChange={(e) => setEditForm((f) => ({ ...f, memo: e.target.value }))}
-                      className="h-8 w-full rounded-md border border-border-default bg-transparent px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      id={`edit-primary-${contact.id}`}
-                      type="checkbox"
-                      checked={editForm.is_primary}
-                      onChange={(e) => setEditForm((f) => ({ ...f, is_primary: e.target.checked }))}
-                      className="rounded border-border-default"
-                    />
-                    <label
-                      htmlFor={`edit-primary-${contact.id}`}
-                      className="text-sm text-text-secondary cursor-pointer"
-                    >
-                      주 연락처
-                    </label>
-                  </div>
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <Button variant="ghost" size="sm" onClick={() => setEditingId(null)}>
-                    취소
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={!editForm.name.trim()}
-                    onClick={() => updateMutation.mutate({ id: contact.id, body: editForm })}
-                    isLoading={updateMutation.isPending}
-                  >
-                    저장
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              /* ---- 카드 뷰 ---- */
-              <div className="flex items-start gap-3">
-                <div className="flex-1 min-w-0">
-                  {/* 이름 + 주연락처 배지 */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm text-text-primary">{contact.name}</span>
-                    {contact.is_primary && (
-                      <span className="inline-flex items-center gap-0.5 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                        <Star size={10} className="fill-green-600 text-green-600" />
-                        주 연락처
-                      </span>
-                    )}
-                    {contact.role && (
-                      <span className="text-xs text-text-disabled">{contact.role}</span>
-                    )}
-                  </div>
-
-                  {/* 이메일 / 전화 */}
-                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-                    {contact.email && (
-                      <a
-                        href={`mailto:${contact.email}`}
-                        className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
-                      >
-                        <Mail size={11} />
-                        {contact.email}
-                      </a>
-                    )}
-                    {contact.phone && (
-                      <a
-                        href={`tel:${contact.phone}`}
-                        className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
-                      >
-                        <Phone size={11} />
-                        {contact.phone}
-                      </a>
-                    )}
-                  </div>
-
-                  {/* 메모 */}
-                  {contact.memo && (
-                    <p className="mt-1.5 text-xs text-text-disabled leading-relaxed">
-                      {contact.memo}
-                    </p>
-                  )}
-                </div>
-
-                {/* 액션 버튼 */}
-                <div className="flex items-center gap-0.5 shrink-0">
-                  {/* 주연락처 지정 (engineer+, 현재 주연락처가 아닌 경우) */}
-                  {canWrite && !contact.is_primary && (
-                    <button
-                      title="주 연락처로 지정"
-                      onClick={() => setPrimaryMutation.mutate(contact.id)}
-                      className="p-1.5 rounded hover:bg-surface-hover text-text-disabled hover:text-yellow-500 transition-colors"
-                    >
-                      <Star size={13} />
-                    </button>
-                  )}
-                  {/* 수정 (engineer+) */}
-                  {canWrite && (
-                    <button
-                      title="수정"
-                      onClick={() => startEdit(contact)}
-                      className="p-1.5 rounded hover:bg-surface-hover text-text-disabled hover:text-text-secondary transition-colors"
-                    >
-                      <Pencil size={13} />
-                    </button>
-                  )}
-                  {/* 삭제 (team_lead+) */}
-                  {canDelete && (
-                    <button
-                      title="삭제"
-                      onClick={() => deleteMutation.mutate(contact.id)}
-                      className="p-1.5 rounded hover:bg-error-bg text-text-disabled hover:text-error-text transition-colors"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// -----------------------------------------------------------------------
 // 탭 정의
 // -----------------------------------------------------------------------
 const TABS = [
-  { id: 'overview',  label: 'Overview', icon: BarChart3 },
-  { id: 'contacts',  label: '연락처',   icon: Contact },
+  { id: 'info',      label: '고객 정보', icon: Info },
   { id: 'tickets',   label: '티켓',     icon: ScrollText },
-  { id: 'assets',    label: '자산',     icon: Package },
+  { id: 'infra',     label: '인프라',   icon: Cpu },
   { id: 'contracts', label: '계약',     icon: FileText },
   { id: 'notes',     label: '메모',     icon: Clock },
 ] as const;
@@ -1200,10 +1516,11 @@ type TabId = typeof TABS[number]['id'];
 export default function CustomerDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const tenantSlug = params?.tenantSlug as string;
   const customerId = params?.customerId as string;
 
-  const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const [activeTab, setActiveTab] = useState<TabId>('info');
   const [selectedNodeId, setSelectedNodeId] = useState<string>(customerId);
 
   const { data: customer, isLoading: customerLoading } = useQuery<Customer>({
@@ -1331,17 +1648,22 @@ export default function CustomerDetailPage() {
 
           {/* 탭 콘텐츠 */}
           <div className="flex-1 overflow-auto min-h-0">
-            {activeTab === 'overview' && displayCustomer && (
-              <OverviewTab customer={displayCustomer} />
-            )}
-            {activeTab === 'contacts' && (
-              <ContactsTab tenantSlug={tenantSlug} customerId={selectedNodeId} />
+            {activeTab === 'info' && displayCustomer && (
+              <InfoTab
+                tenantSlug={tenantSlug}
+                customerId={selectedNodeId}
+                customer={displayCustomer}
+                onCustomerUpdated={() => {
+                  queryClient.invalidateQueries({ queryKey: ['customer', tenantSlug, selectedNodeId] });
+                  queryClient.invalidateQueries({ queryKey: ['customer', tenantSlug, customerId] });
+                }}
+              />
             )}
             {activeTab === 'tickets' && (
               <TicketsTab tenantSlug={tenantSlug} customerId={selectedNodeId} />
             )}
-            {activeTab === 'assets' && (
-              <AssetsTab tenantSlug={tenantSlug} customerId={selectedNodeId} />
+            {activeTab === 'infra' && (
+              <InfraTab tenantSlug={tenantSlug} customerId={selectedNodeId} />
             )}
             {activeTab === 'contracts' && (
               <ContractsTab tenantSlug={tenantSlug} customerId={selectedNodeId} />

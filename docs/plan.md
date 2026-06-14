@@ -1034,3 +1034,17 @@ CREATE TABLE ticket_known_issues (
 | R-C2 | 고객 상세 > 계약 탭 — 생성·수정·삭제 전체 추가 (현재 읽기 전용) | M | [ DONE 2026-06-14 ] |
 
 **성공 기준**: 고객 상세 탭 안에서 자산·계약 전체 CRUD 가능. /assets·/contracts 별도 페이지 사용 불필요.
+
+---
+
+### R-D: 고객 정보 탭 통합 + 인프라 탭 [ DONE 2026-06-14 ]
+
+> overview + contacts → 편집 가능한 단일 탭 / assets → CMDB+자산 통합 인프라 탭
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| R-D1 | InfoTab — overview+contacts 통합, 기본정보 인라인 편집 (PATCH /customers/{id}) | M | [ DONE 2026-06-14 ] |
+| R-D2 | InfraTab — CMDB CI + 자산 통합 뷰, HW/SW 필터, status 배지 | M | [ DONE 2026-06-14 ] |
+| R-D3 | TABS 5개로 축소 (info/tickets/infra/contracts/notes), 초기 탭 info로 변경 | S | [ DONE 2026-06-14 ] |
+
+**성공 기준**: 고객 상세 첫 진입 시 기본정보+연락처가 한 화면에 표시, ✏️ 버튼으로 즉시 편집 가능. 인프라 탭에서 HW/SW/자산 필터로 전체 구성 현황 확인 가능.

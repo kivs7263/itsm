@@ -120,3 +120,4 @@ docker exec itsm_fron | ✅ | itsm | build-hook |
 | 2026-06-14 09:28 | build | docker compose build itsm_frontend 2>&1 | grep -E "ERROR|error|warning|Warning|B | ✅ | itsm | build-hook |
 | 2026-06-14 09:29 | build | docker compose build itsm_frontend 2>&1 | grep -E "ERROR|Type error|error TS|Bui | ✅ | itsm | build-hook |
 | 2026-06-14 09:30 | build | docker compose build itsm_frontend 2>&1 | grep -E "ERROR|Type error|error TS|Bui | ✅ | itsm | build-hook |
+| 2026-06-14 09:44 | build | docker compose build itsm_frontend 2>&1 | tail -30 | ✅ | itsm | build-hook |
