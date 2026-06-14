@@ -651,3 +651,270 @@ async def list_cause_categories(
         )
     ).scalars().all()
     return _build_category_tree(list(rows), None)
+
+
+# ------------------------------------------------------------------
+# 분류 체계 CRUD (team_lead+/admin)
+# ------------------------------------------------------------------
+
+
+class CategoryCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    parent_id: uuid.UUID | None = None
+
+
+class CategoryUpdate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+
+
+# ---- SymptomCategory CRUD ----
+
+@classification_router.post(
+    "/{tenant_slug}/symptom-categories",
+    response_model=CategoryNode,
+    status_code=status.HTTP_201_CREATED,
+    summary="증상 분류 생성 (team_lead+)",
+)
+async def create_symptom_category(
+    tenant_slug: str,
+    data: CategoryCreate,
+    current_user: Annotated[
+        User, Depends(require_roles(UserRole.team_lead, UserRole.admin))
+    ] = None,
+    db: AsyncSession = Depends(get_db),
+) -> CategoryNode:
+    # 부모 존재 확인 (tenant 격리)
+    if data.parent_id is not None:
+        parent = await db.scalar(
+            select(SymptomCategory).where(
+                and_(
+                    SymptomCategory.id == data.parent_id,
+                    SymptomCategory.tenant_id == current_user.tenant_id,
+                )
+            )
+        )
+        if parent is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="부모 증상 분류를 찾을 수 없습니다.",
+            )
+
+    cat = SymptomCategory(
+        id=uuid.uuid4(),
+        tenant_id=current_user.tenant_id,
+        name=data.name,
+        parent_id=data.parent_id,
+    )
+    db.add(cat)
+    await db.commit()
+    await db.refresh(cat)
+    return CategoryNode(id=cat.id, name=cat.name, display_order=cat.display_order)
+
+
+@classification_router.patch(
+    "/{tenant_slug}/symptom-categories/{category_id}",
+    response_model=CategoryNode,
+    summary="증상 분류 수정 (team_lead+)",
+)
+async def update_symptom_category(
+    tenant_slug: str,
+    category_id: uuid.UUID,
+    data: CategoryUpdate,
+    current_user: Annotated[
+        User, Depends(require_roles(UserRole.team_lead, UserRole.admin))
+    ] = None,
+    db: AsyncSession = Depends(get_db),
+) -> CategoryNode:
+    cat = await db.scalar(
+        select(SymptomCategory).where(
+            and_(
+                SymptomCategory.id == category_id,
+                SymptomCategory.tenant_id == current_user.tenant_id,
+            )
+        )
+    )
+    if cat is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="증상 분류를 찾을 수 없습니다.",
+        )
+    cat.name = data.name
+    await db.commit()
+    await db.refresh(cat)
+    return CategoryNode(id=cat.id, name=cat.name, display_order=cat.display_order)
+
+
+@classification_router.delete(
+    "/{tenant_slug}/symptom-categories/{category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="증상 분류 삭제 (admin)",
+)
+async def delete_symptom_category(
+    tenant_slug: str,
+    category_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    cat = await db.scalar(
+        select(SymptomCategory).where(
+            and_(
+                SymptomCategory.id == category_id,
+                SymptomCategory.tenant_id == current_user.tenant_id,
+            )
+        )
+    )
+    if cat is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="증상 분류를 찾을 수 없습니다.",
+        )
+
+    # 자식 카테고리 존재 체크
+    child_count = await db.scalar(
+        select(func.count()).select_from(SymptomCategory).where(
+            and_(
+                SymptomCategory.parent_id == category_id,
+                SymptomCategory.tenant_id == current_user.tenant_id,
+            )
+        )
+    )
+    if child_count and child_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="자식 분류가 있습니다. 먼저 자식을 삭제해주세요.",
+        )
+
+    await db.delete(cat)
+    await db.commit()
+
+
+# ---- CauseCategory CRUD ----
+
+@classification_router.post(
+    "/{tenant_slug}/cause-categories",
+    response_model=CategoryNode,
+    status_code=status.HTTP_201_CREATED,
+    summary="원인 분류 생성 (team_lead+)",
+)
+async def create_cause_category(
+    tenant_slug: str,
+    data: CategoryCreate,
+    current_user: Annotated[
+        User, Depends(require_roles(UserRole.team_lead, UserRole.admin))
+    ] = None,
+    db: AsyncSession = Depends(get_db),
+) -> CategoryNode:
+    if data.parent_id is not None:
+        parent = await db.scalar(
+            select(CauseCategory).where(
+                and_(
+                    CauseCategory.id == data.parent_id,
+                    CauseCategory.tenant_id == current_user.tenant_id,
+                )
+            )
+        )
+        if parent is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="부모 원인 분류를 찾을 수 없습니다.",
+            )
+
+    cat = CauseCategory(
+        id=uuid.uuid4(),
+        tenant_id=current_user.tenant_id,
+        name=data.name,
+        parent_id=data.parent_id,
+    )
+    db.add(cat)
+    await db.commit()
+    await db.refresh(cat)
+    return CategoryNode(id=cat.id, name=cat.name, display_order=cat.display_order)
+
+
+@classification_router.patch(
+    "/{tenant_slug}/cause-categories/{category_id}",
+    response_model=CategoryNode,
+    summary="원인 분류 수정 (team_lead+)",
+)
+async def update_cause_category(
+    tenant_slug: str,
+    category_id: uuid.UUID,
+    data: CategoryUpdate,
+    current_user: Annotated[
+        User, Depends(require_roles(UserRole.team_lead, UserRole.admin))
+    ] = None,
+    db: AsyncSession = Depends(get_db),
+) -> CategoryNode:
+    cat = await db.scalar(
+        select(CauseCategory).where(
+            and_(
+                CauseCategory.id == category_id,
+                CauseCategory.tenant_id == current_user.tenant_id,
+            )
+        )
+    )
+    if cat is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="원인 분류를 찾을 수 없습니다.",
+        )
+    cat.name = data.name
+    await db.commit()
+    await db.refresh(cat)
+    return CategoryNode(id=cat.id, name=cat.name, display_order=cat.display_order)
+
+
+@classification_router.delete(
+    "/{tenant_slug}/cause-categories/{category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="원인 분류 삭제 (admin)",
+)
+async def delete_cause_category(
+    tenant_slug: str,
+    category_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    cat = await db.scalar(
+        select(CauseCategory).where(
+            and_(
+                CauseCategory.id == category_id,
+                CauseCategory.tenant_id == current_user.tenant_id,
+            )
+        )
+    )
+    if cat is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="원인 분류를 찾을 수 없습니다.",
+        )
+
+    # 자식 카테고리 존재 체크
+    child_count = await db.scalar(
+        select(func.count()).select_from(CauseCategory).where(
+            and_(
+                CauseCategory.parent_id == category_id,
+                CauseCategory.tenant_id == current_user.tenant_id,
+            )
+        )
+    )
+    if child_count and child_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="자식 분류가 있습니다. 먼저 자식을 삭제해주세요.",
+        )
+
+    # TicketCause에서 사용 중인지 확인
+    used_count = await db.scalar(
+        select(func.count()).select_from(TicketCause).where(
+            TicketCause.cause_category_id == category_id
+        )
+    )
+    if used_count and used_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="티켓에서 사용 중인 분류는 삭제할 수 없습니다.",
+        )
+
+    await db.delete(cat)
+    await db.commit()

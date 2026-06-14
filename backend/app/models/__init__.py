@@ -64,6 +64,7 @@ from app.models.reply_template import ReplyTemplate  # noqa: F401
 from app.models.recurring_alert import RecurringAlert  # noqa: F401
 from app.models.ticket_known_issue import TicketKnownIssue  # noqa: F401
 from app.models.report import Report, ReportStatus  # noqa: F401
+from app.models.tenant_notification_config import TenantNotificationConfig  # noqa: F401
 
 __all__ = [
     "Base",
@@ -148,4 +149,6 @@ __all__ = [
     # reports (P6-2)
     "Report",
     "ReportStatus",
+    # tenant notification config (P4-3)
+    "TenantNotificationConfig",
 ]

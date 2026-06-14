@@ -207,3 +207,7 @@ app.include_router(kb_semantic_router.router, prefix="/api")               # /ap
 # P6-2 보고서 승인 워크플로우
 from app.routers import reports as reports_router  # noqa: E402
 app.include_router(reports_router.router, prefix="/api")                   # /api/{slug}/reports
+
+# P4-3 Settings — 사용자 관리
+from app.routers import settings_users as settings_users_router  # noqa: E402
+app.include_router(settings_users_router.router, prefix="/api")            # /api/{slug}/settings/users

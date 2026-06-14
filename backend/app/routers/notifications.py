@@ -8,6 +8,8 @@ tags   : ["notifications"]
 엔드포인트:
   GET  /{tenant_slug}/notifications                — 알림 로그 목록 (page, page_size, channel 필터)
   GET  /{tenant_slug}/notifications/channel-status — 설정된 채널 목록 반환 (admin/team_lead)
+  GET  /{tenant_slug}/notifications/config         — 채널 설정 조회 (admin)
+  PUT  /{tenant_slug}/notifications/config         — 채널 설정 저장/업데이트 (admin)
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_roles
 from app.models import User, UserRole
 from app.models.notification_log import NotificationLog, NotifChannel
+from app.models.tenant_notification_config import TenantNotificationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +62,28 @@ class ChannelStatusOut(BaseModel):
     sms: dict
     slack: dict
     teams: dict
+
+
+class NotificationConfigOut(BaseModel):
+    slack_webhook_url: str | None
+    teams_webhook_url: str | None
+    kakao_api_key: str | None
+    kakao_sender_key: str | None
+    sms_api_key: str | None
+    sms_api_secret: str | None
+    sms_from_number: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class NotificationConfigUpdate(BaseModel):
+    slack_webhook_url: str | None = None
+    teams_webhook_url: str | None = None
+    kakao_api_key: str | None = None
+    kakao_sender_key: str | None = None
+    sms_api_key: str | None = None
+    sms_api_secret: str | None = None
+    sms_from_number: str | None = None
 
 
 # ------------------------------------------------------------------
@@ -123,11 +148,104 @@ async def get_channel_status(
     current_user: Annotated[
         User, Depends(require_roles(UserRole.admin, UserRole.team_lead))
     ] = None,
+    db: AsyncSession = Depends(get_db),
 ) -> ChannelStatusOut:
-    """각 알림 채널의 활성화 여부 반환."""
+    """각 알림 채널의 활성화 여부 반환. DB 설정 우선, 없으면 env var fallback."""
+    cfg = await db.scalar(
+        select(TenantNotificationConfig).where(
+            TenantNotificationConfig.tenant_id == current_user.tenant_id
+        )
+    )
+
+    if cfg:
+        return ChannelStatusOut(
+            kakao={"configured": bool(cfg.kakao_api_key and cfg.kakao_sender_key)},
+            sms={"configured": bool(cfg.sms_api_key and cfg.sms_api_secret and cfg.sms_from_number)},
+            slack={"configured": bool(cfg.slack_webhook_url)},
+            teams={"configured": bool(cfg.teams_webhook_url)},
+        )
+
+    # DB 설정 없으면 env var fallback
     return ChannelStatusOut(
         kakao={"configured": bool(settings.KAKAO_API_KEY and settings.KAKAO_SENDER_KEY)},
         sms={"configured": bool(settings.SMS_API_KEY and settings.SMS_API_SECRET and settings.SMS_FROM_NUMBER)},
         slack={"configured": bool(settings.SLACK_WEBHOOK_URL)},
         teams={"configured": bool(settings.TEAMS_WEBHOOK_URL)},
     )
+
+
+# ------------------------------------------------------------------
+# GET /config — 채널 설정 조회 (admin)
+# ------------------------------------------------------------------
+
+
+@router.get(
+    "/config",
+    response_model=NotificationConfigOut,
+    summary="채널 설정 조회 (admin)",
+)
+async def get_notification_config(
+    tenant_slug: str,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> NotificationConfigOut:
+    """테넌트 알림 채널 설정 조회. 미설정 시 빈 값 반환."""
+    cfg = await db.scalar(
+        select(TenantNotificationConfig).where(
+            TenantNotificationConfig.tenant_id == current_user.tenant_id
+        )
+    )
+    if cfg is None:
+        return NotificationConfigOut(
+            slack_webhook_url=None,
+            teams_webhook_url=None,
+            kakao_api_key=None,
+            kakao_sender_key=None,
+            sms_api_key=None,
+            sms_api_secret=None,
+            sms_from_number=None,
+        )
+    return NotificationConfigOut.model_validate(cfg)
+
+
+# ------------------------------------------------------------------
+# PUT /config — 채널 설정 저장/업데이트 (admin) — SELECT FOR UPDATE upsert
+# ------------------------------------------------------------------
+
+
+@router.put(
+    "/config",
+    response_model=NotificationConfigOut,
+    summary="채널 설정 저장/업데이트 (admin)",
+)
+async def upsert_notification_config(
+    tenant_slug: str,
+    data: NotificationConfigUpdate,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> NotificationConfigOut:
+    """채널 설정 upsert (SELECT FOR UPDATE → 있으면 UPDATE, 없으면 INSERT)."""
+    import uuid as _uuid
+
+    cfg = await db.scalar(
+        select(TenantNotificationConfig)
+        .where(TenantNotificationConfig.tenant_id == current_user.tenant_id)
+        .with_for_update()
+    )
+
+    update_fields = data.model_dump(exclude_unset=False)
+
+    if cfg is not None:
+        for field, value in update_fields.items():
+            setattr(cfg, field, value)
+    else:
+        cfg = TenantNotificationConfig(
+            id=_uuid.uuid4(),
+            tenant_id=current_user.tenant_id,
+            **update_fields,
+        )
+        db.add(cfg)
+
+    await db.commit()
+    await db.refresh(cfg)
+    return NotificationConfigOut.model_validate(cfg)

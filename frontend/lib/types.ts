@@ -495,3 +495,32 @@ export interface SemanticSearchResult {
   category: string | null;
   similarity: number; // 0.0 ~ 1.0
 }
+
+// -----------------------------------------------------------------------
+// Settings 타입
+// -----------------------------------------------------------------------
+export interface UserSetting {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface NotificationConfig {
+  slack_webhook_url: string | null;
+  teams_webhook_url: string | null;
+  kakao_api_key: string | null;
+  kakao_sender_key: string | null;
+  sms_api_key: string | null;
+  sms_api_secret: string | null;
+  sms_from_number: string | null;
+}
+
+export interface SymptomCategoryItem {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  children?: SymptomCategoryItem[];
+}

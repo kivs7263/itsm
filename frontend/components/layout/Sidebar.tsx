@@ -21,11 +21,12 @@ import {
   BookOpen,
   CalendarDays,
   RefreshCw,
+  Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSlug } from '@/lib/slug';
 import { useAuth } from '@/hooks/useAuth';
-import { isTeamLeadOrAbove, isSales, isCLevel, type UserRole } from '@/lib/auth';
+import { isTeamLeadOrAbove, isSales, isCLevel, isAdminRole, type UserRole } from '@/lib/auth';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { getInitials } from '@/lib/utils';
 
@@ -62,12 +63,19 @@ const ALL_ITEMS: NavItem[] = [
   { label: '리포트',     href: '/reports',           icon: BarChart2  },
 ];
 
+const ADMIN_ONLY_ITEMS: NavItem[] = [
+  { label: '설정', href: '/settings', icon: Settings },
+];
+
 function getNavItems(role: UserRole | undefined): NavItem[] {
   if (isCLevel(role)) {
     return ALL_ITEMS.filter((i) => ['/home', '/reports'].includes(i.href));
   }
   if (isSales(role)) {
     return ALL_ITEMS.filter((i) => ['/customers', '/contracts', '/reports'].includes(i.href));
+  }
+  if (isAdminRole(role)) {
+    return [...ALL_ITEMS, ...ADMIN_ONLY_ITEMS];
   }
   if (isTeamLeadOrAbove(role)) {
     return ALL_ITEMS;
