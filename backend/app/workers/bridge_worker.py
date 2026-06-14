@@ -24,7 +24,7 @@ from app.services.bridge_service import compute_kpi, push_to_sa
 logger = logging.getLogger(__name__)
 
 _LOCK_KEY = "itsm:bridge_worker:lock"
-_LOCK_TTL = 3600  # seconds — 1주기와 동일
+_LOCK_TTL = 1800  # seconds — 30분 stale 임계값(BIZCARD-A BA-7)
 _DIRTY_KEY_PREFIX = "itsm:kpi:dirty:"  # {business_id} → "1" (TTL 300s)
 _running = True
 

@@ -95,7 +95,7 @@ class Settings(BaseSettings):
     # SA_BACKEND_URL 미설정 시 브릿지 비활성 (graceful skip)
     # ------------------------------------------------------------------
     SA_BACKEND_URL: str = ""           # http://sa_backend:8000
-    BRIDGE_INTERVAL_MINUTES: int = 60  # KPI push 주기 (분)
+    BRIDGE_INTERVAL_MINUTES: int = 30  # KPI push 주기 (분) — stale 임계값 30분
 
     # ------------------------------------------------------------------
     # [선택] 이메일 채널 수신 (IMAP 폴링)
