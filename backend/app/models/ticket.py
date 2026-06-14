@@ -88,6 +88,9 @@ class Ticket(Base):
         nullable=True,
     )
     ticket_number = Column(String(25), nullable=True, unique=False)  # TKT-YYYYMMDD-NNNN
+    # P5-3 반복 장애 감지
+    is_recurring_flag = Column(Boolean, nullable=False, default=False)
+    recurring_detected_at = Column(DateTime(timezone=True), nullable=True)
     # P5-1 설치 워크플로우 (request_type='installation' 티켓 전용)
     installation_step = Column(String(30), nullable=True)
     installation_history = Column(JSONB, nullable=False, default=list)

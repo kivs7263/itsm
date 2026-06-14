@@ -60,6 +60,8 @@ from app.models.notification_log import (  # noqa: F401
 )
 from app.models.work_log import TicketWorkLog, WorkType  # noqa: F401
 from app.models.reply_template import ReplyTemplate  # noqa: F401
+from app.models.recurring_alert import RecurringAlert  # noqa: F401
+from app.models.ticket_known_issue import TicketKnownIssue  # noqa: F401
 
 __all__ = [
     "Base",
@@ -136,4 +138,8 @@ __all__ = [
     "WorkType",
     # reply template
     "ReplyTemplate",
+    # recurring alerts (P5-3)
+    "RecurringAlert",
+    # ticket known issues (P5-4)
+    "TicketKnownIssue",
 ]

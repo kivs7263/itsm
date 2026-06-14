@@ -30,6 +30,8 @@ export interface Ticket {
   assignee_name?: string;
   sla_response_deadline?: string | null;   // ISO datetime
   sla_resolution_deadline?: string | null; // ISO datetime
+  // P5-3 반복 장애
+  is_recurring_flag?: boolean;
 }
 
 export interface TicketComment {
@@ -371,4 +373,46 @@ export interface ReplyTemplate {
 export interface ReplyTemplatesResponse {
   items: ReplyTemplate[];
   total: number;
+}
+
+// -----------------------------------------------------------------------
+// P5-3 반복 장애 알림 타입
+// -----------------------------------------------------------------------
+export interface RecurringAlert {
+  id: string;
+  customer_id: string | null;
+  symptom_category_id: string | null;
+  trigger_ticket_ids: string[];
+  occurrence_count: number;
+  detected_at: string;
+  is_acknowledged: boolean;
+}
+
+export interface RecurringAlertsResponse {
+  items: RecurringAlert[];
+  total: number;
+}
+
+// -----------------------------------------------------------------------
+// P5-4 알려진 이슈 타입
+// -----------------------------------------------------------------------
+export interface KnownIssue {
+  id: string;
+  title: string;
+  ki_severity: string | null;
+  ki_status: string | null;
+  ki_symptom_category_id: string | null;
+}
+
+export interface KnownIssuesResponse {
+  items: KnownIssue[];
+  total: number;
+}
+
+// -----------------------------------------------------------------------
+// 증상 분류 타입
+// -----------------------------------------------------------------------
+export interface SymptomCategory {
+  id: string;
+  name: string;
 }

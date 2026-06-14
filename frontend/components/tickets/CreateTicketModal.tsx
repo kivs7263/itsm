@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   AlertTriangle,
@@ -16,6 +16,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
+import type { KnownIssue, SymptomCategory } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -104,6 +105,7 @@ const createTicketSchema = z.object({
   priority: z.enum(['low', 'medium', 'high', 'critical']),
   channel: z.enum(['email', 'phone', 'portal', 'internal']),
   source: z.string().optional(),
+  symptom_category_id: z.string().optional(),
 });
 
 type CreateTicketValues = z.infer<typeof createTicketSchema>;
@@ -199,6 +201,41 @@ function TicketFormStep({
   const priority = watch('priority');
   const channel = watch('channel');
   const source = watch('source');
+  const symptomCategoryId = watch('symptom_category_id');
+
+  // 증상 분류 목록 (incident 전용)
+  const { data: symptomCategoriesData } = useQuery<{ items: SymptomCategory[] } | SymptomCategory[]>({
+    queryKey: ['symptom-categories', tenantSlug],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/symptom-categories`).then((r) => r.data),
+    enabled: requestType === 'incident',
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const symptomCategories: SymptomCategory[] = Array.isArray(symptomCategoriesData)
+    ? symptomCategoriesData
+    : Array.isArray((symptomCategoriesData as { items: SymptomCategory[] })?.items)
+      ? (symptomCategoriesData as { items: SymptomCategory[] }).items
+      : [];
+
+  // 알려진 이슈 제안 (symptom_category_id 선택 시)
+  const { data: knownIssuesData } = useQuery<{ items: KnownIssue[] } | KnownIssue[]>({
+    queryKey: ['known-issues-suggest', tenantSlug, symptomCategoryId],
+    queryFn: () =>
+      api
+        .get(`/${tenantSlug}/kb/known-issues/suggest`, {
+          params: { symptom_category_id: symptomCategoryId },
+        })
+        .then((r) => r.data),
+    enabled: requestType === 'incident' && !!symptomCategoryId,
+    staleTime: 60 * 1000,
+  });
+
+  const knownIssues: KnownIssue[] = Array.isArray(knownIssuesData)
+    ? knownIssuesData
+    : Array.isArray((knownIssuesData as { items: KnownIssue[] })?.items)
+      ? (knownIssuesData as { items: KnownIssue[] }).items
+      : [];
 
   async function onSubmit(values: CreateTicketValues) {
     try {
@@ -281,22 +318,54 @@ function TicketFormStep({
             </FormField>
           </div>
 
-          {/* 발견 주체 (incident 전용) */}
+          {/* 증상 분류 + 발견 주체 (incident 전용) */}
           {requestType === 'incident' && (
-            <FormField label="발견 주체">
-              <Select
-                value={source ?? ''}
-                onValueChange={(v) => setValue('source', v)}
-              >
-                <SelectTrigger><SelectValue placeholder="선택 (선택)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="customer_direct">고객 직접 신고</SelectItem>
-                  <SelectItem value="customer_relay">고객사 내부 전달</SelectItem>
-                  <SelectItem value="engineer_found">엔지니어 발견</SelectItem>
-                  <SelectItem value="monitoring">모니터링 감지</SelectItem>
-                </SelectContent>
-              </Select>
-            </FormField>
+            <>
+              <FormField label="증상 분류">
+                <Select
+                  value={symptomCategoryId ?? ''}
+                  onValueChange={(v) => setValue('symptom_category_id', v || undefined)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="선택 (선택)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {symptomCategories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormField>
+
+              {/* 알려진 이슈 배너 */}
+              {knownIssues.length > 0 && (
+                <div className="flex items-start gap-2 rounded-lg border border-warning bg-warning-bg px-3 py-2.5 text-sm text-warning-text">
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                  <span>
+                    알려진 이슈 {knownIssues.length}건 —{' '}
+                    {knownIssues.map((ki) => ki.title).join(', ')}.
+                    해결 방법을 먼저 확인해보세요.
+                  </span>
+                </div>
+              )}
+
+              <FormField label="발견 주체">
+                <Select
+                  value={source ?? ''}
+                  onValueChange={(v) => setValue('source', v)}
+                >
+                  <SelectTrigger><SelectValue placeholder="선택 (선택)" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="customer_direct">고객 직접 신고</SelectItem>
+                    <SelectItem value="customer_relay">고객사 내부 전달</SelectItem>
+                    <SelectItem value="engineer_found">엔지니어 발견</SelectItem>
+                    <SelectItem value="monitoring">모니터링 감지</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
+            </>
           )}
         </div>
       </div>

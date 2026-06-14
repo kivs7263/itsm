@@ -20,6 +20,7 @@ import {
   Inbox,
   BookOpen,
   CalendarDays,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSlug } from '@/lib/slug';
@@ -45,19 +46,20 @@ function getInitialCollapsed(): boolean {
 type NavItem = { label: string; href: string; icon: React.ElementType };
 
 const ALL_ITEMS: NavItem[] = [
-  { label: '대시보드',   href: '/home',            icon: Home       },
-  { label: '공유 큐',    href: '/queue',           icon: Inbox      },
-  { label: '티켓',       href: '/tickets',         icon: LifeBuoy   },
-  { label: '캘린더',     href: '/calendar',        icon: CalendarDays },
-  { label: '고객',       href: '/customers',       icon: Users      },
-  { label: '자산',       href: '/assets',          icon: Package    },
-  { label: 'CMDB',       href: '/cmdb',            icon: Server     },
-  { label: '계약',       href: '/contracts',       icon: FileText   },
-  { label: '변경 관리',  href: '/change-requests', icon: GitMerge   },
-  { label: 'SLA',        href: '/sla',             icon: Clock      },
-  { label: '지식베이스', href: '/kb',              icon: BookOpen   },
-  { label: '알림',       href: '/notifications',   icon: Bell       },
-  { label: '리포트',     href: '/reports',         icon: BarChart2  },
+  { label: '대시보드',   href: '/home',              icon: Home       },
+  { label: '공유 큐',    href: '/queue',             icon: Inbox      },
+  { label: '티켓',       href: '/tickets',           icon: LifeBuoy   },
+  { label: '캘린더',     href: '/calendar',          icon: CalendarDays },
+  { label: '고객',       href: '/customers',         icon: Users      },
+  { label: '자산',       href: '/assets',            icon: Package    },
+  { label: 'CMDB',       href: '/cmdb',              icon: Server     },
+  { label: '계약',       href: '/contracts',         icon: FileText   },
+  { label: '변경 관리',  href: '/change-requests',   icon: GitMerge   },
+  { label: 'SLA',        href: '/sla',               icon: Clock      },
+  { label: '지식베이스', href: '/kb',                icon: BookOpen   },
+  { label: '반복 장애',  href: '/recurring-alerts',  icon: RefreshCw  },
+  { label: '알림',       href: '/notifications',     icon: Bell       },
+  { label: '리포트',     href: '/reports',           icon: BarChart2  },
 ];
 
 function getNavItems(role: UserRole | undefined): NavItem[] {
@@ -72,7 +74,7 @@ function getNavItems(role: UserRole | undefined): NavItem[] {
   }
   // engineer (기본)
   return ALL_ITEMS.filter((i) =>
-    ['/home', '/queue', '/tickets', '/calendar', '/customers', '/assets', '/kb', '/notifications'].includes(i.href)
+    ['/home', '/queue', '/tickets', '/calendar', '/customers', '/assets', '/kb', '/recurring-alerts', '/notifications'].includes(i.href)
   );
 }
 

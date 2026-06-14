@@ -33,6 +33,9 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """애플리케이션 startup / shutdown 훅."""
+    import asyncio as _asyncio
+    from app.workers.recurring_worker import run_recurring_worker
+
     # Startup
     try:
         redis = get_redis()
@@ -41,9 +44,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:
         logger.warning("Redis 연결 확인 실패: %s", exc)
 
+    # P5-3 반복 장애 감지 워커
+    _recurring_task = _asyncio.create_task(run_recurring_worker())
+
     yield
 
     # Shutdown
+    _recurring_task.cancel()
     await close_redis()
     await engine.dispose()
     logger.info("ITSM 백엔드 종료")
@@ -183,3 +190,12 @@ app.include_router(installation_router.router, prefix="/api")              # /ap
 # P5-2 답변 템플릿
 from app.routers import reply_templates as reply_templates_router  # noqa: E402
 app.include_router(reply_templates_router.router, prefix="/api")           # /api/{slug}/reply-templates
+
+# P5-3 반복 장애 감지
+from app.routers import recurring_alerts as recurring_alerts_router  # noqa: E402
+app.include_router(recurring_alerts_router.router, prefix="/api")          # /api/{slug}/recurring-alerts
+
+# P5-4 알려진 이슈
+from app.routers import known_issues as known_issues_router  # noqa: E402
+app.include_router(known_issues_router.router, prefix="/api")              # /api/{slug}/kb/known-issues
+app.include_router(known_issues_router.router_ticket, prefix="/api")       # /api/{slug}/tickets/{id}/known-issues
