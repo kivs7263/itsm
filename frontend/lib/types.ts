@@ -135,7 +135,10 @@ export interface Customer {
   company: string | null;
   email: string | null;
   phone: string | null;
+  contract_grade: string | null;
   contract_tier: ContractTier | null;
+  parent_id: string | null;
+  kind: 'account' | 'division';
   created_at: string;
   updated_at: string;
 }
@@ -143,6 +146,34 @@ export interface Customer {
 export interface CustomersResponse {
   items: Customer[];
   total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface CustomerTreeNode {
+  id: string;
+  name: string;
+  kind: 'account' | 'division';
+  children: CustomerTreeNode[];
+}
+
+export interface CustomerRollup {
+  customer_id: string;
+  name: string;
+  open_tickets: number;
+  total_hours_this_month: number;
+  active_assets: number;
+  active_contracts: number;
+}
+
+export interface CustomerNote {
+  id: string;
+  customer_id: string;
+  title: string | null;
+  content: string | null;
+  author_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // -----------------------------------------------------------------------

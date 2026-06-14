@@ -209,7 +209,7 @@ W/h = 계약금액÷   ██████░░ 87%         MTTR 18.3h
 
 ---
 
-### P4-3: 고객 카드 360도 뷰 [ PENDING ]
+### P4-3: 고객 카드 360도 뷰 [ DONE 2026-06-14 ]
 
 > 요구사항: 납품 HW/SW 이력, 장애 이력, 구조 정리 공간, 부서 계층
 
@@ -217,7 +217,7 @@ W/h = 계약금액÷   ██████░░ 87%         MTTR 18.3h
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `P4-3a` | **Migration 011** — `customers.parent_id` + `customers.kind` 추가 | S | `[ PENDING ]` |
+| `P4-3a` | **Migration 011** — `customers.parent_id` + `customers.kind` 추가 | S | `[ DONE 2026-06-14 ]` |
 
 ```sql
 ALTER TABLE customers
@@ -233,7 +233,7 @@ ALTER TABLE customers
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `P4-3b` | **Migration 012** — `customer_notes` 테이블 신규 | S | `[ PENDING ]` |
+| `P4-3b` | **Migration 012** — `customer_notes` 테이블 신규 | S | `[ DONE 2026-06-14 ]` |
 
 ```sql
 -- customer_notes: 고객 카드 전용 메모/문서 (KB와 별개)
@@ -252,7 +252,7 @@ updated_at    TIMESTAMPTZ
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `P4-3c` | customers 라우터 확장 — 트리 조회 + 부서 CRUD | M | `[ PENDING ]` |
+| `P4-3c` | customers 라우터 확장 — 트리 조회 + 부서 CRUD | M | `[ DONE 2026-06-14 ]` |
 
 엔드포인트:
 - `GET /{tenant}/customers/{id}/tree` — 하위 부서 포함 트리 (recursive CTE)
@@ -266,7 +266,7 @@ updated_at    TIMESTAMPTZ
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `P4-3d` | customers/[id] 페이지 전면 재설계 — 좌측 부서 트리 + 우측 6탭 | L | `[ PENDING ]` |
+| `P4-3d` | customers/[id] 페이지 전면 재설계 — 좌측 부서 트리 + 우측 6탭 | L | `[ DONE 2026-06-14 ]` |
 
 레이아웃:
 ```

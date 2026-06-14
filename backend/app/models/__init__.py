@@ -8,7 +8,7 @@ from app.models.user import User, UserRole  # noqa: F401
 from app.models.sso_config import SSOConfig  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.team import Team, TeamMember  # noqa: F401
-from app.models.customer import Customer  # noqa: F401
+from app.models.customer import Customer, CustomerNote  # noqa: F401
 from app.models.asset import Asset, AssetType  # noqa: F401
 from app.models.contract import Contract, ContractType  # noqa: F401
 from app.models.ticket import (  # noqa: F401
@@ -76,6 +76,7 @@ __all__ = [
     "TeamMember",
     # customer
     "Customer",
+    "CustomerNote",
     # asset
     "Asset",
     "AssetType",
