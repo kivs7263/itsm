@@ -15,11 +15,13 @@ class UserRole(str, enum.Enum):
     team_lead = "team_lead"
     admin = "admin"
     customer = "customer"
+    sales = "sales"
+    c_level = "c_level"
 
 
 # PostgreSQL ENUM 타입명 — migration과 동일하게 유지
 _user_role_enum = Enum(
-    "engineer", "team_lead", "admin", "customer",
+    "engineer", "team_lead", "admin", "customer", "sales", "c_level",
     name="user_role_enum",
 )
 

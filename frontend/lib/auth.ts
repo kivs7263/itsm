@@ -7,7 +7,7 @@
  * 쿠키 prefix: itsm. (GW는 gw.)
  */
 
-export type UserRole = 'engineer' | 'team_lead' | 'admin' | 'customer';
+export type UserRole = 'engineer' | 'team_lead' | 'admin' | 'customer' | 'sales' | 'c_level';
 
 // -----------------------------------------------------------------------
 // 인증 상태 확인 (쿠키 기반)
@@ -98,6 +98,14 @@ export function canManageTickets(role: UserRole | undefined): boolean {
 
 export function canManageTeam(role: UserRole | undefined): boolean {
   return isTeamLeadOrAbove(role);
+}
+
+export function isSales(role: UserRole | undefined): boolean {
+  return role === 'sales';
+}
+
+export function isCLevel(role: UserRole | undefined): boolean {
+  return role === 'c_level';
 }
 
 export function canAccessAdmin(role: UserRole | undefined): boolean {

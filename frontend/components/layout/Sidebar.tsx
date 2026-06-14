@@ -1,18 +1,6 @@
 'use client';
 
-/**
- * Sidebar.tsx — ITSM 사이드바 (collapsed/expanded)
- *
- * 구조:
- * - 상단: WorkspaceSwitcher
- * - 중간: 네비게이션 항목 (티켓·고객·자산·계약·SLA·리포트)
- * - 하단: 로그아웃 버튼 + 사용자 아바타
- *
- * collapsed 상태: localStorage 'itsm.sidebar.collapsed' 저장
- * 모든 링크: useSlug()로 /{tenantSlug}/... prefix 보장
- */
-
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -28,15 +16,20 @@ import {
   Server,
   GitMerge,
   Bell,
+  Home,
+  Inbox,
+  BookOpen,
+  CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSlug } from '@/lib/slug';
 import { useAuth } from '@/hooks/useAuth';
+import { isTeamLeadOrAbove, isSales, isCLevel, type UserRole } from '@/lib/auth';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { getInitials } from '@/lib/utils';
 
 // -----------------------------------------------------------------------
-// localStorage — collapsed 상태 초기값 (SSR guard 포함)
+// localStorage — collapsed 상태 초기값
 // -----------------------------------------------------------------------
 const STORAGE_KEY = 'itsm.sidebar.collapsed';
 
@@ -47,19 +40,50 @@ function getInitialCollapsed(): boolean {
 }
 
 // -----------------------------------------------------------------------
-// 네비게이션 항목 정의
+// 역할별 NAV_ITEMS 정의
 // -----------------------------------------------------------------------
-const NAV_ITEMS = [
-  { label: '티켓',    href: '/tickets',         icon: LifeBuoy  },
-  { label: '고객',    href: '/customers',        icon: Users     },
-  { label: '자산',    href: '/assets',           icon: Package   },
-  { label: 'CMDB',    href: '/cmdb',             icon: Server    },
-  { label: '계약',    href: '/contracts',        icon: FileText  },
-  { label: '변경 관리', href: '/change-requests', icon: GitMerge  },
-  { label: 'SLA',     href: '/sla',              icon: Clock     },
-  { label: '알림',    href: '/notifications',    icon: Bell      },
-  { label: '리포트',  href: '/reports',          icon: BarChart2 },
-] as const;
+type NavItem = { label: string; href: string; icon: React.ElementType };
+
+const ALL_ITEMS: NavItem[] = [
+  { label: '대시보드',   href: '/home',            icon: Home       },
+  { label: '공유 큐',    href: '/queue',           icon: Inbox      },
+  { label: '티켓',       href: '/tickets',         icon: LifeBuoy   },
+  { label: '캘린더',     href: '/calendar',        icon: CalendarDays },
+  { label: '고객',       href: '/customers',       icon: Users      },
+  { label: '자산',       href: '/assets',          icon: Package    },
+  { label: 'CMDB',       href: '/cmdb',            icon: Server     },
+  { label: '계약',       href: '/contracts',       icon: FileText   },
+  { label: '변경 관리',  href: '/change-requests', icon: GitMerge   },
+  { label: 'SLA',        href: '/sla',             icon: Clock      },
+  { label: '지식베이스', href: '/kb',              icon: BookOpen   },
+  { label: '알림',       href: '/notifications',   icon: Bell       },
+  { label: '리포트',     href: '/reports',         icon: BarChart2  },
+];
+
+function getNavItems(role: UserRole | undefined): NavItem[] {
+  if (isCLevel(role)) {
+    return ALL_ITEMS.filter((i) => ['/home', '/reports'].includes(i.href));
+  }
+  if (isSales(role)) {
+    return ALL_ITEMS.filter((i) => ['/customers', '/contracts', '/reports'].includes(i.href));
+  }
+  if (isTeamLeadOrAbove(role)) {
+    return ALL_ITEMS;
+  }
+  // engineer (기본)
+  return ALL_ITEMS.filter((i) =>
+    ['/home', '/queue', '/tickets', '/calendar', '/customers', '/assets', '/kb', '/notifications'].includes(i.href)
+  );
+}
+
+const ROLE_LABELS: Record<UserRole, string> = {
+  engineer:   '엔지니어',
+  team_lead:  '팀장',
+  admin:      '관리자',
+  customer:   '고객',
+  sales:      '영업',
+  c_level:    'C-Level',
+};
 
 // -----------------------------------------------------------------------
 // Sidebar 컴포넌트
@@ -69,6 +93,8 @@ export function Sidebar() {
   const pathname = usePathname();
   const slug = useSlug();
   const { user, logout } = useAuth();
+
+  const navItems = useMemo(() => getNavItems(user?.role as UserRole), [user?.role]);
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -86,7 +112,6 @@ export function Sidebar() {
         'flex h-screen flex-col',
         'border-r border-white/10',
         'transition-[width] duration-200 ease-out',
-        // 다크 계열 사이드바 배경 (GW 패턴 동일)
         'bg-[#0E0E0C]',
         collapsed ? 'w-14' : 'w-56',
       )}
@@ -96,7 +121,7 @@ export function Sidebar() {
 
       {/* 네비게이션 */}
       <nav className="flex-1 overflow-y-auto py-2 px-1.5" aria-label="메인 네비게이션">
-        {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
+        {navItems.map(({ label, href, icon: Icon }) => {
           const fullHref = slug(href);
           const isActive = pathname?.startsWith(fullHref);
 
@@ -122,17 +147,14 @@ export function Sidebar() {
                   isActive ? 'text-[#F5C000]' : 'text-white/40',
                 )}
               />
-              {!collapsed && (
-                <span className="truncate">{label}</span>
-              )}
+              {!collapsed && <span className="truncate">{label}</span>}
             </Link>
           );
         })}
       </nav>
 
-      {/* 하단: 사용자 + 로그아웃 */}
+      {/* 하단: 사용자 + 역할 배지 + 로그아웃 */}
       <div className="border-t border-white/10 p-2 flex flex-col gap-1">
-        {/* 로그아웃 버튼 */}
         <button
           type="button"
           onClick={logout}
@@ -149,7 +171,6 @@ export function Sidebar() {
           {!collapsed && <span>로그아웃</span>}
         </button>
 
-        {/* 사용자 아바타 */}
         {user && (
           <div
             className={cn(
@@ -167,14 +188,21 @@ export function Sidebar() {
             {!collapsed && (
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium text-white truncate">{user.name}</p>
-                <p className="text-[10px] text-white/40 truncate">{user.email}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[10px] text-white/40 truncate">{user.email}</span>
+                  {user.role && (
+                    <span className="shrink-0 rounded px-1 py-px text-[9px] font-medium bg-white/10 text-white/60">
+                      {ROLE_LABELS[user.role as UserRole] ?? user.role}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* collapsed 토글 버튼 */}
+      {/* collapsed 토글 */}
       <button
         type="button"
         onClick={toggleCollapsed}

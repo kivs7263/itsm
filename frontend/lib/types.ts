@@ -307,6 +307,9 @@ export interface ReportSummary {
   monthly_tickets: { month: string; count: number }[];
   by_status: { status: TicketStatus; count: number }[];
   sla_compliance_rate: number;
+  sla_breach_count?: number;
+  monthly_resolved?: number;
+  csat_summary?: CSATSummary;
 }
 
 // -----------------------------------------------------------------------

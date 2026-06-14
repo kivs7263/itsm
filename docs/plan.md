@@ -453,7 +453,7 @@ KB 등록: ○ 신규 등록  ○ 기존 KB 연결  ○ 해당 없음
 
 ---
 
-### P4-5: 역할별 뷰 분기 [ PENDING ]
+### P4-5: 역할별 뷰 분기 [ DONE 2026-06-14 ]
 
 > 현재 Sidebar.tsx: 모든 역할에 동일 메뉴 노출. 대시보드도 역할 무관 단일 화면.
 
@@ -461,7 +461,7 @@ KB 등록: ○ 신규 등록  ○ 기존 KB 연결  ○ 해당 없음
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `P4-5a` | **Migration 015** — UserRole enum에 `sales`, `c_level` 추가 | S | `[ PENDING ]` |
+| `P4-5a` | **Migration 015** — UserRole enum에 `sales`, `c_level` 추가 | S | `[ DONE 2026-06-14 ]` |
 
 ```sql
 ALTER TYPE userrole ADD VALUE 'sales';
@@ -472,7 +472,7 @@ ALTER TYPE userrole ADD VALUE 'c_level';
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `P4-5b` | Sidebar.tsx — user.role 기반 NAV_ITEMS 조건부 렌더링 | M | `[ PENDING ]` |
+| `P4-5b` | Sidebar.tsx — user.role 기반 NAV_ITEMS 조건부 렌더링 | M | `[ DONE 2026-06-14 ]` |
 
 엔지니어 사이드바 (6개):
 - 내 대시보드 / 공유 큐 (미배정 배지) / My Queue / 캘린더 / 고객·자산 (조회) / 지식베이스
@@ -492,7 +492,7 @@ C-level 사이드바 (3개):
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `P4-5c` | `/[tenant]/home` 페이지 — role에 따라 다른 대시보드 컴포넌트 렌더링 | L | `[ PENDING ]` |
+| `P4-5c` | `/[tenant]/home` 페이지 — role에 따라 다른 대시보드 컴포넌트 렌더링 | L | `[ DONE 2026-06-14 ]` |
 
 **엔지니어 대시보드 (개인 워크스페이스)**:
 - My Queue 요약 (담당 티켓 수, SLA 임박 N개)
