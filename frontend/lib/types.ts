@@ -17,6 +17,10 @@ export interface Ticket {
   priority: TicketPriority;
   status: TicketStatus;
   channel: TicketChannel;
+  source: string | null;
+  request_type: string | null;
+  parent_ticket_id: string | null;
+  ticket_number: string | null;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;

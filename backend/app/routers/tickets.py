@@ -5,13 +5,18 @@ prefix : /{tenant_slug}/tickets
 격리   : 모든 쿼리 tenant_id == current_user.tenant_id
 
 엔드포인트:
-  GET    /{tenant_slug}/tickets                  — 목록 (필터 + 페이지네이션)
-  POST   /{tenant_slug}/tickets                  — 생성
-  GET    /{tenant_slug}/tickets/{id}             — 상세 (댓글 포함)
-  PATCH  /{tenant_slug}/tickets/{id}             — 수정
-  DELETE /{tenant_slug}/tickets/{id}             — 삭제 (admin/team_lead)
-  POST   /{tenant_slug}/tickets/{id}/comments    — 댓글 추가
-  POST   /{tenant_slug}/tickets/bulk-status      — 대량 상태 변경
+  GET    /{tenant_slug}/tickets                          — 목록 (필터 + 페이지네이션)
+  POST   /{tenant_slug}/tickets                          — 생성 (ticket_number 자동 부여)
+  GET    /{tenant_slug}/tickets/{id}                     — 상세 (댓글 포함)
+  PATCH  /{tenant_slug}/tickets/{id}                     — 수정
+  DELETE /{tenant_slug}/tickets/{id}                     — 삭제 (admin/team_lead)
+  POST   /{tenant_slug}/tickets/{id}/comments            — 댓글 추가
+  POST   /{tenant_slug}/tickets/bulk-status              — 대량 상태 변경
+  POST   /{tenant_slug}/tickets/{id}/sub-tickets         — 서브티켓 생성
+  GET    /{tenant_slug}/tickets/{id}/sub-tickets         — 서브티켓 목록
+  POST   /{tenant_slug}/tickets/{id}/causes              — 원인 확정 등록
+  GET    /{tenant_slug}/symptom-categories               — 증상 분류 트리
+  GET    /{tenant_slug}/cause-categories                 — 원인 분류 트리
 """
 from __future__ import annotations
 
@@ -22,13 +27,16 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_roles
 from app.models import (
+    CauseCategory,
+    SymptomCategory,
     Ticket,
+    TicketCause,
     TicketChannel,
     TicketComment,
     TicketPriority,
@@ -39,6 +47,9 @@ from app.models import (
 from app.services import search_service
 
 logger = logging.getLogger(__name__)
+
+# 분류 트리 라우터 (/{tenant_slug}/symptom-categories, /{tenant_slug}/cause-categories)
+classification_router = APIRouter(tags=["classifications"])
 
 router = APIRouter(
     prefix="/{tenant_slug}/tickets",
@@ -61,6 +72,9 @@ class TicketCreate(BaseModel):
     customer_id: uuid.UUID | None = None
     contract_id: uuid.UUID | None = None
     assigned_to: uuid.UUID | None = None
+    source: str | None = None         # customer_direct | customer_relay | engineer_found | monitoring
+    request_type: str | None = None   # incident | service_request | installation | upgrade | technical_inquiry | maintenance
+    parent_ticket_id: uuid.UUID | None = None
 
 
 class TicketUpdate(BaseModel):
@@ -70,6 +84,8 @@ class TicketUpdate(BaseModel):
     status: TicketStatus | None = None
     assigned_to: uuid.UUID | None = None
     contract_id: uuid.UUID | None = None
+    source: str | None = None
+    request_type: str | None = None
 
 
 class TicketOut(BaseModel):
@@ -83,12 +99,34 @@ class TicketOut(BaseModel):
     customer_id: uuid.UUID | None
     contract_id: uuid.UUID | None
     assigned_to: uuid.UUID | None
+    source: str | None
+    request_type: str | None
+    parent_ticket_id: uuid.UUID | None
+    ticket_number: str | None
     created_at: datetime
     updated_at: datetime
     resolved_at: datetime | None
     closed_at: datetime | None
 
     model_config = {"from_attributes": True}
+
+
+class CategoryNode(BaseModel):
+    id: uuid.UUID
+    name: str
+    display_order: int
+    children: list["CategoryNode"] = []
+
+    model_config = {"from_attributes": True}
+
+
+class CauseIn(BaseModel):
+    cause_category_id: uuid.UUID
+    action_taken: str | None = None
+
+
+class CausesRegisterRequest(BaseModel):
+    causes: list[CauseIn] = Field(..., min_length=1)
 
 
 class CommentCreate(BaseModel):
@@ -128,6 +166,39 @@ async def _get_ticket_or_404(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="티켓을 찾을 수 없습니다.")
     return row
+
+
+async def _generate_ticket_number(db: AsyncSession, tenant_id: uuid.UUID) -> str:
+    """TKT-YYYYMMDD-NNNN 형식 ticket_number 생성 (tenant별 daily 시퀀스)."""
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    prefix = f"TKT-{today}-"
+    # 오늘 발급된 이 tenant의 최대 시퀀스 조회
+    result = await db.execute(
+        text("""
+            SELECT MAX(CAST(SUBSTRING(ticket_number FROM :prefix_len + 1) AS INTEGER))
+            FROM tickets
+            WHERE tenant_id = :tid
+              AND ticket_number LIKE :prefix
+        """),
+        {"prefix_len": len(prefix), "prefix": f"{prefix}%", "tid": str(tenant_id)},
+    )
+    max_seq = result.scalar() or 0
+    return f"{prefix}{str(max_seq + 1).zfill(4)}"
+
+
+def _build_category_tree(
+    nodes: list, parent_id: uuid.UUID | None
+) -> list[CategoryNode]:
+    children = [n for n in nodes if n.parent_id == parent_id]
+    return [
+        CategoryNode(
+            id=n.id,
+            name=n.name,
+            display_order=n.display_order,
+            children=_build_category_tree(nodes, n.id),
+        )
+        for n in sorted(children, key=lambda x: x.display_order)
+    ]
 
 
 def _apply_resolved_closed(ticket: Ticket, new_status: TicketStatus) -> None:
@@ -244,6 +315,7 @@ async def create_ticket(
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db),
 ) -> TicketOut:
+    ticket_number = await _generate_ticket_number(db, current_user.tenant_id)
     ticket = Ticket(
         id=uuid.uuid4(),
         tenant_id=current_user.tenant_id,
@@ -255,6 +327,10 @@ async def create_ticket(
         customer_id=data.customer_id,
         contract_id=data.contract_id,
         assigned_to=data.assigned_to,
+        source=data.source,
+        request_type=data.request_type,
+        parent_ticket_id=data.parent_ticket_id,
+        ticket_number=ticket_number,
     )
     db.add(ticket)
     await db.commit()
@@ -423,3 +499,155 @@ async def add_comment(
     await db.commit()
     await db.refresh(comment)
     return CommentOut.model_validate(comment)
+
+
+# ------------------------------------------------------------------
+# 서브티켓
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "/{ticket_id}/sub-tickets",
+    response_model=TicketOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="서브티켓 생성",
+)
+async def create_sub_ticket(
+    tenant_slug: str,
+    ticket_id: uuid.UUID,
+    data: TicketCreate,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> TicketOut:
+    await _get_ticket_or_404(db, current_user.tenant_id, ticket_id)
+    ticket_number = await _generate_ticket_number(db, current_user.tenant_id)
+    sub = Ticket(
+        id=uuid.uuid4(),
+        tenant_id=current_user.tenant_id,
+        title=data.title,
+        description=data.description,
+        priority=data.priority,
+        status=TicketStatus.open,
+        channel=data.channel,
+        customer_id=data.customer_id,
+        contract_id=data.contract_id,
+        assigned_to=data.assigned_to,
+        source=data.source,
+        request_type=data.request_type,
+        parent_ticket_id=ticket_id,
+        ticket_number=ticket_number,
+    )
+    db.add(sub)
+    await db.commit()
+    await db.refresh(sub)
+    return TicketOut.model_validate(sub)
+
+
+@router.get(
+    "/{ticket_id}/sub-tickets",
+    response_model=list[TicketOut],
+    summary="서브티켓 목록",
+)
+async def list_sub_tickets(
+    tenant_slug: str,
+    ticket_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> list[TicketOut]:
+    await _get_ticket_or_404(db, current_user.tenant_id, ticket_id)
+    rows = (
+        await db.execute(
+            select(Ticket).where(
+                and_(
+                    Ticket.tenant_id == current_user.tenant_id,
+                    Ticket.parent_ticket_id == ticket_id,
+                )
+            ).order_by(Ticket.created_at.asc())
+        )
+    ).scalars().all()
+    return [TicketOut.model_validate(r) for r in rows]
+
+
+# ------------------------------------------------------------------
+# 원인 확정
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "/{ticket_id}/causes",
+    status_code=status.HTTP_201_CREATED,
+    summary="원인 확정 등록 (복수)",
+)
+async def register_causes(
+    tenant_slug: str,
+    ticket_id: uuid.UUID,
+    data: CausesRegisterRequest,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    await _get_ticket_or_404(db, current_user.tenant_id, ticket_id)
+
+    # 기존 원인 삭제 후 재등록
+    existing = (
+        await db.execute(
+            select(TicketCause).where(TicketCause.ticket_id == ticket_id)
+        )
+    ).scalars().all()
+    for c in existing:
+        await db.delete(c)
+
+    for item in data.causes:
+        cause = TicketCause(
+            ticket_id=ticket_id,
+            cause_category_id=item.cause_category_id,
+            action_taken=item.action_taken,
+        )
+        db.add(cause)
+
+    await db.commit()
+    return {"registered": len(data.causes)}
+
+
+# ------------------------------------------------------------------
+# 분류 트리 (classification_router)
+# ------------------------------------------------------------------
+
+
+@classification_router.get(
+    "/{tenant_slug}/symptom-categories",
+    response_model=list[CategoryNode],
+    summary="증상 분류 트리",
+)
+async def list_symptom_categories(
+    tenant_slug: str,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> list[CategoryNode]:
+    rows = (
+        await db.execute(
+            select(SymptomCategory)
+            .where(SymptomCategory.tenant_id == current_user.tenant_id)
+            .order_by(SymptomCategory.display_order)
+        )
+    ).scalars().all()
+    return _build_category_tree(list(rows), None)
+
+
+@classification_router.get(
+    "/{tenant_slug}/cause-categories",
+    response_model=list[CategoryNode],
+    summary="원인 분류 트리",
+)
+async def list_cause_categories(
+    tenant_slug: str,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> list[CategoryNode]:
+    rows = (
+        await db.execute(
+            select(CauseCategory)
+            .where(CauseCategory.tenant_id == current_user.tenant_id)
+            .order_by(CauseCategory.display_order)
+        )
+    ).scalars().all()
+    return _build_category_tree(list(rows), None)

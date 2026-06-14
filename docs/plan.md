@@ -67,8 +67,8 @@
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `P4-0a` | `bridge_service.py:141` csat_score=None → 실제 CSAT 평균 쿼리로 교체 | S | `[ PENDING ]` |
-| `P4-0b` | bridge_service에 `avg_csat`, `csat_response_rate` 집계 추가 + SA itsm_bridge Pydantic 모델 동기화 | S | `[ PENDING ]` |
+| `P4-0a` | `bridge_service.py:141` csat_score=None → 실제 CSAT 평균 쿼리로 교체 | S | `[ DONE 2026-06-14 ]` |
+| `P4-0b` | bridge_service에 `avg_csat`, `csat_response_rate` 집계 추가 + SA itsm_bridge Pydantic 모델 동기화 | S | `[ DONE 2026-06-14 ]` |
 
 **성공 기준**: SA 사업카드 itsm_kpi.csat_score에 실제 값 표시
 
@@ -336,7 +336,7 @@ KPI 스트립: 활성티켓 N | 이번달 공수 Nh | 계약 만료 D-N | 자산
 
 ---
 
-### P4-4: 티켓 구조 보강 [ PENDING ]
+### P4-4: 티켓 구조 보강 [ DONE 2026-06-14 ]
 
 > 요구사항 정의서 4.1절 핵심 필드 구현
 > 현재 ticket 모델에 source, request_type, ticket_number, parent_id 없음
@@ -345,7 +345,7 @@ KPI 스트립: 활성티켓 N | 이번달 공수 Nh | 계약 만료 D-N | 자산
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `P4-4a` | **Migration 013** — tickets 테이블 필드 4종 추가 | S | `[ PENDING ]` |
+| `P4-4a` | **Migration 013** — tickets 테이블 필드 4종 추가 | S | `[ DONE 2026-06-14 ]` |
 
 ```sql
 ALTER TABLE tickets
@@ -376,7 +376,7 @@ CREATE INDEX ON tickets(tenant_id, parent_ticket_id) WHERE parent_ticket_id IS N
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `P4-4b` | **Migration 014** — `symptom_categories` + `cause_categories` 테이블 신규 | S | `[ PENDING ]` |
+| `P4-4b` | **Migration 014** — `symptom_categories` + `cause_categories` 테이블 신규 | S | `[ DONE 2026-06-14 ]` |
 
 ```sql
 -- 증상 분류 (대분류/중분류 2단계)
@@ -396,7 +396,7 @@ ticket_causes (ticket_id FK, cause_category_id FK, action_taken TEXT, created_at
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `P4-4c` | ticket_number 시퀀스 생성 로직 + 기존 rows 백필 | M | `[ PENDING ]` |
+| `P4-4c` | ticket_number 시퀀스 생성 로직 + 기존 rows 백필 | M | `[ DONE 2026-06-14 ]` |
 
 - 신규 티켓: 생성 시 `TKT-{YYYYMMDD}-{tenant별 daily 4자리}` 자동 부여
 - 기존 rows: `UPDATE tickets SET ticket_number = ...` 배치 (created_at 기준 순서)
@@ -406,7 +406,7 @@ ticket_causes (ticket_id FK, cause_category_id FK, action_taken TEXT, created_at
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `P4-4d` | tickets 라우터 — request_type별 워크플로우, 서브티켓 CRUD, 분류 API | M | `[ PENDING ]` |
+| `P4-4d` | tickets 라우터 — request_type별 워크플로우, 서브티켓 CRUD, 분류 API | M | `[ DONE 2026-06-14 ]` |
 
 엔드포인트 추가:
 - `POST /{tenant}/tickets/{id}/sub-tickets` — 서브티켓 생성
@@ -426,7 +426,7 @@ request_type별 워크플로우:
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `P4-4e` | 티켓 생성 폼 — 6가지 요청 유형 카드 선택 + 유형별 폼 분기 | M | `[ PENDING ]` |
+| `P4-4e` | 티켓 생성 폼 — 6가지 요청 유형 카드 선택 + 유형별 폼 분기 | M | `[ DONE 2026-06-14 ]` |
 
 요청 유형 선택 화면 (첫 단계):
 ```

@@ -130,7 +130,8 @@ from app.routers import (
 )
 app.include_router(auth_router.router, prefix="/api")            # /api/auth
 app.include_router(crossapp_auth_router.router, prefix="/api")  # /api/{slug}/auth/crossapp
-app.include_router(tickets_router.router, prefix="/api")         # /api/{slug}/tickets
+app.include_router(tickets_router.router, prefix="/api")                        # /api/{slug}/tickets
+app.include_router(tickets_router.classification_router, prefix="/api")        # /api/{slug}/symptom-categories, /cause-categories
 app.include_router(customers_router.router, prefix="/api")       # /api/{slug}/customers
 app.include_router(assets_router.router, prefix="/api")          # /api/{slug}/assets
 app.include_router(contracts_router.router, prefix="/api")       # /api/{slug}/contracts

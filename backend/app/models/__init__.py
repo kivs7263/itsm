@@ -18,6 +18,9 @@ from app.models.ticket import (  # noqa: F401
     TicketPriority,
     TicketStatus,
     TicketChannel,
+    SymptomCategory,
+    CauseCategory,
+    TicketCause,
 )
 from app.models.sla import (  # noqa: F401
     SLAPolicy,
@@ -90,6 +93,9 @@ __all__ = [
     "TicketPriority",
     "TicketStatus",
     "TicketChannel",
+    "SymptomCategory",
+    "CauseCategory",
+    "TicketCause",
     # sla
     "SLAPolicy",
     "SLAEvent",

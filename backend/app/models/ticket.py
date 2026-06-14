@@ -1,9 +1,9 @@
-"""티켓, 댓글, 첨부파일 모델."""
+"""티켓, 댓글, 첨부파일, 분류 모델."""
 from __future__ import annotations
 
 import enum
 
-from sqlalchemy import BigInteger, Boolean, Column, Enum, ForeignKey, Index, String, Text
+from sqlalchemy import BigInteger, Boolean, Column, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.models.base import Base, gen_uuid, utcnow
@@ -80,6 +80,15 @@ class Ticket(Base):
     priority = Column(_ticket_priority_enum, nullable=False, default=TicketPriority.medium)
     status = Column(_ticket_status_enum, nullable=False, default=TicketStatus.open)
     channel = Column(_ticket_channel_enum, nullable=False, default=TicketChannel.internal)
+    # P4-4 추가 필드
+    source = Column(String(30), nullable=True)         # customer_direct | customer_relay | engineer_found | monitoring
+    request_type = Column(String(30), nullable=True)   # incident | service_request | installation | upgrade | technical_inquiry | maintenance
+    parent_ticket_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tickets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    ticket_number = Column(String(25), nullable=True, unique=False)  # TKT-YYYYMMDD-NNNN
     created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
@@ -130,4 +139,60 @@ class TicketAttachment(Base):
     filename = Column(String(500), nullable=False)
     minio_key = Column(String(1000), nullable=False)
     size_bytes = Column(BigInteger, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class SymptomCategory(Base):
+    __tablename__ = "symptom_categories"
+    __table_args__ = (
+        Index("ix_symptom_categories_tenant_parent", "tenant_id", "parent_id"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=gen_uuid)
+    tenant_id = Column(UUID(as_uuid=True), nullable=False)
+    name = Column(String(100), nullable=False)
+    parent_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("symptom_categories.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    display_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class CauseCategory(Base):
+    __tablename__ = "cause_categories"
+    __table_args__ = (
+        Index("ix_cause_categories_tenant_parent", "tenant_id", "parent_id"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=gen_uuid)
+    tenant_id = Column(UUID(as_uuid=True), nullable=False)
+    name = Column(String(100), nullable=False)
+    parent_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("cause_categories.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    display_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class TicketCause(Base):
+    __tablename__ = "ticket_causes"
+    __table_args__ = (
+        Index("ix_ticket_causes_ticket", "ticket_id"),
+    )
+
+    ticket_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tickets.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    cause_category_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("cause_categories.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    action_taken = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
