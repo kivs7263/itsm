@@ -298,6 +298,32 @@ async def create_customer(
 
 
 # ------------------------------------------------------------------
+# 전체 트리 (루트 고객 + 하위 부서 전체)
+# 주의: /{customer_id} 라우트보다 먼저 등록해야 "/tree"가 UUID로 해석되지 않음
+# ------------------------------------------------------------------
+
+
+@router.get(
+    "/tree",
+    response_model=list[CustomerTreeNode],
+    summary="전체 고객사 트리 (루트→하위 부서 전체)",
+)
+async def get_all_customers_tree(
+    tenant_slug: str,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> list[CustomerTreeNode]:
+    """테넌트 내 모든 고객사를 parent_id 기준 트리로 반환."""
+    result = await db.execute(
+        select(Customer.id, Customer.name, Customer.kind, Customer.parent_id)  # type: ignore[arg-type]
+        .where(Customer.tenant_id == current_user.tenant_id)
+        .order_by(Customer.name)
+    )
+    nodes = [{"id": r.id, "name": r.name, "kind": r.kind, "parent_id": r.parent_id} for r in result]
+    return _build_tree(nodes, None)
+
+
+# ------------------------------------------------------------------
 # 상세
 # ------------------------------------------------------------------
 

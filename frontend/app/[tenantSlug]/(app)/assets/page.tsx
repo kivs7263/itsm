@@ -92,7 +92,7 @@ const createAssetSchema = z.object({
   asset_type:         z.string().optional(),
   customer_id:        z.string().optional(),
   installed_at:       z.string().optional(),
-  warranty_expires_at: z.string().optional(),
+  warranty_end: z.string().optional(),
 });
 
 type CreateAssetValues = z.infer<typeof createAssetSchema>;
@@ -154,7 +154,7 @@ function CreateAssetModal({
         asset_type:          values.asset_type || null,
         customer_id:         values.customer_id || null,
         installed_at:        values.installed_at || null,
-        warranty_expires_at: values.warranty_expires_at || null,
+        warranty_end: values.warranty_end || null,
       });
       toast.success('자산이 생성되었습니다.');
       await queryClient.invalidateQueries({ queryKey: ['assets', tenantSlug] });
@@ -203,9 +203,9 @@ function CreateAssetModal({
                   className="h-9 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
                 />
               </FormField>
-              <FormField label="보증 만료일" error={errors.warranty_expires_at?.message}>
+              <FormField label="보증 만료일" error={errors.warranty_end?.message}>
                 <input
-                  {...register('warranty_expires_at')}
+                  {...register('warranty_end')}
                   type="date"
                   className="h-9 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
                 />
@@ -311,7 +311,7 @@ export default function AssetsPage() {
                     {formatDate(a.installed_at)}
                   </td>
                   <td className="px-4 py-3 text-text-secondary text-xs">
-                    {formatDate(a.warranty_expires_at)}
+                    {formatDate(a.warranty_end)}
                   </td>
                 </tr>
               ))

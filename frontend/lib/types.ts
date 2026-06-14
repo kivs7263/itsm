@@ -188,13 +188,16 @@ export interface CustomerNote {
 export interface Asset {
   id: string;
   tenant_id: string;
-  asset_tag: string | null;
-  model: string | null;
-  asset_type: string | null;
-  customer_id: string | null;
+  customer_id: string;
   customer_name?: string;
+  asset_tag: string;
+  model: string;
+  serial: string | null;
+  asset_type: string;
+  location: Record<string, unknown> | null;
   installed_at: string | null;
-  warranty_expires_at: string | null;
+  warranty_end: string | null;
+  license_end: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -202,6 +205,8 @@ export interface Asset {
 export interface AssetsResponse {
   items: Asset[];
   total: number;
+  page: number;
+  page_size: number;
 }
 
 // -----------------------------------------------------------------------
@@ -210,13 +215,16 @@ export interface AssetsResponse {
 export interface Contract {
   id: string;
   tenant_id: string;
-  name: string;
-  customer_id: string | null;
+  customer_id: string;
   customer_name?: string;
-  contract_type: string | null;
-  sla_tier: ContractTier | null;
-  start_date: string | null;
-  end_date: string | null;
+  name: string;
+  type: string;
+  sla_grade: string;
+  start_date: string;
+  end_date: string;
+  amount: string | null;
+  support_hours: string | null;
+  memo: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -224,6 +232,8 @@ export interface Contract {
 export interface ContractsResponse {
   items: Contract[];
   total: number;
+  page: number;
+  page_size: number;
 }
 
 // -----------------------------------------------------------------------

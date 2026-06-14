@@ -203,9 +203,23 @@ function TicketsTab({ tenantSlug, customerId }: { tenantSlug: string; customerId
 }
 
 // -----------------------------------------------------------------------
-// 탭: 자산
 // -----------------------------------------------------------------------
+// 탭: 자산 (생성·수정·삭제 포함)
+// -----------------------------------------------------------------------
+const ASSET_TYPE_LABELS: Record<string, string> = {
+  server: '서버', network: '네트워크', storage: '스토리지',
+  workstation: '워크스테이션', laptop: '노트북', mobile: '모바일',
+  printer: '프린터', other: '기타',
+};
+
 function AssetsTab({ tenantSlug, customerId }: { tenantSlug: string; customerId: string }) {
+  const queryClient = useQueryClient();
+  const [editAsset, setEditAsset] = useState<Asset | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+
+  // 폼 상태
+  const [form, setForm] = useState({ asset_tag: '', model: '', serial: '', asset_type: 'server', warranty_end: '' });
+
   const { data, isLoading } = useQuery({
     queryKey: ['customer-assets', tenantSlug, customerId],
     queryFn: () =>
@@ -215,48 +229,180 @@ function AssetsTab({ tenantSlug, customerId }: { tenantSlug: string; customerId:
 
   const assets: Asset[] = data?.items ?? [];
 
-  if (isLoading) return <div className="p-6"><Skeleton className="h-40 w-full" /></div>;
+  const createMutation = useMutation({
+    mutationFn: (d: typeof form) =>
+      api.post(`/${tenantSlug}/assets`, {
+        asset_tag: d.asset_tag, model: d.model, serial: d.serial || null,
+        asset_type: d.asset_type, customer_id: customerId,
+        warranty_end: d.warranty_end || null,
+      }).then((r) => r.data),
+    onSuccess: () => {
+      toast.success('자산이 등록되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['customer-assets', tenantSlug, customerId] });
+      queryClient.invalidateQueries({ queryKey: ['customer-rollup', tenantSlug, customerId] });
+      setShowCreate(false);
+      setForm({ asset_tag: '', model: '', serial: '', asset_type: 'server', warranty_end: '' });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
 
-  if (assets.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-text-secondary text-sm">
-        등록된 자산이 없습니다.
-      </div>
-    );
+  const updateMutation = useMutation({
+    mutationFn: ({ id, d }: { id: string; d: typeof form }) =>
+      api.patch(`/${tenantSlug}/assets/${id}`, {
+        asset_tag: d.asset_tag, model: d.model, serial: d.serial || null,
+        asset_type: d.asset_type, warranty_end: d.warranty_end || null,
+      }).then((r) => r.data),
+    onSuccess: () => {
+      toast.success('자산이 수정되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['customer-assets', tenantSlug, customerId] });
+      setEditAsset(null);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/${tenantSlug}/assets/${id}`),
+    onSuccess: () => {
+      toast.success('자산이 삭제되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['customer-assets', tenantSlug, customerId] });
+      queryClient.invalidateQueries({ queryKey: ['customer-rollup', tenantSlug, customerId] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  function openEdit(a: Asset) {
+    setEditAsset(a);
+    setForm({ asset_tag: a.asset_tag, model: a.model, serial: a.serial ?? '', asset_type: a.asset_type, warranty_end: a.warranty_end ?? '' });
   }
 
+  const inputCls = 'h-8 w-full rounded-md border border-border-default bg-surface px-2.5 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong';
+
+  const AssetForm = ({ onSubmit, onCancel, loading }: { onSubmit: () => void; onCancel: () => void; loading: boolean }) => (
+    <div className="grid grid-cols-2 gap-3 p-4 bg-surface-raised border-b border-border-subtle">
+      <div>
+        <label className="text-xs text-text-secondary mb-1 block">자산 태그 *</label>
+        <input className={inputCls} value={form.asset_tag} onChange={(e) => setForm((p) => ({ ...p, asset_tag: e.target.value }))} placeholder="SV-001" />
+      </div>
+      <div>
+        <label className="text-xs text-text-secondary mb-1 block">모델명 *</label>
+        <input className={inputCls} value={form.model} onChange={(e) => setForm((p) => ({ ...p, model: e.target.value }))} placeholder="Dell PowerEdge R750" />
+      </div>
+      <div>
+        <label className="text-xs text-text-secondary mb-1 block">시리얼</label>
+        <input className={inputCls} value={form.serial} onChange={(e) => setForm((p) => ({ ...p, serial: e.target.value }))} placeholder="시리얼 번호 (선택)" />
+      </div>
+      <div>
+        <label className="text-xs text-text-secondary mb-1 block">유형 *</label>
+        <select className={inputCls} value={form.asset_type} onChange={(e) => setForm((p) => ({ ...p, asset_type: e.target.value }))}>
+          {Object.entries(ASSET_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="text-xs text-text-secondary mb-1 block">보증 만료일</label>
+        <input type="date" className={inputCls} value={form.warranty_end} onChange={(e) => setForm((p) => ({ ...p, warranty_end: e.target.value }))} />
+      </div>
+      <div className="flex items-end gap-2">
+        <Button size="sm" onClick={onSubmit} isLoading={loading} disabled={!form.asset_tag || !form.model}>저장</Button>
+        <Button size="sm" variant="ghost" onClick={onCancel}>취소</Button>
+      </div>
+    </div>
+  );
+
+  if (isLoading) return <div className="p-6"><Skeleton className="h-40 w-full" /></div>;
+
   return (
-    <div className="overflow-auto">
-      <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-surface border-b border-border-default">
-          <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">자산 태그</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">모델</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">유형</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">보증 만료</th>
-          </tr>
-        </thead>
-        <tbody>
-          {assets.map((a) => (
-            <tr key={a.id} className="border-b border-border-subtle">
-              <td className="px-4 py-2.5 font-mono text-xs text-text-secondary">{a.asset_tag ?? '-'}</td>
-              <td className="px-4 py-2.5 text-text-primary">{a.model ?? '-'}</td>
-              <td className="px-4 py-2.5 text-text-secondary">{a.asset_type ?? '-'}</td>
-              <td className="px-4 py-2.5 text-text-secondary text-xs">
-                {a.warranty_expires_at ? formatRelativeTime(a.warranty_expires_at) : '-'}
-              </td>
+    <div className="flex flex-col h-full overflow-auto">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle shrink-0">
+        <span className="text-xs text-text-secondary">{assets.length}개</span>
+        <Button size="sm" leftIcon={<Plus size={12} />} onClick={() => { setShowCreate(true); setEditAsset(null); }}>
+          자산 추가
+        </Button>
+      </div>
+
+      {/* 생성 폼 */}
+      {showCreate && (
+        <AssetForm
+          onSubmit={() => createMutation.mutate(form)}
+          onCancel={() => setShowCreate(false)}
+          loading={createMutation.isPending}
+        />
+      )}
+
+      {assets.length === 0 && !showCreate ? (
+        <div className="flex flex-col items-center justify-center py-16 text-text-secondary text-sm">
+          등록된 자산이 없습니다.
+        </div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-surface border-b border-border-default">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">자산 태그</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">모델</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">유형</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">보증 만료</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary">액션</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {assets.map((a) => (
+              <React.Fragment key={a.id}>
+                <tr className="border-b border-border-subtle hover:bg-surface-hover">
+                  <td className="px-4 py-2.5 font-mono text-xs text-text-secondary">{a.asset_tag}</td>
+                  <td className="px-4 py-2.5 text-text-primary">{a.model}</td>
+                  <td className="px-4 py-2.5 text-text-secondary">{ASSET_TYPE_LABELS[a.asset_type] ?? a.asset_type}</td>
+                  <td className="px-4 py-2.5 text-text-secondary text-xs">
+                    {a.warranty_end ? formatRelativeTime(a.warranty_end) : '-'}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button type="button" onClick={() => openEdit(a)} className="p-1 rounded text-text-secondary hover:text-text-primary hover:bg-surface-hover">
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { if (confirm('자산을 삭제하시겠습니까?')) deleteMutation.mutate(a.id); }}
+                        className="p-1 rounded text-text-secondary hover:text-error hover:bg-error-bg"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {editAsset?.id === a.id && (
+                  <tr className="border-b border-border-subtle">
+                    <td colSpan={5} className="p-0">
+                      <AssetForm
+                        onSubmit={() => updateMutation.mutate({ id: a.id, d: form })}
+                        onCancel={() => setEditAsset(null)}
+                        loading={updateMutation.isPending}
+                      />
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
 
 // -----------------------------------------------------------------------
-// 탭: 계약
+// 탭: 계약 (생성·수정·삭제 포함)
 // -----------------------------------------------------------------------
+const CONTRACT_TYPE_LABELS: Record<string, string> = {
+  warranty: '보증', paid: '유상', maintenance: '유지보수',
+};
+
 function ContractsTab({ tenantSlug, customerId }: { tenantSlug: string; customerId: string }) {
+  const queryClient = useQueryClient();
+  const [editContract, setEditContract] = useState<Contract | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const emptyForm = { name: '', type: 'maintenance', sla_grade: 'standard', start_date: '', end_date: '', amount: '', memo: '' };
+  const [form, setForm] = useState({ ...emptyForm });
+
   const { data, isLoading } = useQuery({
     queryKey: ['customer-contracts', tenantSlug, customerId],
     queryFn: () =>
@@ -266,38 +412,173 @@ function ContractsTab({ tenantSlug, customerId }: { tenantSlug: string; customer
 
   const contracts: Contract[] = data?.items ?? [];
 
-  if (isLoading) return <div className="p-6"><Skeleton className="h-40 w-full" /></div>;
+  const createMutation = useMutation({
+    mutationFn: (d: typeof form) =>
+      api.post(`/${tenantSlug}/contracts`, {
+        name: d.name, customer_id: customerId, type: d.type,
+        sla_grade: d.sla_grade, start_date: d.start_date, end_date: d.end_date,
+        amount: d.amount ? Number(d.amount) : null, memo: d.memo || null,
+      }).then((r) => r.data),
+    onSuccess: () => {
+      toast.success('계약이 생성되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['customer-contracts', tenantSlug, customerId] });
+      queryClient.invalidateQueries({ queryKey: ['customer-rollup', tenantSlug, customerId] });
+      setShowCreate(false);
+      setForm({ ...emptyForm });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
 
-  if (contracts.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-text-secondary text-sm">
-        연결된 계약이 없습니다.
-      </div>
-    );
+  const updateMutation = useMutation({
+    mutationFn: ({ id, d }: { id: string; d: typeof form }) =>
+      api.patch(`/${tenantSlug}/contracts/${id}`, {
+        name: d.name, type: d.type, sla_grade: d.sla_grade,
+        start_date: d.start_date, end_date: d.end_date,
+        amount: d.amount ? Number(d.amount) : null, memo: d.memo || null,
+      }).then((r) => r.data),
+    onSuccess: () => {
+      toast.success('계약이 수정되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['customer-contracts', tenantSlug, customerId] });
+      setEditContract(null);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/${tenantSlug}/contracts/${id}`),
+    onSuccess: () => {
+      toast.success('계약이 삭제되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['customer-contracts', tenantSlug, customerId] });
+      queryClient.invalidateQueries({ queryKey: ['customer-rollup', tenantSlug, customerId] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  function openEdit(c: Contract) {
+    setEditContract(c);
+    setForm({ name: c.name, type: c.type, sla_grade: c.sla_grade, start_date: c.start_date, end_date: c.end_date, amount: c.amount ?? '', memo: c.memo ?? '' });
   }
 
+  const inputCls = 'h-8 w-full rounded-md border border-border-default bg-surface px-2.5 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong';
+
+  const ContractForm = ({ onSubmit, onCancel, loading }: { onSubmit: () => void; onCancel: () => void; loading: boolean }) => (
+    <div className="grid grid-cols-2 gap-3 p-4 bg-surface-raised border-b border-border-subtle">
+      <div className="col-span-2">
+        <label className="text-xs text-text-secondary mb-1 block">계약명 *</label>
+        <input className={inputCls} value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="삼성전자 서버 유지보수 계약" />
+      </div>
+      <div>
+        <label className="text-xs text-text-secondary mb-1 block">유형 *</label>
+        <select className={inputCls} value={form.type} onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))}>
+          {Object.entries(CONTRACT_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="text-xs text-text-secondary mb-1 block">SLA 등급 *</label>
+        <input className={inputCls} value={form.sla_grade} onChange={(e) => setForm((p) => ({ ...p, sla_grade: e.target.value }))} placeholder="standard / premium" />
+      </div>
+      <div>
+        <label className="text-xs text-text-secondary mb-1 block">시작일 *</label>
+        <input type="date" className={inputCls} value={form.start_date} onChange={(e) => setForm((p) => ({ ...p, start_date: e.target.value }))} />
+      </div>
+      <div>
+        <label className="text-xs text-text-secondary mb-1 block">만료일 *</label>
+        <input type="date" className={inputCls} value={form.end_date} onChange={(e) => setForm((p) => ({ ...p, end_date: e.target.value }))} />
+      </div>
+      <div>
+        <label className="text-xs text-text-secondary mb-1 block">금액</label>
+        <input type="number" className={inputCls} value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} placeholder="0" />
+      </div>
+      <div>
+        <label className="text-xs text-text-secondary mb-1 block">메모</label>
+        <input className={inputCls} value={form.memo} onChange={(e) => setForm((p) => ({ ...p, memo: e.target.value }))} placeholder="비고 (선택)" />
+      </div>
+      <div className="col-span-2 flex gap-2 pt-1">
+        <Button size="sm" onClick={onSubmit} isLoading={loading} disabled={!form.name || !form.start_date || !form.end_date}>저장</Button>
+        <Button size="sm" variant="ghost" onClick={onCancel}>취소</Button>
+      </div>
+    </div>
+  );
+
+  if (isLoading) return <div className="p-6"><Skeleton className="h-40 w-full" /></div>;
+
   return (
-    <div className="overflow-auto">
-      <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-surface border-b border-border-default">
-          <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">계약명</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">상태</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">만료일</th>
-          </tr>
-        </thead>
-        <tbody>
-          {contracts.map((c) => (
-            <tr key={c.id} className="border-b border-border-subtle">
-              <td className="px-4 py-2.5 text-text-primary">{c.name}</td>
-              <td className="px-4 py-2.5 text-text-secondary capitalize">{c.contract_type ?? '-'}</td>
-              <td className="px-4 py-2.5 text-text-secondary text-xs">
-                {c.end_date ? formatRelativeTime(c.end_date) : '-'}
-              </td>
+    <div className="flex flex-col h-full overflow-auto">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle shrink-0">
+        <span className="text-xs text-text-secondary">{contracts.length}개</span>
+        <Button size="sm" leftIcon={<Plus size={12} />} onClick={() => { setShowCreate(true); setEditContract(null); }}>
+          계약 추가
+        </Button>
+      </div>
+
+      {/* 생성 폼 */}
+      {showCreate && (
+        <ContractForm
+          onSubmit={() => createMutation.mutate(form)}
+          onCancel={() => setShowCreate(false)}
+          loading={createMutation.isPending}
+        />
+      )}
+
+      {contracts.length === 0 && !showCreate ? (
+        <div className="flex flex-col items-center justify-center py-16 text-text-secondary text-sm">
+          연결된 계약이 없습니다.
+        </div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-surface border-b border-border-default">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">계약명</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">유형</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">SLA</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">기간</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary">액션</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {contracts.map((c) => (
+              <React.Fragment key={c.id}>
+                <tr className="border-b border-border-subtle hover:bg-surface-hover">
+                  <td className="px-4 py-2.5 text-text-primary font-medium">{c.name}</td>
+                  <td className="px-4 py-2.5 text-text-secondary">
+                    {CONTRACT_TYPE_LABELS[c.type] ?? c.type}
+                  </td>
+                  <td className="px-4 py-2.5 text-text-secondary text-xs">{c.sla_grade}</td>
+                  <td className="px-4 py-2.5 text-text-secondary text-xs">
+                    {c.start_date} ~ {c.end_date}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button type="button" onClick={() => openEdit(c)} className="p-1 rounded text-text-secondary hover:text-text-primary hover:bg-surface-hover">
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { if (confirm('계약을 삭제하시겠습니까?')) deleteMutation.mutate(c.id); }}
+                        className="p-1 rounded text-text-secondary hover:text-error hover:bg-error-bg"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {editContract?.id === c.id && (
+                  <tr className="border-b border-border-subtle">
+                    <td colSpan={5} className="p-0">
+                      <ContractForm
+                        onSubmit={() => updateMutation.mutate({ id: c.id, d: form })}
+                        onCancel={() => setEditContract(null)}
+                        loading={updateMutation.isPending}
+                      />
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

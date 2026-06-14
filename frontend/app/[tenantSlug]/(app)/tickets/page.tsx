@@ -2,10 +2,13 @@
 
 import React, { useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { Plus, Search, LifeBuoy } from 'lucide-react';
-import { api } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Plus, Search, LifeBuoy, Inbox, UserPlus, Info, RotateCcw } from 'lucide-react';
+import { toast } from 'sonner';
+import { api, getErrorMessage } from '@/lib/api';
 import type { Ticket, TicketStatus, TicketPriority, TicketsResponse } from '@/lib/types';
+import { useAuth } from '@/hooks/useAuth';
+import { isTeamLeadOrAbove, type UserRole } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/utils';
 import { SlaBadge } from '@/components/tickets/SlaBadge';
@@ -138,6 +141,172 @@ function EmptyState({ onNew }: { onNew: () => void }) {
 }
 
 // -----------------------------------------------------------------------
+// 공유 큐 타입
+// -----------------------------------------------------------------------
+interface QueueTicket {
+  id: string;
+  ticket_number: string | null;
+  title: string;
+  priority: string;
+  request_type: string | null;
+  customer_id: string | null;
+  assigned_to: string | null;
+  created_at: string;
+}
+interface QueueResponse {
+  items: QueueTicket[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+const REQUEST_TYPE_LABELS: Record<string, string> = {
+  incident:          '장애',
+  service_request:   '서비스 요청',
+  installation:      '설치',
+  upgrade:           '업그레이드',
+  technical_inquiry: '기술 문의',
+  maintenance:       '유지보수',
+};
+
+// -----------------------------------------------------------------------
+// 공유 큐 탭 (인라인 — 별도 /queue 페이지 없애고 여기서 처리)
+// -----------------------------------------------------------------------
+function QueueTab({ tenantSlug }: { tenantSlug: string }) {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const _isManager = isTeamLeadOrAbove(user?.role as UserRole);
+
+  const { data, isLoading } = useQuery<QueueResponse>({
+    queryKey: ['queue', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/queue`).then((r) => r.data),
+    enabled: !!tenantSlug,
+    refetchInterval: 30_000,
+  });
+
+  const claimMutation = useMutation({
+    mutationFn: (ticketId: string) =>
+      api.post(`/${tenantSlug}/queue/${ticketId}/claim`).then((r) => r.data),
+    onSuccess: (ticket) => {
+      toast.success(`티켓 ${ticket.ticket_number ?? ticket.id.slice(0, 8)} 접수 완료`);
+      queryClient.invalidateQueries({ queryKey: ['queue', tenantSlug] });
+      queryClient.invalidateQueries({ queryKey: ['tickets', tenantSlug] });
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err));
+      queryClient.invalidateQueries({ queryKey: ['queue', tenantSlug] });
+    },
+  });
+
+  const tickets = data?.items ?? [];
+  const total = data?.total ?? 0;
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* 안내 배너 */}
+      <div className="mx-6 mt-4 flex items-start gap-2 rounded-lg bg-info-bg px-4 py-3 text-sm text-info-text shrink-0">
+        <Info size={14} className="mt-0.5 shrink-0" />
+        <span>
+          선착순 접수 방식 — 먼저 클릭한 1인만 성공합니다. 동시 클릭 시 나머지는 자동 알림을 받습니다.
+          {total > 0 && <strong className="ml-1">({total}개 대기 중)</strong>}
+        </span>
+        <button
+          type="button"
+          onClick={() => queryClient.invalidateQueries({ queryKey: ['queue', tenantSlug] })}
+          className="ml-auto shrink-0 flex items-center gap-1 text-xs text-info-text hover:text-text-primary"
+        >
+          <RotateCcw size={12} />
+          새로고침
+        </button>
+      </div>
+
+      {/* 테이블 */}
+      <div className="flex-1 overflow-auto min-h-0 mt-4">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 z-10 bg-surface border-b border-border-default">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">번호</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">제목</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">우선순위</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">유형</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">접수일</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary">액션</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b border-border-subtle">
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-48" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-5 w-14 rounded-full" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-7 w-20 rounded-md" /></td>
+                  </tr>
+                ))}
+              </>
+            ) : tickets.length === 0 ? (
+              <tr>
+                <td colSpan={6}>
+                  <div className="flex flex-col items-center justify-center py-20 gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl" style={{ background: 'rgba(245, 192, 0, 0.12)' }}>
+                      <Inbox size={24} strokeWidth={1.5} style={{ color: '#F5C000' }} />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-text-primary">미배정 티켓 없음</p>
+                      <p className="text-xs text-text-secondary mt-0.5">모든 티켓이 담당자에게 배정되었습니다.</p>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              tickets.map((t) => (
+                <tr key={t.id} className="border-b border-border-subtle hover:bg-surface-hover transition-colors">
+                  <td className="px-4 py-3 font-mono text-xs text-text-secondary">
+                    {t.ticket_number ?? t.id.slice(0, 8)}
+                  </td>
+                  <td className="px-4 py-3 text-text-primary max-w-xs">
+                    <p className="truncate">{t.title}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={cn(
+                      'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                      PRIORITY_STYLES[t.priority as TicketPriority] ?? 'bg-neutral-100 text-neutral-500',
+                    )}>
+                      {PRIORITY_LABELS[t.priority as TicketPriority] ?? t.priority}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-text-secondary text-xs">
+                    {t.request_type ? (REQUEST_TYPE_LABELS[t.request_type] ?? t.request_type) : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-text-secondary text-xs">
+                    {formatRelativeTime(t.created_at)}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      leftIcon={<UserPlus size={13} />}
+                      onClick={() => claimMutation.mutate(t.id)}
+                      isLoading={claimMutation.isPending && claimMutation.variables === t.id}
+                      disabled={claimMutation.isPending}
+                    >
+                      접수
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
 // 필터 상태
 // -----------------------------------------------------------------------
 interface Filters {
@@ -149,10 +318,13 @@ interface Filters {
 // -----------------------------------------------------------------------
 // 티켓 목록 페이지
 // -----------------------------------------------------------------------
+type TicketTab = 'my-tickets' | 'queue';
+
 export default function TicketsPage() {
   const params = useParams();
   const tenantSlug = params?.tenantSlug as string;
 
+  const [activeTab, setActiveTab] = useState<TicketTab>('my-tickets');
   const [filters, setFilters] = useState<Filters>({
     status: '',
     priority: '',
@@ -215,15 +387,53 @@ export default function TicketsPage() {
     <div className="flex flex-col h-full">
       {/* 페이지 헤더 */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border-default bg-surface shrink-0">
-        <h1 className="text-xl font-semibold text-text-primary">티켓</h1>
-        <Button
-          size="sm"
-          onClick={() => setCreateOpen(true)}
-          leftIcon={<Plus size={14} />}
-        >
-          새 티켓
-        </Button>
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl font-semibold text-text-primary">티켓</h1>
+          {/* 탭 토글 */}
+          <div className="flex gap-0.5 p-0.5 rounded-lg bg-border-subtle">
+            <button
+              type="button"
+              onClick={() => setActiveTab('my-tickets')}
+              className={cn(
+                'rounded-md px-3 py-1 text-sm font-medium transition-colors duration-fast',
+                activeTab === 'my-tickets'
+                  ? 'bg-surface text-text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary',
+              )}
+            >
+              내 티켓
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('queue')}
+              className={cn(
+                'rounded-md px-3 py-1 text-sm font-medium transition-colors duration-fast',
+                activeTab === 'queue'
+                  ? 'bg-surface text-text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary',
+              )}
+            >
+              공유 큐
+            </button>
+          </div>
+        </div>
+        {activeTab === 'my-tickets' && (
+          <Button
+            size="sm"
+            onClick={() => setCreateOpen(true)}
+            leftIcon={<Plus size={14} />}
+          >
+            새 티켓
+          </Button>
+        )}
       </div>
+
+      {/* 공유 큐 탭 */}
+      {activeTab === 'queue' && <QueueTab tenantSlug={tenantSlug} />}
+
+      {/* 내 티켓 탭 — 필터 바 + 테이블 */}
+      {activeTab === 'my-tickets' && (
+      <>
 
       {/* 필터 바 */}
       <div className="flex items-center gap-3 px-6 py-3 border-b border-border-subtle bg-surface shrink-0 flex-wrap">
@@ -417,6 +627,8 @@ export default function TicketsPage() {
         onClear={handleClearBulk}
         tenantSlug={tenantSlug}
       />
+      </>
+      )}
     </div>
   );
 }

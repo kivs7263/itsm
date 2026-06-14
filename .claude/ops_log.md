@@ -36,3 +36,87 @@
 | 2026-06-11 01:22 | build | docker compose build itsm_frontend 2>&1 | tail -20 | ✅ | itsm | build-hook |
 | 2026-06-11 01:23 | build | docker compose build itsm_backend 2>&1 | tail -15 | ✅ | itsm | build-hook |
 | 2026-06-11 01:23 | build | docker compose build itsm_frontend 2>&1 | tail -15 | ✅ | itsm | build-hook |
+| 2026-06-11 01:33 | build | cd /teamwork/itsm && docker compose build itsm_backend 2>&1 | tail -5 && docker  | ✅ | itsm | build-hook |
+| 2026-06-11 01:33 | build | docker compose build itsm_frontend 2>&1 | tail -5 && docker compose up -d itsm_f | ✅ | itsm | build-hook |
+| 2026-06-11 01:36 | build | docker compose build itsm_frontend && docker compose up -d itsm_frontend 2>&1 |  | ✅ | itsm | build-hook |
+| 2026-06-11 01:37 | build | docker compose build itsm_backend 2>&1 | tail -20 | ✅ | itsm | build-hook |
+| 2026-06-11 01:38 | build | docker compose build itsm_backend 2>&1 | tail -5 && docker compose up -d itsm_ba | ✅ | itsm | build-hook |
+| 2026-06-11 01:43 | build | docker compose build itsm_backend 2>&1 | tail -10 && docker compose up -d itsm_b | ✅ | itsm | build-hook |
+| 2026-06-11 01:46 | build | docker compose build itsm_backend 2>&1 | tail -8 | ✅ | itsm | build-hook |
+| 2026-06-11 01:47 | build | docker compose build itsm_frontend 2>&1 | tail -5 | ✅ | itsm | build-hook |
+| 2026-06-11 05:57 | build | cd /teamwork/itsm && docker compose build itsm_backend 2>&1 | tail -15 | ✅ | itsm | build-hook |
+| 2026-06-11 05:58 | build | docker compose build itsm_frontend 2>&1 | tail -10 | ✅ | itsm | build-hook |
+| 2026-06-11 06:13 | build | docker compose build itsm_frontend 2>&1 | tail -8 | ✅ | itsm | build-hook |
+| 2026-06-11 06:22 | build | docker compose build itsm_frontend 2>&1 | tail -5 && docker compose up -d itsm_f | ✅ | itsm | build-hook |
+| 2026-06-11 06:32 | build | docker compose build itsm_frontend 2>&1 | tail -5 && docker compose up -d itsm_f | ✅ | itsm | build-hook |
+| 2026-06-11 06:35 | build | docker compose build itsm_backend 2>&1 | tail -5 && docker compose up -d itsm_ba | ✅ | itsm | build-hook |
+| 2026-06-11 07:22 | build | docker compose build itsm_frontend 2>&1 | tail -5 && docker compose up -d itsm_f | ✅ | itsm | build-hook |
+| 2026-06-11 07:27 | build | docker compose build itsm_frontend 2>&1 | tail -5 && docker compose up -d itsm_f | ✅ | itsm | build-hook |
+| 2026-06-11 07:35 | build | docker compose build itsm_frontend 2>&1 | tail -3 && docker compose up -d itsm_f | ✅ | itsm | build-hook |
+| 2026-06-11 07:38 | build | docker compose build itsm_frontend 2>&1 | tail -3 && docker compose up -d itsm_f | ✅ | itsm | build-hook |
+| 2026-06-11 07:47 | build | docker compose build itsm_backend 2>&1 | tail -5 && docker compose up -d itsm_ba | ✅ | itsm | build-hook |
+| 2026-06-11 07:54 | build | docker compose build itsm_frontend 2>&1 | tail -3 && docker compose up -d itsm_f | ✅ | itsm | build-hook |
+| 2026-06-11 07:57 | build | docker compose build itsm_frontend 2>&1 | tail -5 && docker compose up -d itsm_f | ✅ | itsm | build-hook |
+| 2026-06-11 08:10 | build | docker compose build itsm_backend 2>&1 | tail -20 | ✅ | itsm | build-hook |
+| 2026-06-11 08:10 | build | cd /teamwork/sa-workspace && docker compose build frontend 2>&1 | tail -20 | ✅ | itsm | build-hook |
+| 2026-06-11 08:11 | build | docker build -t sa-workspace-frontend /teamwork/sa-workspace -f /teamwork/sa-wor | ✅ | itsm | build-hook |
+| 2026-06-11 08:11 | build | cd /teamwork/sa-workspace && docker compose build frontend 2>&1 | tail -10 | ✅ | itsm | build-hook |
+| 2026-06-11 08:12 | build | docker compose build itsm_frontend 2>&1 | tail -10 | ✅ | itsm | build-hook |
+| 2026-06-11 08:50 | build | cd /teamwork/itsm && docker compose build itsm_backend 2>&1 | tail -5 && docker  | ✅ | itsm | build-hook |
+| 2026-06-11 08:54 | build | # itsm_frontend 컨테이너가 현재 서빙하는 실제 xiilab/login 청크에서 "조직" 검색
+docker exec itsm_fron | ✅ | itsm | build-hook |
+| 2026-06-14 04:17 | build | cd /teamwork/itsm && docker compose build itsm_backend 2>&1 | tail -5 | ✅ | itsm | build-hook |
+| 2026-06-14 04:18 | build | cd /teamwork/itsm && docker compose run --rm --no-deps itsm_backend alembic upgr | ✅ | itsm | build-hook |
+| 2026-06-14 04:18 | build | docker compose run --rm --no-deps itsm_backend alembic upgrade head 2>&1 | ✅ | itsm | build-hook |
+| 2026-06-14 04:18 | build | docker compose run --rm --no-deps itsm_backend alembic upgrade 010_work_logs 2>& | ✅ | itsm | build-hook |
+| 2026-06-14 04:19 | build | docker compose build itsm_backend 2>&1 | tail -5 | ✅ | itsm | build-hook |
+| 2026-06-14 04:20 | build | docker compose build itsm_backend 2>&1 | tail -3 && docker compose run --rm --no | ✅ | itsm | build-hook |
+| 2026-06-14 04:21 | build | docker compose build itsm_backend 2>&1 | tail -5 | ✅ | itsm | build-hook |
+| 2026-06-14 04:22 | build | docker compose build itsm_backend 2>&1 | tail -3 | ✅ | itsm | build-hook |
+| 2026-06-14 04:25 | build | docker compose build itsm_frontend 2>&1 | tail -8 | ✅ | itsm | build-hook |
+| 2026-06-14 04:28 | build | docker compose build itsm_backend 2>&1 | tail -5 | ✅ | itsm | build-hook |
+| 2026-06-14 04:29 | build | cd /teamwork/itsm && docker compose build itsm_frontend 2>&1 | tail -8 | ✅ | itsm | build-hook |
+| 2026-06-14 04:30 | build | docker compose build itsm_frontend 2>&1 | grep -E "error|Error|Type|Cannot|Modul | ✅ | itsm | build-hook |
+| 2026-06-14 04:31 | build | docker compose build itsm_frontend 2>&1 | grep -E "error|Error|Type|Cannot|succe | ✅ | itsm | build-hook |
+| 2026-06-14 04:46 | session_close | 세션 정상 종료 / ★★:57개 | ✅ | itsm | leader |
+| 2026-06-14 04:48 | build | grep -n "★★\|핵심 체크\|볼륨\|재빌드\|docker build" ~/.claude/agents/backend.md | head -3 | ✅ | itsm | build-hook |
+| 2026-06-14 04:53 | build | git -C /teamwork/itsm add CLAUDE.md && git -C /teamwork/itsm commit -m "$(cat << | ✅ | itsm | build-hook |
+| 2026-06-14 07:26 | build | cd /teamwork/itsm && docker compose build itsm_backend 2>&1 | tail -10 | ✅ | itsm | build-hook |
+| 2026-06-14 07:26 | build | docker compose run --rm --no-deps itsm_backend alembic upgrade head 2>&1 | ✅ | itsm | build-hook |
+| 2026-06-14 07:30 | build | docker compose build itsm_frontend 2>&1 | tail -15 | ✅ | itsm | build-hook |
+| 2026-06-14 07:30 | build | docker compose build itsm_frontend 2>&1 | grep -E "error|Error|Type error|×|✗" | | ✅ | itsm | build-hook |
+| 2026-06-14 07:31 | build | docker compose build itsm_frontend 2>&1 | grep -E "error|Error|Type error|×|✗" | | ✅ | itsm | build-hook |
+| 2026-06-14 07:31 | build | docker compose build itsm_frontend 2>&1 | tail -5 | ✅ | itsm | build-hook |
+| 2026-06-14 07:36 | build | docker compose build itsm_backend 2>&1 | tail -8 | ✅ | itsm | build-hook |
+| 2026-06-14 07:36 | build | docker compose run --rm --no-deps itsm_backend alembic upgrade head 2>&1 | tail  | ✅ | itsm | build-hook |
+| 2026-06-14 07:38 | build | docker compose build itsm_frontend 2>&1 | grep -E "error|Error|Type error" | hea | ✅ | itsm | build-hook |
+| 2026-06-14 07:38 | build | docker compose build itsm_frontend 2>&1 | tail -6 | ✅ | itsm | build-hook |
+| 2026-06-14 07:42 | build | docker compose build itsm_frontend 2>&1 | grep -E "error|Error|Type error" | hea | ✅ | itsm | build-hook |
+| 2026-06-14 07:42 | build | docker compose build itsm_frontend 2>&1 | tail -5 | ✅ | itsm | build-hook |
+| 2026-06-14 07:43 | build | docker compose build itsm_backend 2>&1 | tail -5 | ✅ | itsm | build-hook |
+| 2026-06-14 07:43 | build | docker compose run --rm --no-deps itsm_backend alembic upgrade head 2>&1 | tail  | ✅ | itsm | build-hook |
+| 2026-06-14 07:44 | build | docker compose build itsm_backend 2>&1 | tail -5 | ✅ | itsm | build-hook |
+| 2026-06-14 07:45 | build | docker compose build itsm_frontend 2>&1 | grep -E "error|Error|Type error" | hea | ✅ | itsm | build-hook |
+| 2026-06-14 07:46 | build | docker compose build itsm_frontend 2>&1 | tail -5 | ✅ | itsm | build-hook |
+| 2026-06-14 07:58 | build | docker compose build itsm_backend 2>&1 | tail -5 | ✅ | itsm | build-hook |
+| 2026-06-14 07:58 | build | docker compose run --rm --no-deps itsm_backend alembic upgrade head 2>&1 | tail  | ✅ | itsm | build-hook |
+| 2026-06-14 08:02 | build | docker compose build itsm_frontend 2>&1 | tail -5 && docker compose up -d itsm_f | ✅ | itsm | build-hook |
+| 2026-06-14 08:24 | build | docker compose build itsm_backend 2>&1 | tail -5 | ✅ | itsm | build-hook |
+| 2026-06-14 08:24 | build | docker compose run --rm --no-deps itsm_backend alembic upgrade head 2>&1 | tail  | ✅ | itsm | build-hook |
+| 2026-06-14 08:28 | build | docker compose build itsm_frontend 2>&1 | tail -5 && docker compose up -d itsm_f | ✅ | itsm | build-hook |
+| 2026-06-14 08:39 | build | docker compose build itsm_backend 2>&1 | tail -8 | ✅ | itsm | build-hook |
+| 2026-06-14 08:39 | build | docker compose run --rm --no-deps itsm_backend alembic upgrade head 2>&1 | tail  | ✅ | itsm | build-hook |
+| 2026-06-14 08:44 | build | docker compose build itsm_frontend 2>&1 | tail -5 && docker compose up -d itsm_f | ✅ | itsm | build-hook |
+| 2026-06-14 08:45 | build | docker compose build itsm_frontend 2>&1 | grep -A5 "Error\|error\|Type\|Cannot\| | ✅ | itsm | build-hook |
+| 2026-06-14 08:45 | build | docker compose build itsm_frontend 2>&1 | grep "^#14" | grep -v "^#14 [0-9]*\.[0 | ✅ | itsm | build-hook |
+| 2026-06-14 08:46 | build | docker compose build itsm_frontend 2>&1 | tail -5 && docker compose up -d itsm_f | ✅ | itsm | build-hook |
+| 2026-06-14 08:57 | build | docker compose build itsm_backend 2>&1 | tail -5 | ✅ | itsm | build-hook |
+| 2026-06-14 08:57 | build | docker compose run --rm --no-deps itsm_backend alembic upgrade head 2>&1 | tail  | ✅ | itsm | build-hook |
+| 2026-06-14 08:58 | build | docker compose build itsm_backend 2>&1 | tail -5 && docker compose up -d itsm_ba | ✅ | itsm | build-hook |
+| 2026-06-14 08:58 | build | docker compose build itsm_backend 2>&1 | tail -4 && docker compose up -d itsm_ba | ✅ | itsm | build-hook |
+| 2026-06-14 09:03 | build | docker compose build itsm_frontend 2>&1 | tail -5 && docker compose up -d itsm_f | ✅ | itsm | build-hook |
+| 2026-06-14 09:22 | build | docker compose build itsm_frontend 2>&1 | tail -20 | ✅ | itsm | build-hook |
+| 2026-06-14 09:23 | build | docker compose build itsm_backend 2>&1 | tail -10 && docker compose up -d itsm_b | ✅ | itsm | build-hook |
+| 2026-06-14 09:28 | build | docker compose build itsm_frontend 2>&1 | grep -E "ERROR|error|warning|Warning|B | ✅ | itsm | build-hook |
+| 2026-06-14 09:29 | build | docker compose build itsm_frontend 2>&1 | grep -E "ERROR|Type error|error TS|Bui | ✅ | itsm | build-hook |
+| 2026-06-14 09:30 | build | docker compose build itsm_frontend 2>&1 | grep -E "ERROR|Type error|error TS|Bui | ✅ | itsm | build-hook |

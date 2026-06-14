@@ -34,20 +34,21 @@ function Spinner() {
 import {
   LifeBuoy,
   Users,
-  Package,
-  FileText,
-  Clock,
+  BookOpen,
+  RefreshCw,
+  Bell,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 
 const MOBILE_NAV = [
-  { label: '티켓',  href: '/tickets',   icon: LifeBuoy },
-  { label: '고객',  href: '/customers', icon: Users    },
-  { label: '자산',  href: '/assets',    icon: Package  },
-  { label: '계약',  href: '/contracts', icon: FileText },
-  { label: 'SLA',   href: '/sla',       icon: Clock    },
+  { label: '티켓',       href: '/tickets',          icon: LifeBuoy  },
+  { label: '고객',       href: '/customers',        icon: Users     },
+  { label: '지식베이스', href: '/kb',               icon: BookOpen  },
+  { label: '반복 장애',  href: '/recurring-alerts', icon: RefreshCw },
 ] as const;
 
 function BottomNav() {
@@ -80,6 +81,36 @@ function BottomNav() {
         })}
       </div>
     </nav>
+  );
+}
+
+// -----------------------------------------------------------------------
+// 알림 벨 헤더 (데스크탑용)
+// -----------------------------------------------------------------------
+function NotificationBell({ tenantSlug }: { tenantSlug: string }) {
+  const { data } = useQuery<{ total: number }>({
+    queryKey: ['notification-count', tenantSlug],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/notifications`, { params: { page_size: 1 } }).then((r) => r.data),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+  const total = data?.total ?? 0;
+
+  return (
+    <Link
+      href={`/${tenantSlug}/notifications`}
+      className="relative flex h-8 w-8 items-center justify-center rounded-md text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors duration-fast"
+      title="알림"
+    >
+      <Bell size={16} />
+      {total > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-error text-[10px] font-semibold text-white px-1">
+          {total > 99 ? '99+' : total}
+        </span>
+      )}
+    </Link>
   );
 }
 
@@ -145,6 +176,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
         {/* 사업카드 컨텍스트 바 (SA_BACKEND_URL 미설정 시 숨김) */}
         {tenantSlug && <BusinessContextBar tenantSlug={tenantSlug} />}
+
+        {/* 미니 헤더 — 알림 벨 (데스크탑, md 이상) */}
+        {tenantSlug && (
+          <div className="hidden md:flex items-center justify-end px-4 py-1.5 border-b border-border-subtle bg-surface shrink-0">
+            <NotificationBell tenantSlug={tenantSlug} />
+          </div>
+        )}
 
         {/* 페이지 콘텐츠 — 자체 스크롤 */}
         <div className="flex-1 overflow-y-auto min-h-0">

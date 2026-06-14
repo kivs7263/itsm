@@ -162,10 +162,10 @@ export default function ContractsPage() {
                     {typeof c.customer_name === 'string' ? c.customer_name : '-'}
                   </td>
                   <td className="px-4 py-3 text-text-secondary text-xs">
-                    {typeof c.contract_type === 'string' ? c.contract_type : '-'}
+                    {typeof c.type === 'string' ? c.type : '-'}
                   </td>
                   <td className="px-4 py-3">
-                    <TierBadge tier={c.sla_tier} />
+                    <TierBadge tier={c.sla_grade as ContractTier} />
                   </td>
                   <td className="px-4 py-3 text-text-secondary text-xs">
                     {formatDate(c.start_date)}

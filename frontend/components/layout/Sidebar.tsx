@@ -6,20 +6,12 @@ import { usePathname } from 'next/navigation';
 import {
   LifeBuoy,
   Users,
-  Package,
-  FileText,
-  Clock,
   BarChart2,
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Server,
-  GitMerge,
-  Bell,
   Home,
-  Inbox,
   BookOpen,
-  CalendarDays,
   RefreshCw,
   Settings,
 } from 'lucide-react';
@@ -46,44 +38,43 @@ function getInitialCollapsed(): boolean {
 // -----------------------------------------------------------------------
 type NavItem = { label: string; href: string; icon: React.ElementType };
 
-const ALL_ITEMS: NavItem[] = [
-  { label: '대시보드',   href: '/home',              icon: Home       },
-  { label: '공유 큐',    href: '/queue',             icon: Inbox      },
-  { label: '티켓',       href: '/tickets',           icon: LifeBuoy   },
-  { label: '캘린더',     href: '/calendar',          icon: CalendarDays },
-  { label: '고객',       href: '/customers',         icon: Users      },
-  { label: '자산',       href: '/assets',            icon: Package    },
-  { label: 'CMDB',       href: '/cmdb',              icon: Server     },
-  { label: '계약',       href: '/contracts',         icon: FileText   },
-  { label: '변경 관리',  href: '/change-requests',   icon: GitMerge   },
-  { label: 'SLA',        href: '/sla',               icon: Clock      },
-  { label: '지식베이스', href: '/kb',                icon: BookOpen   },
-  { label: '반복 장애',  href: '/recurring-alerts',  icon: RefreshCw  },
-  { label: '알림',       href: '/notifications',     icon: Bell       },
-  { label: '리포트',     href: '/reports',           icon: BarChart2  },
+// 역할별 nav 항목 (사이드바 15개 → 역할별 5~7개로 정리)
+// 자산·CMDB·계약은 고객 상세 탭에서 관리. 알림은 헤더 벨. 캘린더는 미구현 제거.
+const ENGINEER_ITEMS: NavItem[] = [
+  { label: '대시보드',   href: '/home',             icon: Home      },
+  { label: '티켓',       href: '/tickets',          icon: LifeBuoy  },
+  { label: '고객',       href: '/customers',        icon: Users     },
+  { label: '지식베이스', href: '/kb',               icon: BookOpen  },
+  { label: '반복 장애',  href: '/recurring-alerts', icon: RefreshCw },
 ];
 
-const ADMIN_ONLY_ITEMS: NavItem[] = [
+const TEAM_LEAD_ITEMS: NavItem[] = [
+  ...ENGINEER_ITEMS,
+  { label: '리포트', href: '/reports', icon: BarChart2 },
+];
+
+const ADMIN_ITEMS: NavItem[] = [
+  ...TEAM_LEAD_ITEMS,
   { label: '설정', href: '/settings', icon: Settings },
 ];
 
+const SALES_ITEMS: NavItem[] = [
+  { label: '대시보드', href: '/home',      icon: Home      },
+  { label: '고객',     href: '/customers', icon: Users     },
+  { label: '리포트',   href: '/reports',   icon: BarChart2 },
+];
+
+const C_LEVEL_ITEMS: NavItem[] = [
+  { label: '대시보드', href: '/home',    icon: Home      },
+  { label: '리포트',   href: '/reports', icon: BarChart2 },
+];
+
 function getNavItems(role: UserRole | undefined): NavItem[] {
-  if (isCLevel(role)) {
-    return ALL_ITEMS.filter((i) => ['/home', '/reports'].includes(i.href));
-  }
-  if (isSales(role)) {
-    return ALL_ITEMS.filter((i) => ['/customers', '/contracts', '/reports'].includes(i.href));
-  }
-  if (isAdminRole(role)) {
-    return [...ALL_ITEMS, ...ADMIN_ONLY_ITEMS];
-  }
-  if (isTeamLeadOrAbove(role)) {
-    return ALL_ITEMS;
-  }
-  // engineer (기본)
-  return ALL_ITEMS.filter((i) =>
-    ['/home', '/queue', '/tickets', '/calendar', '/customers', '/assets', '/kb', '/recurring-alerts', '/notifications'].includes(i.href)
-  );
+  if (isCLevel(role)) return C_LEVEL_ITEMS;
+  if (isSales(role)) return SALES_ITEMS;
+  if (isAdminRole(role)) return ADMIN_ITEMS;
+  if (isTeamLeadOrAbove(role)) return TEAM_LEAD_ITEMS;
+  return ENGINEER_ITEMS;
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
