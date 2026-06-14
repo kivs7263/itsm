@@ -256,8 +256,8 @@ async def compute_kpi(tenant_id: str, business_id: str) -> ItsmKpiPayload | None
                     SELECT COUNT(*) AS total
                     FROM tickets t
                     JOIN contracts c ON c.id = t.contract_id
-                    WHERE c.linked_business_id = :business_id::uuid
-                      AND t.tenant_id = :tenant_id::uuid
+                    WHERE c.linked_business_id = CAST(:business_id AS uuid)
+                      AND t.tenant_id = CAST(:tenant_id AS uuid)
                 """),
                 {"tenant_id": tenant_id, "business_id": business_id},
             )
@@ -269,8 +269,8 @@ async def compute_kpi(tenant_id: str, business_id: str) -> ItsmKpiPayload | None
                     SELECT COUNT(*) AS cnt
                     FROM tickets t
                     JOIN contracts c ON c.id = t.contract_id
-                    WHERE c.linked_business_id = :business_id::uuid
-                      AND t.tenant_id = :tenant_id::uuid
+                    WHERE c.linked_business_id = CAST(:business_id AS uuid)
+                      AND t.tenant_id = CAST(:tenant_id AS uuid)
                       AND t.status IN ('open', 'in_progress', 'pending')
                 """),
                 {"tenant_id": tenant_id, "business_id": business_id},
@@ -284,8 +284,8 @@ async def compute_kpi(tenant_id: str, business_id: str) -> ItsmKpiPayload | None
                     FROM sla_events se
                     JOIN tickets t ON t.id = se.ticket_id
                     JOIN contracts c ON c.id = t.contract_id
-                    WHERE c.linked_business_id = :business_id::uuid
-                      AND se.tenant_id = :tenant_id::uuid
+                    WHERE c.linked_business_id = CAST(:business_id AS uuid)
+                      AND se.tenant_id = CAST(:tenant_id AS uuid)
                       AND se.event_type = 'breached'
                 """),
                 {"tenant_id": tenant_id, "business_id": business_id},
@@ -304,8 +304,8 @@ async def compute_kpi(tenant_id: str, business_id: str) -> ItsmKpiPayload | None
                     ) AS avg_min
                     FROM tickets t
                     JOIN contracts c ON c.id = t.contract_id
-                    WHERE c.linked_business_id = :business_id::uuid
-                      AND t.tenant_id = :tenant_id::uuid
+                    WHERE c.linked_business_id = CAST(:business_id AS uuid)
+                      AND t.tenant_id = CAST(:tenant_id AS uuid)
                       AND t.status != 'open'
                 """),
                 {"tenant_id": tenant_id, "business_id": business_id},
@@ -321,8 +321,8 @@ async def compute_kpi(tenant_id: str, business_id: str) -> ItsmKpiPayload | None
                     ) AS avg_min
                     FROM tickets t
                     JOIN contracts c ON c.id = t.contract_id
-                    WHERE c.linked_business_id = :business_id::uuid
-                      AND t.tenant_id = :tenant_id::uuid
+                    WHERE c.linked_business_id = CAST(:business_id AS uuid)
+                      AND t.tenant_id = CAST(:tenant_id AS uuid)
                       AND t.resolved_at IS NOT NULL
                 """),
                 {"tenant_id": tenant_id, "business_id": business_id},
@@ -335,8 +335,8 @@ async def compute_kpi(tenant_id: str, business_id: str) -> ItsmKpiPayload | None
                 text("""
                     SELECT MIN(end_date - CURRENT_DATE) AS days_left
                     FROM contracts
-                    WHERE tenant_id = :tenant_id::uuid
-                      AND linked_business_id = :business_id::uuid
+                    WHERE tenant_id = CAST(:tenant_id AS uuid)
+                      AND linked_business_id = CAST(:business_id AS uuid)
                 """),
                 {"tenant_id": tenant_id, "business_id": business_id},
             )
@@ -348,8 +348,8 @@ async def compute_kpi(tenant_id: str, business_id: str) -> ItsmKpiPayload | None
                 text("""
                     SELECT COALESCE(SUM(amount), 0) AS contract_total
                     FROM contracts
-                    WHERE tenant_id = :tenant_id::uuid
-                      AND linked_business_id = :business_id::uuid
+                    WHERE tenant_id = CAST(:tenant_id AS uuid)
+                      AND linked_business_id = CAST(:business_id AS uuid)
                 """),
                 {"tenant_id": tenant_id, "business_id": business_id},
             )
@@ -366,8 +366,8 @@ async def compute_kpi(tenant_id: str, business_id: str) -> ItsmKpiPayload | None
                     FROM ticket_work_logs wl
                     JOIN tickets t ON t.id = wl.ticket_id
                     JOIN contracts c ON c.id = t.contract_id
-                    WHERE c.linked_business_id = :business_id::uuid
-                      AND wl.tenant_id = :tenant_id::uuid
+                    WHERE c.linked_business_id = CAST(:business_id AS uuid)
+                      AND wl.tenant_id = CAST(:tenant_id AS uuid)
                 """),
                 {"tenant_id": tenant_id, "business_id": business_id},
             )
@@ -395,8 +395,8 @@ async def compute_kpi(tenant_id: str, business_id: str) -> ItsmKpiPayload | None
                     FROM ticket_work_logs wl
                     JOIN tickets t ON t.id = wl.ticket_id
                     JOIN contracts c ON c.id = t.contract_id
-                    WHERE c.linked_business_id = :business_id::uuid
-                      AND wl.tenant_id = :tenant_id::uuid
+                    WHERE c.linked_business_id = CAST(:business_id AS uuid)
+                      AND wl.tenant_id = CAST(:tenant_id AS uuid)
                       AND wl.user_id IS NOT NULL
                     GROUP BY wl.user_id
                 """),
@@ -447,8 +447,8 @@ async def compute_kpi(tenant_id: str, business_id: str) -> ItsmKpiPayload | None
                     FROM csat_surveys cs
                     JOIN tickets t ON t.id = cs.ticket_id
                     JOIN contracts c ON c.id = t.contract_id
-                    WHERE c.linked_business_id = :business_id::uuid
-                      AND cs.tenant_id = :tenant_id::uuid
+                    WHERE c.linked_business_id = CAST(:business_id AS uuid)
+                      AND cs.tenant_id = CAST(:tenant_id AS uuid)
                 """),
                 {"tenant_id": tenant_id, "business_id": business_id},
             )
@@ -469,8 +469,8 @@ async def compute_kpi(tenant_id: str, business_id: str) -> ItsmKpiPayload | None
                                            AND t.created_at  < NOW() - INTERVAL '14 days')   AS prev_14
                     FROM tickets t
                     JOIN contracts c ON c.id = t.contract_id
-                    WHERE c.linked_business_id = :business_id::uuid
-                      AND t.tenant_id = :tenant_id::uuid
+                    WHERE c.linked_business_id = CAST(:business_id AS uuid)
+                      AND t.tenant_id = CAST(:tenant_id AS uuid)
                 """),
                 {"tenant_id": tenant_id, "business_id": business_id},
             )
@@ -488,15 +488,15 @@ async def compute_kpi(tenant_id: str, business_id: str) -> ItsmKpiPayload | None
             row = await session.execute(
                 text("""
                     SELECT
-                        COUNT(*) FILTER (WHERE t.category = 'incident')   AS incident_cnt,
-                        COUNT(*) FILTER (WHERE t.category = 'install')    AS install_cnt,
-                        COUNT(*) FILTER (WHERE t.category = 'retention')  AS retention_cnt,
-                        COUNT(*) FILTER (WHERE t.category NOT IN ('incident','install','retention')
-                                           OR t.category IS NULL)         AS other_cnt
+                        COUNT(*) FILTER (WHERE t.request_type = 'incident')   AS incident_cnt,
+                        COUNT(*) FILTER (WHERE t.request_type = 'install')    AS install_cnt,
+                        COUNT(*) FILTER (WHERE t.request_type = 'retention')  AS retention_cnt,
+                        COUNT(*) FILTER (WHERE t.request_type NOT IN ('incident','install','retention')
+                                           OR t.request_type IS NULL)         AS other_cnt
                     FROM tickets t
                     JOIN contracts c ON c.id = t.contract_id
-                    WHERE c.linked_business_id = :business_id::uuid
-                      AND t.tenant_id = :tenant_id::uuid
+                    WHERE c.linked_business_id = CAST(:business_id AS uuid)
+                      AND t.tenant_id = CAST(:tenant_id AS uuid)
                 """),
                 {"tenant_id": tenant_id, "business_id": business_id},
             )
