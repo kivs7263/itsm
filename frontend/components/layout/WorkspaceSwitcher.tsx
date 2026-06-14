@@ -4,7 +4,7 @@
  * WorkspaceSwitcher.tsx — ITSM 사이드바 상단 조직 스위처 + 앱 전환
  *
  * 4앱 그리드 (3열):
- *   - GW (Groupware): {GW_URL}/{slug}/home 직접 링크
+ *   - GW (Groupware): crossapp/issue → crossapp?token= 리다이렉트
  *   - SA (SA Workspace): crossapp/issue → crossapp?token= 리다이렉트
  *   - ITSM (현재): 브랜드 색 강조 + 활성 표시
  *   - Admin Portal: 새 탭으로 열기
@@ -55,7 +55,10 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
   const handleSwitchToSA = async () => {
     if (!SA_URL) return;
     try {
-      const res = await fetch('/api/auth/crossapp/issue', {
+      const issueUrl = tenantSlug
+        ? `/api/${tenantSlug}/auth/crossapp/issue`
+        : '/api/auth/crossapp/issue';
+      const res = await fetch(issueUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -76,11 +79,29 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
     }
   };
 
-  const handleSwitchToGW = () => {
+  const handleSwitchToGW = async () => {
     if (!GW_URL) return;
-    // GW는 직접 링크 (crossapp 미구현)
-    const target = tenantSlug ? `${GW_URL}/${tenantSlug}/home` : GW_URL;
-    window.location.href = target;
+    try {
+      const issueUrl = tenantSlug
+        ? `/api/${tenantSlug}/auth/crossapp/issue`
+        : '/api/auth/crossapp/issue';
+      const res = await fetch(issueUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const target = tenantSlug
+          ? `${GW_URL}/${tenantSlug}/crossapp?token=${data.token}`
+          : `${GW_URL}/crossapp?token=${data.token}`;
+        window.location.href = target;
+      } else {
+        window.location.href = tenantSlug ? `${GW_URL}/${tenantSlug}/home` : GW_URL;
+      }
+    } catch {
+      window.location.href = tenantSlug ? `${GW_URL}/${tenantSlug}/home` : GW_URL!;
+    }
   };
 
   return (

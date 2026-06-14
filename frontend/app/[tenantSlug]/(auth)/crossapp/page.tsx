@@ -46,10 +46,13 @@ function CrossAppContent() {
 
     (async () => {
       try {
-        const res = await fetch('/api/auth/crossapp/redeem', {
+        const redeemUrl = tenantSlug
+          ? `/api/${tenantSlug}/auth/crossapp/redeem`
+          : '/api/auth/crossapp/redeem';
+        const res = await fetch(redeemUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token, from_app: 'sa' }),
+          body: JSON.stringify({ token }),
           credentials: 'include',
         });
 

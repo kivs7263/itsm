@@ -13,10 +13,12 @@ import logging
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.auth_cookies import set_auth_cookies
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
@@ -103,6 +105,8 @@ async def issue(
             user_id=str(current_user.id),
             tenant_id=str(current_user.tenant_id),
             email=current_user.email,
+            name=current_user.name or "",
+            tenant_slug=tenant_slug,
             iss="itsm",
         )
     except ValueError as exc:
@@ -127,6 +131,7 @@ async def issue(
 async def redeem(
     tenant_slug: str,
     data: CrossAppRedeemRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> CrossAppAuthResponse:
     # CrossApp 토큰 검증
@@ -160,52 +165,67 @@ async def redeem(
         )
 
     # CRIT-1: 테넌트 격리 검증
-    tenant_id_str: str | None = payload.get("tenant_id")
-    if not tenant_id_str:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="CrossApp 토큰에 테넌트 정보가 없습니다.",
-        )
-    try:
-        payload_tenant_id = uuid.UUID(tenant_id_str)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="CrossApp 토큰의 테넌트 ID 형식이 올바르지 않습니다.",
-        )
-
+    # SA/GW 토큰은 tenant_slug만 포함 (tenant_id 없음); ITSM 토큰은 둘 다 포함
     tenant = await db.scalar(
         select(Tenant).where(Tenant.slug == tenant_slug)
     )
-    if tenant is None or tenant.id != payload_tenant_id:
+    if tenant is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="테넌트를 찾을 수 없습니다.",
+        )
+
+    # tenant_id가 있으면 cross-check; tenant_slug가 있으면 URL과 일치 확인
+    payload_tenant_id_str: str | None = payload.get("tenant_id")
+    if payload_tenant_id_str:
+        try:
+            payload_tenant_id = uuid.UUID(payload_tenant_id_str)
+            if tenant.id != payload_tenant_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="CrossApp 토큰의 테넌트 정보가 올바르지 않습니다.",
+                )
+        except ValueError:
+            pass
+
+    payload_tenant_slug: str | None = payload.get("tenant_slug")
+    if payload_tenant_slug and payload_tenant_slug != tenant_slug:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="CrossApp 토큰의 테넌트 정보가 올바르지 않습니다.",
         )
 
-    # user_id 검증
+    # 사용자 조회: sub(UUID) 우선, 없으면 email fallback (SA/GW 호환)
+    user: User | None = None
     user_id_str: str | None = payload.get("sub")
-    if not user_id_str:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="CrossApp 토큰에 사용자 정보가 없습니다.",
+    if user_id_str:
+        try:
+            uid = uuid.UUID(user_id_str)
+            user = await db.scalar(
+                select(User).where(
+                    User.id == uid,
+                    User.is_active.is_(True),
+                    User.tenant_id == tenant.id,
+                )
+            )
+        except ValueError:
+            pass
+
+    if user is None:
+        email: str | None = payload.get("email")
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="CrossApp 토큰에 사용자 정보가 없습니다.",
+            )
+        user = await db.scalar(
+            select(User).where(
+                User.email == email,
+                User.is_active.is_(True),
+                User.tenant_id == tenant.id,
+            )
         )
 
-    try:
-        uid = uuid.UUID(user_id_str)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="CrossApp 토큰의 사용자 ID 형식이 올바르지 않습니다.",
-        )
-
-    user = await db.scalar(
-        select(User).where(
-            User.id == uid,
-            User.is_active.is_(True),
-            User.tenant_id == tenant.id,
-        )
-    )
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -213,9 +233,15 @@ async def redeem(
         )
 
     token_data = _build_token_data(user)
+    access_token = create_access_token(token_data)
+    refresh_token = create_refresh_token(token_data)
+
+    # HttpOnly 쿠키 세팅 — 프론트엔드는 쿠키 수신 후 바로 redirect
+    set_auth_cookies(response, access_token, refresh_token, tenant_slug)
+
     return CrossAppAuthResponse(
-        access_token=create_access_token(token_data),
-        refresh_token=create_refresh_token(token_data),
+        access_token=access_token,
+        refresh_token=refresh_token,
         user=UserOut(
             id=user.id,
             name=user.name,

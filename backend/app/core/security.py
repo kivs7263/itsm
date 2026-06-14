@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
@@ -96,47 +97,48 @@ def decode_token(token: str) -> dict:
 _CROSSAPP_TTL = 60  # 60초 단기 토큰
 
 
+def _b64_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
 def issue_crossapp_token(
     *,
     user_id: str,
     tenant_id: str,
     email: str,
+    name: str = "",
+    tenant_slug: str = "",
     iss: str,
     secret: str | None = None,
 ) -> str:
-    """CrossApp 단기 토큰 발급 (HMAC-SHA256, 60s TTL).
-
-    iss: 발급 서비스 식별자 (예: "itsm", "gw", "sa")
-    """
+    """CrossApp 단기 토큰 발급 — SA/GW 호환 {payload_b64}.{sig_b64} 형식."""
     if secret is None:
         secret = settings.SERVICE_BUS_SECRET
     if not secret:
         raise ValueError("SERVICE_BUS_SECRET이 설정되지 않았습니다.")
 
-    payload = json.dumps(
-        {
-            "sub": user_id,
-            "tenant_id": tenant_id,
-            "email": email,
-            "iss": iss,
-            "jti": str(uuid.uuid4()),
-            "iat": int(time.time()),
-            "exp": int(time.time()) + _CROSSAPP_TTL,
-        },
-        separators=(",", ":"),
-        sort_keys=True,
-    )
-    sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
-    token_data = json.dumps({"payload": payload, "sig": sig}, separators=(",", ":"))
-    import base64
-    return base64.urlsafe_b64encode(token_data.encode()).decode()
+    payload_dict = {
+        "sub": user_id,
+        "tenant_id": tenant_id,
+        "tenant_slug": tenant_slug,
+        "email": email,
+        "name": name,
+        "iss": iss,
+        "jti": str(uuid.uuid4()),
+        "iat": int(time.time()),
+        "exp": int(time.time()) + _CROSSAPP_TTL,
+    }
+    payload_b64 = _b64_encode(json.dumps(payload_dict, ensure_ascii=False).encode())
+    sig_bytes = hmac.new(secret.encode(), payload_b64.encode(), hashlib.sha256).digest()
+    sig_b64 = _b64_encode(sig_bytes)
+    return f"{payload_b64}.{sig_b64}"
 
 
 def verify_crossapp_token(token: str, *, secret: str | None = None) -> dict:
-    """CrossApp 토큰 검증.
+    """CrossApp 토큰 검증 — SA/GW 호환 {payload_b64}.{sig_b64} 형식.
 
     Returns:
-        payload dict (sub, tenant_id, email, iss, iat, exp)
+        payload dict (sub, tenant_id, tenant_slug, email, iss, iat, exp)
 
     Raises:
         ValueError: 서명 불일치 또는 만료
@@ -146,20 +148,20 @@ def verify_crossapp_token(token: str, *, secret: str | None = None) -> dict:
     if not secret:
         raise ValueError("SERVICE_BUS_SECRET이 설정되지 않았습니다.")
 
-    import base64
     try:
-        token_data = json.loads(base64.urlsafe_b64decode(token.encode()).decode())
-        payload_str: str = token_data["payload"]
-        sig: str = token_data["sig"]
-    except Exception as exc:
+        payload_b64, sig_b64 = token.rsplit(".", 1)
+    except ValueError as exc:
         raise ValueError("CrossApp 토큰 형식이 올바르지 않습니다.") from exc
 
-    expected_sig = hmac.new(secret.encode(), payload_str.encode(), hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(sig, expected_sig):
+    expected_sig_bytes = hmac.new(secret.encode(), payload_b64.encode(), hashlib.sha256).digest()
+    expected_sig_b64 = base64.urlsafe_b64encode(expected_sig_bytes).rstrip(b"=").decode()
+    if not hmac.compare_digest(sig_b64, expected_sig_b64):
         raise ValueError("CrossApp 토큰 서명이 유효하지 않습니다.")
 
     try:
-        payload = json.loads(payload_str)
+        padding = 4 - len(payload_b64) % 4
+        payload_bytes = base64.urlsafe_b64decode(payload_b64 + "=" * (padding % 4))
+        payload = json.loads(payload_bytes.decode())
     except Exception as exc:
         raise ValueError("CrossApp 토큰 페이로드 파싱 실패.") from exc
 

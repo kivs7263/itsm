@@ -14,7 +14,10 @@ prefix : /api/auth
 """
 from __future__ import annotations
 
+import base64
+import hashlib
 import logging
+import os
 import secrets
 import uuid
 from typing import Annotated
@@ -27,6 +30,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth_cookies import _COOKIE_SECURE, clear_auth_cookies, set_auth_cookies
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
@@ -47,48 +51,6 @@ router = APIRouter(
     tags=["auth"],
 )
 
-_COOKIE_SECURE = settings.ENVIRONMENT == "production"
-_COOKIE_SAMESITE = "lax"
-
-
-def _set_auth_cookies(
-    response: Response,
-    access_token: str,
-    refresh_token: str,
-    tenant_slug: str = "",
-) -> None:
-    """액세스·리프레시 토큰을 HttpOnly 쿠키로 설정 + CSRF sentinel."""
-    access_max = settings.JWT_EXPIRE_MINUTES * 60
-    refresh_max = settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400
-
-    response.set_cookie(
-        "itsm.access_token", access_token,
-        httponly=True, secure=_COOKIE_SECURE, samesite=_COOKIE_SAMESITE,
-        max_age=access_max, path="/",
-    )
-    response.set_cookie(
-        "itsm.refresh_token", refresh_token,
-        httponly=True, secure=_COOKIE_SECURE, samesite=_COOKIE_SAMESITE,
-        max_age=refresh_max, path="/api/auth",
-    )
-    response.set_cookie(
-        "csrf.itsm", secrets.token_urlsafe(16),
-        httponly=False, secure=_COOKIE_SECURE, samesite=_COOKIE_SAMESITE,
-        max_age=access_max, path="/",
-    )
-    if tenant_slug:
-        response.set_cookie(
-            "itsm.last.tenant", tenant_slug,
-            httponly=False, secure=False, samesite=_COOKIE_SAMESITE,
-            max_age=30 * 86400, path="/",
-        )
-
-
-def _clear_auth_cookies(response: Response) -> None:
-    """로그아웃 시 인증 쿠키 제거."""
-    for name in ("itsm.access_token", "itsm.refresh_token", "csrf.itsm"):
-        response.delete_cookie(name, path="/")
-    response.delete_cookie("itsm.refresh_token", path="/api/auth")
 
 
 # ------------------------------------------------------------------
@@ -239,7 +201,7 @@ async def register(
     await db.refresh(tenant)
 
     auth = _build_auth_response(user, tenant)
-    _set_auth_cookies(response, auth.access_token, auth.refresh_token, tenant.slug)
+    set_auth_cookies(response, auth.access_token, auth.refresh_token, tenant.slug)
     return auth
 
 
@@ -251,7 +213,7 @@ async def register(
 @router.post(
     "/login",
     response_model=AuthResponse,
-    summary="이메일/비밀번호 로그인",
+    summary="이메일/비밀번호 로그인 (KC ROPC 검증)",
 )
 async def login(
     data: LoginRequest,
@@ -263,42 +225,81 @@ async def login(
         detail="이메일 또는 비밀번호가 올바르지 않습니다.",
     )
 
-    # slug 지정 시 해당 테넌트에서만 조회
-    if data.slug:
-        tenant = await db.scalar(
-            select(Tenant).where(Tenant.slug == data.slug)
+    # 1. KC ROPC 로 자격증명 검증 (KC가 단일 진실 공급원)
+    if settings.KEYCLOAK_ISSUER and settings.KEYCLOAK_CLIENT_SECRET:
+        async with httpx.AsyncClient(timeout=10) as client:
+            kc_resp = await client.post(
+                f"{_kc_oidc_base()}/token",
+                data={
+                    "grant_type": "password",
+                    "client_id": settings.KEYCLOAK_CLIENT_ID,
+                    "client_secret": settings.KEYCLOAK_CLIENT_SECRET,
+                    "username": data.email,
+                    "password": data.password,
+                    "scope": "openid email profile",
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+        if kc_resp.status_code != 200:
+            raise _INVALID
+
+        kc_access = kc_resp.json().get("access_token")
+        if not kc_access:
+            raise _INVALID
+
+        # KC userinfo → email/name 확보
+        async with httpx.AsyncClient(timeout=10) as client:
+            ui_resp = await client.get(
+                f"{_kc_oidc_base()}/userinfo",
+                headers={"Authorization": f"Bearer {kc_access}"},
+            )
+        email: str = ui_resp.json().get("email", data.email) if ui_resp.status_code == 200 else data.email
+        name: str = (
+            ui_resp.json().get("name") or ui_resp.json().get("preferred_username") or email.split("@")[0]
+            if ui_resp.status_code == 200 else email.split("@")[0]
         )
+    else:
+        # KC 미설정 환경 fallback: 로컬 bcrypt 검증
+        email = data.email
+        name = email.split("@")[0]
+
+    # 2. ITSM DB에서 테넌트/사용자 조회 (없으면 생성)
+    tenant: Tenant | None = None
+    user: User | None = None
+
+    if data.slug:
+        tenant = await db.scalar(select(Tenant).where(Tenant.slug == data.slug))
         if tenant is None:
             raise _INVALID
         user = await db.scalar(
-            select(User).where(
-                User.tenant_id == tenant.id,
-                User.email == data.email,
-                User.is_active.is_(True),
-            )
+            select(User).where(User.tenant_id == tenant.id, User.email == email, User.is_active.is_(True))
         )
+        if user is None:
+            user = User(
+                id=uuid.uuid4(), tenant_id=tenant.id, email=email, name=name,
+                role=UserRole.admin, hashed_password=None, is_active=True,
+            )
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
     else:
-        # slug 미제공: 단일 테넌트 환경 fallback (created_at 오름차순 첫 번째)
         user = await db.scalar(
-            select(User).where(
-                User.email == data.email,
-                User.is_active.is_(True),
-            ).order_by(User.created_at.asc())
+            select(User).where(User.email == email, User.is_active.is_(True)).order_by(User.created_at.asc())
         )
         if user is None:
             raise _INVALID
-        tenant = await db.scalar(
-            select(Tenant).where(Tenant.id == user.tenant_id)
-        )
+        tenant = await db.scalar(select(Tenant).where(Tenant.id == user.tenant_id))
 
     if user is None or tenant is None:
         raise _INVALID
 
-    if not user.hashed_password or not verify_password(data.password, user.hashed_password):
-        raise _INVALID
+    # KC 없는 fallback: 로컬 bcrypt 검증
+    if not settings.KEYCLOAK_ISSUER or not settings.KEYCLOAK_CLIENT_SECRET:
+        if not user.hashed_password or not verify_password(data.password, user.hashed_password):
+            raise _INVALID
 
     auth = _build_auth_response(user, tenant)
-    _set_auth_cookies(response, auth.access_token, auth.refresh_token, tenant.slug)
+    set_auth_cookies(response, auth.access_token, auth.refresh_token, tenant.slug)
     return auth
 
 
@@ -357,7 +358,7 @@ async def refresh_token(
         raise _invalid
 
     auth = _build_auth_response(user, tenant)
-    _set_auth_cookies(response, auth.access_token, auth.refresh_token, tenant.slug)
+    set_auth_cookies(response, auth.access_token, auth.refresh_token, tenant.slug)
     return auth
 
 
@@ -372,7 +373,7 @@ async def refresh_token(
     summary="로그아웃 (쿠키 제거)",
 )
 async def logout(response: Response) -> dict:
-    _clear_auth_cookies(response)
+    clear_auth_cookies(response)
     return {"detail": "로그아웃되었습니다."}
 
 
@@ -441,6 +442,15 @@ def _kc_oidc_base() -> str:
     return f"{settings.KEYCLOAK_ISSUER}/protocol/openid-connect"
 
 
+def _pkce_pair() -> tuple[str, str]:
+    """Generate PKCE code_verifier and code_challenge (S256)."""
+    verifier = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode()
+    challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(verifier.encode()).digest()
+    ).rstrip(b"=").decode()
+    return verifier, challenge
+
+
 @router.get(
     "/sso",
     summary="KC SSO 로그인 시작 (브라우저 redirect)",
@@ -452,6 +462,7 @@ async def sso_start(
     if not settings.KEYCLOAK_ISSUER or not settings.KEYCLOAK_CLIENT_SECRET:
         raise _SSO_ENABLED_ERR
 
+    verifier, challenge = _pkce_pair()
     state = f"{secrets.token_urlsafe(16)}|{slug or ''}"
     params = {
         "client_id": settings.KEYCLOAK_CLIENT_ID,
@@ -459,9 +470,22 @@ async def sso_start(
         "response_type": "code",
         "scope": "openid email profile",
         "state": state,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
     }
     auth_url = f"{_kc_oidc_base()}/auth?{urlencode(params)}"
-    return RedirectResponse(url=auth_url)
+    response = RedirectResponse(url=auth_url, status_code=307)
+    # PKCE verifier를 httponly 쿠키에 저장 (콜백에서 사용)
+    response.set_cookie(
+        "itsm.pkce_verifier",
+        verifier,
+        httponly=True,
+        secure=_COOKIE_SECURE,
+        samesite="lax",
+        max_age=300,  # 5분 TTL
+        path="/api/auth/sso",
+    )
+    return response
 
 
 @router.get(
@@ -470,28 +494,41 @@ async def sso_start(
     include_in_schema=True,
 )
 async def sso_callback(
-    code: str = Query(...),
     state: str = Query(...),
     db: AsyncSession = Depends(get_db),
+    code: str | None = Query(default=None),
+    error: str | None = Query(default=None),
+    pkce_verifier: str | None = Cookie(default=None, alias="itsm.pkce_verifier"),
 ) -> RedirectResponse:
     if not settings.KEYCLOAK_ISSUER or not settings.KEYCLOAK_CLIENT_SECRET:
         raise _SSO_ENABLED_ERR
+
+    if error:
+        logger.error("KC SSO error: %s", error)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"KC 인증 실패: {error}")
+
+    if not code:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="code 파라미터 없음")
 
     # state 파싱: "<nonce>|<slug>"
     state_parts = state.split("|", 1)
     slug = state_parts[1] if len(state_parts) > 1 else ""
 
     # 1. code → KC tokens
+    token_data: dict[str, str] = {
+        "grant_type": "authorization_code",
+        "client_id": settings.KEYCLOAK_CLIENT_ID,
+        "client_secret": settings.KEYCLOAK_CLIENT_SECRET,
+        "redirect_uri": settings.KEYCLOAK_REDIRECT_URI,
+        "code": code,
+    }
+    if pkce_verifier:
+        token_data["code_verifier"] = pkce_verifier
+
     async with httpx.AsyncClient(timeout=10) as client:
         token_resp = await client.post(
             f"{_kc_oidc_base()}/token",
-            data={
-                "grant_type": "authorization_code",
-                "client_id": settings.KEYCLOAK_CLIENT_ID,
-                "client_secret": settings.KEYCLOAK_CLIENT_SECRET,
-                "redirect_uri": settings.KEYCLOAK_REDIRECT_URI,
-                "code": code,
-            },
+            data=token_data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
 
@@ -572,5 +609,6 @@ async def sso_callback(
     # 5. 쿠키 설정 + 대시보드로 redirect
     redirect_url = f"/{tenant.slug}/tickets"
     redirect_resp = RedirectResponse(url=redirect_url, status_code=302)
-    _set_auth_cookies(redirect_resp, auth.access_token, auth.refresh_token, tenant.slug)
+    set_auth_cookies(redirect_resp, auth.access_token, auth.refresh_token, tenant.slug)
+    redirect_resp.delete_cookie("itsm.pkce_verifier", path="/api/auth/sso")
     return redirect_resp
