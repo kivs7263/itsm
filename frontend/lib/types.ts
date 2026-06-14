@@ -354,3 +354,21 @@ export interface ChannelStatus {
   slack: { configured: boolean };
   teams: { configured: boolean };
 }
+
+// -----------------------------------------------------------------------
+// 답변 템플릿 타입
+// -----------------------------------------------------------------------
+export interface ReplyTemplate {
+  id: string;
+  name: string;
+  body: string;
+  category: string | null;
+  is_shared: boolean;
+  use_count: number;
+  created_at: string;
+}
+
+export interface ReplyTemplatesResponse {
+  items: ReplyTemplate[];
+  total: number;
+}

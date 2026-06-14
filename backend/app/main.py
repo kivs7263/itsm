@@ -175,3 +175,11 @@ app.include_router(businesses_router.router, prefix="/api")                # /ap
 # P4-6 공유 큐
 from app.routers import shared_queue as shared_queue_router  # noqa: E402
 app.include_router(shared_queue_router.router, prefix="/api")              # /api/{slug}/queue
+
+# P5-1 설치 워크플로우
+from app.routers import installation as installation_router  # noqa: E402
+app.include_router(installation_router.router, prefix="/api")              # /api/{slug}/tickets/{id}/installation
+
+# P5-2 답변 템플릿
+from app.routers import reply_templates as reply_templates_router  # noqa: E402
+app.include_router(reply_templates_router.router, prefix="/api")           # /api/{slug}/reply-templates

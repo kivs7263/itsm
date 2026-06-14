@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WorkLogPanel } from './WorkLogPanel';
+import { InstallationStepPanel } from './InstallationStepPanel';
+import { ReplyTemplatePicker } from './ReplyTemplatePicker';
 
 // -----------------------------------------------------------------------
 // 상태/우선순위 배지 색상
@@ -38,7 +40,7 @@ const PRIORITY_LABELS: Record<TicketPriority, string> = {
   critical: '긴급',
 };
 
-type SliderTab = 'conversation' | 'details' | 'work-logs';
+type SliderTab = 'conversation' | 'details' | 'work-logs' | 'installation';
 
 // -----------------------------------------------------------------------
 // Props
@@ -322,7 +324,14 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
 
         {/* 탭 */}
         <div className="flex border-b border-border-default shrink-0">
-          {(['conversation', 'details', 'work-logs'] as SliderTab[]).map((tab) => (
+          {(
+            [
+              'conversation',
+              'details',
+              'work-logs',
+              ...(ticket?.request_type === 'installation' ? ['installation'] : []),
+            ] as SliderTab[]
+          ).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -333,7 +342,13 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
                   : 'text-text-secondary hover:text-text-primary',
               )}
             >
-              {tab === 'conversation' ? '대화' : tab === 'details' ? '상세정보' : '공수'}
+              {tab === 'conversation'
+                ? '대화'
+                : tab === 'details'
+                  ? '상세정보'
+                  : tab === 'work-logs'
+                    ? '공수'
+                    : '설치'}
             </button>
           ))}
         </div>
@@ -387,15 +402,23 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
                       />
                       <span className="text-xs text-text-secondary">내부 메모</span>
                     </label>
-                    <Button
-                      size="sm"
-                      onClick={handleSendComment}
-                      isLoading={commentMutation.isPending}
-                      disabled={!commentBody.trim()}
-                      leftIcon={<Send size={12} />}
-                    >
-                      전송
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <ReplyTemplatePicker
+                        tenantSlug={tenantSlug}
+                        onSelect={(body) =>
+                          setCommentBody((prev) => (prev ? prev + '\n\n' + body : body))
+                        }
+                      />
+                      <Button
+                        size="sm"
+                        onClick={handleSendComment}
+                        isLoading={commentMutation.isPending}
+                        disabled={!commentBody.trim()}
+                        leftIcon={<Send size={12} />}
+                      >
+                        전송
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -404,6 +427,10 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
 
           {activeTab === 'work-logs' && ticketId && (
             <WorkLogPanel ticketId={ticketId} tenantSlug={tenantSlug} />
+          )}
+
+          {activeTab === 'installation' && ticketId && (
+            <InstallationStepPanel ticketId={ticketId} tenantSlug={tenantSlug} />
           )}
 
           {activeTab === 'details' && (

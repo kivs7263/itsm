@@ -3,11 +3,10 @@ from __future__ import annotations
 
 import enum
 
-from sqlalchemy import BigInteger, Boolean, Column, Enum, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.models.base import Base, gen_uuid, utcnow
-from sqlalchemy import DateTime
 
 
 class TicketPriority(str, enum.Enum):
@@ -89,6 +88,9 @@ class Ticket(Base):
         nullable=True,
     )
     ticket_number = Column(String(25), nullable=True, unique=False)  # TKT-YYYYMMDD-NNNN
+    # P5-1 설치 워크플로우 (request_type='installation' 티켓 전용)
+    installation_step = Column(String(30), nullable=True)
+    installation_history = Column(JSONB, nullable=False, default=list)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
     resolved_at = Column(DateTime(timezone=True), nullable=True)

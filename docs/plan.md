@@ -624,5 +624,204 @@ P4-6 (공유 큐)          P4-5 완료 후 (역할별 접수 로직 필요)
 
 | Phase | 주요 내용 |
 |---|---|
-| Phase 5 | 설치 4단계 워크플로우, 답변 템플릿, 반복 장애 감지, 알려진 이슈 |
 | Phase 6 | KB 시맨틱 검색 (pgvector), 보고서 승인 워크플로우, 다중 연락처 |
+
+---
+
+## Phase 5 — 심화 워크플로우 & 인텔리전스
+
+> 마이그레이션 헤드: `017_reply_templates`
+
+### 작업 목록
+
+| ID | 이름 | 크기 | 상태 |
+|---|---|---|---|
+| P5-1 | 설치 4단계 워크플로우 | M | [ DONE 2026-06-14 ] |
+| P5-2 | 답변 템플릿 | M | [ DONE 2026-06-14 ] |
+| P5-3 | 반복 장애 감지 | M | [ PENDING ] |
+| P5-4 | 알려진 이슈 연결 | M | [ PENDING ] |
+
+---
+
+### P5-1: 설치 4단계 워크플로우
+
+**목적**: `request_type = 'installation'` 티켓에 전용 단계별 진행 추적 제공.
+단방향 상태 머신: `survey → executing → verification → acceptance` (되돌리기 없음).
+`acceptance` 완료 시 티켓 `status` 자동 → `resolved`.
+
+#### Migration 016
+
+```sql
+-- tickets 테이블에 컬럼 추가
+ALTER TABLE tickets
+  ADD COLUMN installation_step VARCHAR(30),
+  ADD COLUMN installation_history JSONB NOT NULL DEFAULT '[]';
+
+-- installation_step: 'survey' | 'executing' | 'verification' | 'acceptance' | NULL
+-- installation_history: [{step, actor_id, note, ts}]
+```
+
+#### Backend
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| GET | `/{tenant}/tickets/{id}/installation` | 현재 단계 + 이력 조회 |
+| POST | `/{tenant}/tickets/{id}/installation/advance` | 다음 단계로 이동 (`note` 선택) |
+
+`advance` 규칙:
+- 단계 순서 강제: survey → executing → verification → acceptance
+- 현재 단계 없으면 `survey`로 초기화
+- `acceptance` 도달 시 `ticket.status = 'resolved'`, `ticket.resolved_at = now()`
+- 이력에 `{step, actor_id, note, ts}` append
+
+#### Frontend
+
+- `InstallationStepPanel.tsx`: 4단계 진행 표시 (Stepper) + "다음 단계" 버튼 + 메모 입력
+- `TicketSlider.tsx`에 "설치 진행" 탭 추가 (request_type === 'installation'일 때만)
+
+---
+
+### P5-2: 답변 템플릿
+
+**목적**: 자주 사용하는 답변 문구를 템플릿으로 저장, 대화 탭에서 1클릭 삽입.
+
+#### Migration 017
+
+```sql
+CREATE TABLE reply_templates (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  name        VARCHAR(100) NOT NULL,
+  body        TEXT NOT NULL,
+  category    VARCHAR(50),               -- 'incident' | 'installation' | 'general' 등
+  is_shared   BOOLEAN NOT NULL DEFAULT TRUE,
+  author_id   UUID REFERENCES users(id) ON DELETE SET NULL,
+  use_count   INTEGER NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX ix_reply_templates_tenant ON reply_templates(tenant_id);
+```
+
+시드: 테넌트당 기본 템플릿 3개 (일반 접수 확인, 처리 지연 안내, 완료 안내).
+
+#### Backend
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| GET | `/{tenant}/reply-templates` | 목록 (category 필터, is_shared=true 또는 본인 작성) |
+| POST | `/{tenant}/reply-templates` | 생성 |
+| PUT | `/{tenant}/reply-templates/{id}` | 수정 (본인 or team_lead+) |
+| DELETE | `/{tenant}/reply-templates/{id}` | 삭제 (본인 or team_lead+) |
+| POST | `/{tenant}/reply-templates/{id}/use` | use_count +1 (삽입 시 호출) |
+
+#### Frontend
+
+- `ReplyTemplatePicker.tsx`: Popover 컴포넌트, 카테고리 탭 + 검색 + 클릭 시 textarea에 삽입
+- `TicketSlider.tsx` 대화 탭 textarea 우측에 "템플릿" 버튼 추가
+
+---
+
+### P5-3: 반복 장애 감지
+
+**목적**: 같은 고객에서 동일 증상이 30일 내 3회+ 발생 시 자동 감지 → 엔지니어 알림.
+
+#### Migration 018
+
+```sql
+-- tickets에 컬럼 추가
+ALTER TABLE tickets
+  ADD COLUMN is_recurring_flag BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN recurring_detected_at TIMESTAMPTZ;
+
+-- 반복 알림 테이블
+CREATE TABLE recurring_alerts (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id            UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  customer_id          UUID REFERENCES customers(id) ON DELETE SET NULL,
+  symptom_category_id  UUID REFERENCES symptom_categories(id) ON DELETE SET NULL,
+  trigger_ticket_ids   UUID[] NOT NULL,
+  occurrence_count     INTEGER NOT NULL,
+  detected_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  acknowledged_by      UUID REFERENCES users(id) ON DELETE SET NULL,
+  acknowledged_at      TIMESTAMPTZ,
+  is_acknowledged      BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX ix_recurring_alerts_tenant ON recurring_alerts(tenant_id, detected_at DESC);
+```
+
+#### Backend
+
+- `workers/recurring_worker.py`: 10분 주기 cron, Redis lock `itsm:recurring_worker:lock`
+  - 감지 쿼리: `GROUP BY tenant_id, customer_id, symptom_category_id` → 30일 내 장애 3건+
+  - 미인지 알림 없을 때만 신규 생성 (중복 방지)
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| GET | `/{tenant}/recurring-alerts` | 미인지 반복 알림 목록 |
+| POST | `/{tenant}/recurring-alerts/{id}/acknowledge` | 인지 처리 |
+
+#### Frontend
+
+- 티켓 목록/슬라이더: `is_recurring_flag=true`일 때 "반복" 주황 배지
+- `app/[tenantSlug]/(app)/recurring-alerts/page.tsx`: 반복 알림 대시보드
+
+---
+
+### P5-4: 알려진 이슈 연결
+
+**목적**: KB 아티클을 "알려진 이슈"로 지정, 장애 티켓 생성 시 증상 분류 기반으로 관련 이슈 자동 제안.
+
+#### Migration 019
+
+```sql
+-- kb_articles에 컬럼 추가
+ALTER TABLE kb_articles
+  ADD COLUMN is_known_issue    BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN ki_severity       VARCHAR(20),   -- 'critical' | 'high' | 'medium' | 'low'
+  ADD COLUMN ki_symptom_category_id UUID REFERENCES symptom_categories(id) ON DELETE SET NULL,
+  ADD COLUMN ki_status         VARCHAR(20) DEFAULT 'open';  -- 'open' | 'investigating' | 'resolved'
+
+-- 티켓-알려진이슈 M2M
+CREATE TABLE ticket_known_issues (
+  ticket_id   UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  article_id  UUID NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
+  linked_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  linked_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+  PRIMARY KEY (ticket_id, article_id)
+);
+```
+
+#### Backend
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| GET | `/{tenant}/kb/known-issues` | 알려진 이슈 목록 (ki_status 필터) |
+| GET | `/{tenant}/kb/known-issues/suggest` | symptom_category_id로 관련 이슈 제안 |
+| POST | `/{tenant}/tickets/{id}/known-issues` | 티켓-이슈 연결 |
+| DELETE | `/{tenant}/tickets/{id}/known-issues/{article_id}` | 연결 해제 |
+
+#### Frontend
+
+- `CreateTicketModal.tsx` (incident + 증상 선택 후): 관련 알려진 이슈 배너 표시
+- KB 아티클 편집 화면: "알려진 이슈로 지정" 토글 + severity/status 설정
+
+---
+
+### Phase 5 마이그레이션 리스크
+
+| 마이그레이션 | 변경 | 리스크 |
+|---|---|---|
+| 016 tickets 컬럼 추가 | NULL 허용 — 영향 없음 | 낮음 |
+| 017 reply_templates 신규 | 없음 | 낮음 |
+| 018 tickets 컬럼 + recurring_alerts 신규 | BOOLEAN DEFAULT FALSE — 영향 없음 | 낮음 |
+| 019 kb_articles 컬럼 + ticket_known_issues 신규 | NULL 허용 — 영향 없음 | 낮음 |
+
+### Phase 5 완료 기준 (Definition of Done)
+
+| 항목 | 기준 |
+|---|---|
+| 설치 워크플로우 | 4단계 stepper 정상 표시, acceptance → status=resolved 자동 전환 |
+| 답변 템플릿 | 대화 탭에서 템플릿 선택 → textarea 삽입, use_count 증가 |
+| 반복 장애 | 워커 실행 후 3건+ 감지 시 recurring_alerts 생성, 배지 표시 |
+| 알려진 이슈 | 장애 티켓 생성 중 증상 선택 시 관련 이슈 배너 노출 |

@@ -59,6 +59,7 @@ from app.models.notification_log import (  # noqa: F401
     NotifStatus,
 )
 from app.models.work_log import TicketWorkLog, WorkType  # noqa: F401
+from app.models.reply_template import ReplyTemplate  # noqa: F401
 
 __all__ = [
     "Base",
@@ -133,4 +134,6 @@ __all__ = [
     # work log
     "TicketWorkLog",
     "WorkType",
+    # reply template
+    "ReplyTemplate",
 ]
