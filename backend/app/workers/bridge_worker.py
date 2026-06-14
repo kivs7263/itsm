@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 _LOCK_KEY = "itsm:bridge_worker:lock"
 _LOCK_TTL = 3600  # seconds — 1주기와 동일
+_DIRTY_KEY_PREFIX = "itsm:kpi:dirty:"  # {business_id} → "1" (TTL 300s)
 _running = True
 
 
@@ -34,8 +35,46 @@ def _handle_signal(sig: int, _frame) -> None:
     _running = False
 
 
+async def _flush_dirty(redis) -> None:
+    """dirty SET이 있는 business_id를 즉시 push (정기 주기 전 선처리)."""
+    dirty_keys = await redis.keys(f"{_DIRTY_KEY_PREFIX}*")
+    if not dirty_keys:
+        return
+
+    logger.info("bridge_worker: dirty SET %d건 선처리", len(dirty_keys))
+
+    async with AsyncSessionLocal() as session:
+        for key in dirty_keys:
+            business_id = key.decode().removeprefix(_DIRTY_KEY_PREFIX)
+            row = await session.execute(
+                text("""
+                    SELECT DISTINCT tenant_id::text AS tenant_id
+                    FROM contracts
+                    WHERE linked_business_id = :bid::uuid
+                    LIMIT 1
+                """),
+                {"bid": business_id},
+            )
+            result = row.one_or_none()
+            if result is None:
+                await redis.delete(key)
+                continue
+
+            try:
+                kpi = await compute_kpi(result.tenant_id, business_id)
+                if kpi:
+                    await push_to_sa(business_id, kpi)
+                    await redis.delete(key)
+                    logger.info("dirty push 완료: business_id=%s", business_id)
+            except Exception:
+                logger.exception("dirty push 실패: business_id=%s", business_id)
+
+
 async def _run_bridge_once(redis) -> None:
     """단일 브릿지 주기: 모든 (tenant_id, linked_business_id) 쌍에 KPI push."""
+    # dirty-flag 선처리 (인프라 변경 없이 평균 stale 60분 → 5분 단축)
+    await _flush_dirty(redis)
+
     acquired = await redis.set(_LOCK_KEY, "1", nx=True, ex=_LOCK_TTL)
     if not acquired:
         logger.debug("bridge_worker lock held by another instance, skipping")

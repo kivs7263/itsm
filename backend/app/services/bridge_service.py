@@ -28,7 +28,11 @@ class ItsmKpiPayload(BaseModel):
     sla_compliance_rate: float = 0.0   # 0.0~1.0
     mtta_minutes: float | None = None  # 평균 최초 응답 시간 (분)
     mttr_minutes: float | None = None  # 평균 해결 시간 (분)
-    csat_score: float | None = None    # 1.0~5.0
+    csat_score: float | None = None    # 1.0~5.0 (제출 완료 설문 평균)
+    csat_response_rate: float | None = None  # 0.0~1.0 (제출 / 전체 발송)
+    total_hours: float | None = None        # 총 투입 공수 (h)
+    billable_hours: float | None = None     # 유상 공수 (h)
+    billable_ratio: float | None = None     # 유상 비율 0.0~1.0
     contract_expire_days: int | None = None  # 계약 만료까지 남은 일수
     synced_at: str                     # ISO datetime
 
@@ -132,13 +136,58 @@ async def compute_kpi(tenant_id: str, business_id: str) -> ItsmKpiPayload | None
             expire_val = row.scalar_one()
             contract_expire_days = int(expire_val) if expire_val is not None else None
 
+            # 7. 공수 집계 (ticket_work_logs)
+            row = await session.execute(
+                text("""
+                    SELECT
+                        COALESCE(SUM(hours), 0)                                     AS total_h,
+                        COALESCE(SUM(hours) FILTER (WHERE billable = true), 0)      AS billable_h,
+                        COUNT(*)                                                     AS log_cnt
+                    FROM ticket_work_logs
+                    WHERE tenant_id = :tenant_id::uuid
+                """),
+                {"tenant_id": tenant_id},
+            )
+            wl_row = row.one()
+            total_hours = round(float(wl_row.total_h), 2) if wl_row.log_cnt else None
+            billable_hours = round(float(wl_row.billable_h), 2) if wl_row.log_cnt else None
+            billable_ratio = (
+                round(float(wl_row.billable_h) / float(wl_row.total_h), 4)
+                if wl_row.total_h and float(wl_row.total_h) > 0
+                else None
+            )
+
+            # 8. csat_score / csat_response_rate: 제출 완료 설문 기준
+            row = await session.execute(
+                text("""
+                    SELECT
+                        AVG(score)                                          AS avg_score,
+                        COUNT(*) FILTER (WHERE status = 'submitted')        AS submitted_cnt,
+                        COUNT(*)                                             AS total_cnt
+                    FROM csat_surveys
+                    WHERE tenant_id = :tenant_id::uuid
+                """),
+                {"tenant_id": tenant_id},
+            )
+            csat_row = row.one()
+            csat_score = round(float(csat_row.avg_score), 2) if csat_row.avg_score is not None else None
+            csat_response_rate = (
+                round(float(csat_row.submitted_cnt) / float(csat_row.total_cnt), 4)
+                if csat_row.total_cnt and csat_row.total_cnt > 0
+                else None
+            )
+
         return ItsmKpiPayload(
             total_tickets=total_tickets,
             open_tickets=open_tickets,
             sla_compliance_rate=sla_compliance_rate,
             mtta_minutes=mtta_minutes,
             mttr_minutes=mttr_minutes,
-            csat_score=None,  # CSAT 기능 미구현 (추후 확장)
+            csat_score=csat_score,
+            csat_response_rate=csat_response_rate,
+            total_hours=total_hours,
+            billable_hours=billable_hours,
+            billable_ratio=billable_ratio,
             contract_expire_days=contract_expire_days,
             synced_at=datetime.now(UTC).isoformat(),
         )

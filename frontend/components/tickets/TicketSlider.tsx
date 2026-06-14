@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { X, Send } from 'lucide-react';
+import { X, Send, Play, Square, Plus, Trash2, Clock } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { WorkLogPanel } from './WorkLogPanel';
 
 // -----------------------------------------------------------------------
 // 상태/우선순위 배지 색상
@@ -37,7 +38,7 @@ const PRIORITY_LABELS: Record<TicketPriority, string> = {
   critical: '긴급',
 };
 
-type SliderTab = 'conversation' | 'details';
+type SliderTab = 'conversation' | 'details' | 'work-logs';
 
 // -----------------------------------------------------------------------
 // Props
@@ -321,7 +322,7 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
 
         {/* 탭 */}
         <div className="flex border-b border-border-default shrink-0">
-          {(['conversation', 'details'] as SliderTab[]).map((tab) => (
+          {(['conversation', 'details', 'work-logs'] as SliderTab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -332,7 +333,7 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
                   : 'text-text-secondary hover:text-text-primary',
               )}
             >
-              {tab === 'conversation' ? '대화' : '상세정보'}
+              {tab === 'conversation' ? '대화' : tab === 'details' ? '상세정보' : '공수'}
             </button>
           ))}
         </div>
@@ -399,6 +400,10 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
                 </div>
               </div>
             </div>
+          )}
+
+          {activeTab === 'work-logs' && ticketId && (
+            <WorkLogPanel ticketId={ticketId} tenantSlug={tenantSlug} />
           )}
 
           {activeTab === 'details' && (

@@ -14,6 +14,7 @@ import React, { Suspense, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { BusinessContextBar } from '@/components/layout/BusinessContextBar';
 import { useSlug } from '@/lib/slug';
 
 // -----------------------------------------------------------------------
@@ -141,6 +142,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         >
           메인 콘텐츠로 건너뛰기
         </a>
+
+        {/* 사업카드 컨텍스트 바 (SA_BACKEND_URL 미설정 시 숨김) */}
+        {tenantSlug && <BusinessContextBar tenantSlug={tenantSlug} />}
 
         {/* 페이지 콘텐츠 — 자체 스크롤 */}
         <div className="flex-1 overflow-y-auto min-h-0">

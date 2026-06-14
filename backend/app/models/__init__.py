@@ -55,6 +55,7 @@ from app.models.notification_log import (  # noqa: F401
     NotifChannel,
     NotifStatus,
 )
+from app.models.work_log import TicketWorkLog, WorkType  # noqa: F401
 
 __all__ = [
     "Base",
@@ -122,4 +123,7 @@ __all__ = [
     "NotificationLog",
     "NotifChannel",
     "NotifStatus",
+    # work log
+    "TicketWorkLog",
+    "WorkType",
 ]

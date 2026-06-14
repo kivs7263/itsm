@@ -162,3 +162,11 @@ app.include_router(csat_router.router_portal)                              # /po
 # P3-5 멀티채널 알림
 from app.routers import notifications as notifications_router  # noqa: E402
 app.include_router(notifications_router.router, prefix="/api")             # /api/{slug}/notifications
+
+# P4-1 공수 추적
+from app.routers import work_logs as work_logs_router  # noqa: E402
+app.include_router(work_logs_router.router, prefix="/api")                 # /api/{slug}/tickets/{id}/work-logs + /api/{slug}/work-logs/...
+
+# P4-2 SA 사업카드 proxy
+from app.routers import businesses as businesses_router  # noqa: E402
+app.include_router(businesses_router.router, prefix="/api")                # /api/{slug}/businesses
