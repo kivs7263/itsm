@@ -55,6 +55,7 @@ itsm/
 | `nginx/nginx.conf` | `docker compose restart itsm_nginx` |
 
 **예외 — 절대 자동 실행 금지**: `alembic/versions/*.py` migration은 감지만, 실행 없음.
+**중요**: migration 파일 신규 추가 시에도 `docker compose build itsm_backend` 필수 — 볼륨 마운트 없이 이미지에 베이크되므로 rebuild 없이 `alembic upgrade head` 하면 "Can't locate revision" 오류.
 
 ---
 
