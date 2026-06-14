@@ -517,7 +517,7 @@ C-level 사이드바 (3개):
 
 ---
 
-### P4-6: 공유 큐 (Shared Queue) [ PENDING ]
+### P4-6: 공유 큐 (Shared Queue) [ DONE 2026-06-14 ]
 
 > 요구사항 4.16절 — 미배정 티켓 팀 공개 + Optimistic Locking
 
@@ -525,7 +525,7 @@ C-level 사이드바 (3개):
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `P4-6a` | `shared_queue` 라우터 신규 | M | `[ PENDING ]` |
+| `P4-6a` | `shared_queue` 라우터 신규 | M | `[ DONE 2026-06-14 ]` |
 
 엔드포인트:
 - `GET /{tenant}/queue` — 미배정 티켓 목록 (상태별 잠금 표시 포함)
@@ -554,7 +554,7 @@ async with db.begin():
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `P4-6b` | `/[tenant]/queue` 페이지 신규 | M | `[ PENDING ]` |
+| `P4-6b` | `/[tenant]/queue` 페이지 신규 | M | `[ DONE 2026-06-14 ]` |
 
 UI 구성:
 - 미배정 티켓: `[접수하기]` 버튼 (클릭 시 낙관적 업데이트 → 실패 시 toast "이미 [김철수]님이 14:05에 접수")

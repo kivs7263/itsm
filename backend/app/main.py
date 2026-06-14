@@ -171,3 +171,7 @@ app.include_router(work_logs_router.router, prefix="/api")                 # /ap
 # P4-2 SA 사업카드 proxy
 from app.routers import businesses as businesses_router  # noqa: E402
 app.include_router(businesses_router.router, prefix="/api")                # /api/{slug}/businesses
+
+# P4-6 공유 큐
+from app.routers import shared_queue as shared_queue_router  # noqa: E402
+app.include_router(shared_queue_router.router, prefix="/api")              # /api/{slug}/queue
