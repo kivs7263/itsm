@@ -64,60 +64,70 @@ class ItsmKpiPayload(BaseModel):
 # P&L 계산 (BIZCARD-C)
 # ──────────────────────────────────────────────────────────────────────────────
 
-async def fetch_labor_rates(tenant_id: str) -> dict[str, float]:
-    """SA /api/itsm-bridge/labor-rates?tenant_id={tid} 에서 단가 pull.
+async def fetch_labor_rates(business_id: str) -> tuple[dict[str, float], dict[str, float]]:
+    """SA /api/itsm-bridge/labor-rates?business_id={bid} 에서 단가 pull.
 
-    반환: {user_id: hourly_rate} (개인 단가 우선) + {"role:{role}": hourly_rate} (role 단가)
-    SA_BACKEND_URL 미설정 시 빈 dict 반환 (graceful skip)
+    business_id로 조회하면 SA가 tenant_id를 자동 해석 (ITSM tenant_id 불일치 우회).
+
+    반환: (rates_by_key, rates_by_email)
+      rates_by_key  = {sa_user_id: rate} + {"role:{role}": rate}
+      rates_by_email = {email: rate}   — email 기반 ITSM user 매핑용
+    SA_BACKEND_URL 미설정 시 ({}, {}) 반환 (graceful skip)
     """
     if not settings.SA_BACKEND_URL:
-        logger.info("SA_BACKEND_URL 미설정, labor_rates pull 생략 (tenant_id=%s)", tenant_id)
-        return {}
+        logger.info("SA_BACKEND_URL 미설정, labor_rates pull 생략 (business_id=%s)", business_id)
+        return {}, {}
 
-    url = (
-        f"{settings.SA_BACKEND_URL.rstrip('/')}"
-        f"/api/itsm-bridge/labor-rates"
-    )
+    url = f"{settings.SA_BACKEND_URL.rstrip('/')}/api/itsm-bridge/labor-rates"
     headers = {"x-internal-secret": settings.SERVICE_BUS_SECRET}
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, params={"tenant_id": tenant_id}, headers=headers)
+            resp = await client.get(url, params={"business_id": business_id}, headers=headers)
         if resp.status_code != 200:
             logger.warning(
                 "labor_rates pull 실패: status=%d body=%s", resp.status_code, resp.text[:200]
             )
-            return {}
-        rates: dict[str, float] = {}
+            return {}, {}
+        rates_by_key: dict[str, float] = {}
+        rates_by_email: dict[str, float] = {}
         for item in resp.json():
             hourly = float(item.get("hourly_rate") or 0.0)
             if item.get("user_id"):
-                rates[item["user_id"]] = hourly
+                rates_by_key[item["user_id"]] = hourly
+            if item.get("email"):
+                rates_by_email[item["email"]] = hourly
             if item.get("role"):
-                role_key = f"role:{item['role']}"
-                # 같은 role이 여러 row일 때 평균 — 단순히 덮어씀 (마지막 값 사용)
-                rates[role_key] = hourly
-        return rates
+                rates_by_key[f"role:{item['role']}"] = hourly
+        logger.info(
+            "labor_rates pull 완료: business_id=%s user_rates=%d role_rates=%d email_rates=%d",
+            business_id,
+            sum(1 for k in rates_by_key if not k.startswith("role:")),
+            sum(1 for k in rates_by_key if k.startswith("role:")),
+            len(rates_by_email),
+        )
+        return rates_by_key, rates_by_email
     except Exception:
-        logger.exception("labor_rates pull 예외: tenant_id=%s", tenant_id)
-        return {}
+        logger.exception("labor_rates pull 예외: business_id=%s", business_id)
+        return {}, {}
 
 
 async def compute_pl(
     user_hours: list,
     labor_rates: dict[str, float],
+    rates_by_email: dict[str, float],
+    user_email_map: dict[str, str],
     contract_value: float | None,
     days_remaining: int | None,
 ) -> dict:
     """P&L 계산.
 
+    단가 우선순위: SA user_id 직접 매핑 → 이메일 매핑 → role:default fallback
+
     actual_cost = Σ(user.hours × rate)
-      — user_id 있으면 개인 단가, 없으면 "role:default" fallback (0.0)
     actual_margin_rate = (contract_value - actual_cost) / contract_value * 100
-      (contract_value 있을 때만)
-    daily_rate = actual_cost / max(elapsed_days, 1) — 단순 추정
-    projected_total_cost = actual_cost + daily_rate * days_remaining
-    burn_rate_alert = projected_total_cost > contract_value * 0.90
+    projected_total_cost = actual_cost + daily_rate × days_remaining
+    burn_rate_alert = projected_total_cost > contract_value × 0.90
 
     반환: {actual_cost, actual_margin_rate, projected_total_cost, burn_rate_alert, contract_value}
     """
@@ -126,9 +136,15 @@ async def compute_pl(
         uid = u.get("user_id")
         hours = float(u.get("hours") or 0.0)
         if uid and uid in labor_rates:
+            # SA user_id 직접 매핑 (ITSM/SA user_id가 동일한 경우)
             rate = labor_rates[uid]
         else:
-            rate = labor_rates.get("role:default", 0.0)
+            # 이메일 기반 매핑 (cross-service: ITSM user_id → email → SA rate)
+            email = user_email_map.get(uid or "")
+            if email and email in rates_by_email:
+                rate = rates_by_email[email]
+            else:
+                rate = labor_rates.get("role:default", 0.0)
         actual_cost += hours * rate
 
     actual_cost = round(actual_cost, 2)
@@ -543,10 +559,26 @@ async def compute_kpi(tenant_id: str, business_id: str) -> ItsmKpiPayload | None
         )
 
         # ── P&L 계산 (BIZCARD-C) ──────────────────────────────────────────────
-        labor_rates = await fetch_labor_rates(tenant_id)
+        # ITSM user_id → email 매핑 (cross-service user 매핑: email이 공통 키)
+        itsm_user_ids = [u["user_id"] for u in user_hours_list if u.get("user_id")]
+        user_email_map: dict[str, str] = {}
+        if itsm_user_ids:
+            email_rows = await session.execute(
+                text("""
+                    SELECT id::text, email FROM users
+                    WHERE id = ANY(CAST(:ids AS uuid[]))
+                      AND tenant_id = CAST(:tid AS uuid)
+                """),
+                {"ids": itsm_user_ids, "tid": tenant_id},
+            )
+            user_email_map = {r.id: r.email for r in email_rows.fetchall()}
+
+        labor_rates, rates_by_email = await fetch_labor_rates(business_id)
         pl = await compute_pl(
             user_hours=user_hours_list,
             labor_rates=labor_rates,
+            rates_by_email=rates_by_email,
+            user_email_map=user_email_map,
             contract_value=contract_value,
             days_remaining=contract_expire_days,
         )

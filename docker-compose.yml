@@ -56,6 +56,7 @@ services:
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-}
       KEYCLOAK_REDIRECT_URI: ${KEYCLOAK_REDIRECT_URI:-}
+      SA_BACKEND_URL: ${SA_BACKEND_URL:-http://sa_backend:8000}
     depends_on:
       itsm_postgres_ha:
         condition: service_healthy
