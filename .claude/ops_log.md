@@ -2,6 +2,7 @@
 
 | 날짜 | 이벤트 | 상세 | 결과 | 프로젝트 | 에이전트 |
 |---|---|---|---|---|---|
+| 2026-06-15 | session_close | BIZCARD P&L 수정: SA_BACKEND_URL 누락 추가(itsm_backend 서비스) + bridge_service email 매핑+business_id 기반 단가 조회. 검증: 한국정밀제조 2,803,828원 / 동방물류 959,330원 | ✅ | itsm | leader |
 | 2026-06-10 13:38 | build | cd /teamwork/itsm && docker compose build itsm_backend 2>&1 | tail -8 | ✅ | itsm | build-hook |
 | 2026-06-10 13:41 | build | docker compose build itsm_backend 2>&1 | tail -5 | ✅ | itsm | build-hook |
 | 2026-06-10 13:41 | build | docker compose run --rm --no-deps \
@@ -121,3 +122,4 @@ docker exec itsm_fron | ✅ | itsm | build-hook |
 | 2026-06-14 09:29 | build | docker compose build itsm_frontend 2>&1 | grep -E "ERROR|Type error|error TS|Bui | ✅ | itsm | build-hook |
 | 2026-06-14 09:30 | build | docker compose build itsm_frontend 2>&1 | grep -E "ERROR|Type error|error TS|Bui | ✅ | itsm | build-hook |
 | 2026-06-14 09:44 | build | docker compose build itsm_frontend 2>&1 | tail -30 | ✅ | itsm | build-hook |
+| 2026-06-14 09:52 | session_close | 세션 정상 종료 / ★★:58개 / ITSM Phase R 전체 완료 | ✅ | itsm | leader |
