@@ -148,8 +148,15 @@ export interface Customer {
   contract_tier: ContractTier | null;
   parent_id: string | null;
   kind: 'account' | 'division';
+  linked_business_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface SaBusiness {
+  id: string;
+  name: string;
+  status?: string;
 }
 
 export interface CustomersResponse {

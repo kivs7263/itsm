@@ -245,6 +245,17 @@ function TicketFormStep({
   // 선택된 계약
   const selectedContract = contracts.find((c) => c.id === selectedContractId) ?? null;
 
+  // 연결된 SA 사업카드 이름 (고객에 linked_business_id 있을 때)
+  const { data: businessesData } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['businesses', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/businesses`).then((r) => r.data),
+    enabled: !!selectedCustomer?.linked_business_id,
+    staleTime: 5 * 60 * 1000,
+  });
+  const linkedBusinessName = selectedCustomer?.linked_business_id
+    ? (businessesData ?? []).find((b) => b.id === selectedCustomer.linked_business_id)?.name
+    : null;
+
   // 고객 선택 시 계약 초기화
   function handleSelectCustomer(customer: Customer) {
     setSelectedCustomer(customer);
@@ -431,6 +442,19 @@ function TicketFormStep({
               );
             })()}
           </FormField>
+
+          {/* 연결된 SA 사업카드 표시 (고객 선택 시) */}
+          {selectedCustomer && (
+            <div className="flex items-center gap-2 rounded-md bg-surface-raised px-3 py-2 text-xs">
+              <span className="text-text-secondary">SA 사업카드:</span>
+              {linkedBusinessName
+                ? <span className="font-medium text-text-primary">{linkedBusinessName}</span>
+                : selectedCustomer.linked_business_id
+                  ? <span className="text-text-secondary">로딩 중...</span>
+                  : <span className="text-text-disabled">미연결 — 고객 정보에서 사업카드를 연결하세요</span>
+              }
+            </div>
+          )}
 
           {/* 제목 */}
           <FormField label="제목" required error={errors.title?.message}>

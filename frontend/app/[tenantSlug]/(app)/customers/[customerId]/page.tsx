@@ -161,6 +161,7 @@ interface InfoFormState {
   phone: string;
   contract_grade: string;
   kind: string;
+  linked_business_id: string | null;
 }
 
 function InfoTab({
@@ -188,6 +189,7 @@ function InfoTab({
     phone: customer.phone ?? '',
     contract_grade: customer.contract_grade ?? '',
     kind: customer.kind ?? 'account',
+    linked_business_id: customer.linked_business_id ?? null,
   });
 
   useEffect(() => {
@@ -198,8 +200,18 @@ function InfoTab({
       phone: customer.phone ?? '',
       contract_grade: customer.contract_grade ?? '',
       kind: customer.kind ?? 'account',
+      linked_business_id: customer.linked_business_id ?? null,
     });
   }, [customer]);
+
+  // SA 사업카드 목록
+  const { data: businessesData } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['businesses', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/businesses`).then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+  const businesses = businessesData ?? [];
+  const linkedBusiness = businesses.find((b) => b.id === (infoForm.linked_business_id ?? customer.linked_business_id));
 
   const patchMutation = useMutation({
     mutationFn: (data: Partial<InfoFormState>) =>
@@ -401,9 +413,23 @@ function InfoTab({
                   <option value="division">하위 부서</option>
                 </select>
               </div>
+              <div className="col-span-2">
+                <label className="text-xs text-text-secondary mb-1 block">SA 사업카드 연결</label>
+                <select
+                  className={inputCls}
+                  value={infoForm.linked_business_id ?? ''}
+                  onChange={(e) => setInfoForm((f) => ({ ...f, linked_business_id: e.target.value || null }))}
+                >
+                  <option value="">연결 안 함</option>
+                  {businesses.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-text-disabled mt-1">SA Workspace에서 관리하는 사업카드와 이 고객을 연결합니다.</p>
+              </div>
             </div>
             <div className="flex gap-2 justify-end">
-              <Button variant="ghost" size="sm" onClick={() => { setIsEditing(false); setInfoForm({ name: customer.name ?? '', company: (customer as { company?: string }).company ?? '', email: customer.email ?? '', phone: customer.phone ?? '', contract_grade: customer.contract_grade ?? '', kind: customer.kind ?? 'account' }); }}>
+              <Button variant="ghost" size="sm" onClick={() => { setIsEditing(false); setInfoForm({ name: customer.name ?? '', company: (customer as { company?: string }).company ?? '', email: customer.email ?? '', phone: customer.phone ?? '', contract_grade: customer.contract_grade ?? '', kind: customer.kind ?? 'account', linked_business_id: customer.linked_business_id ?? null }); }}>
                 취소
               </Button>
               <Button
@@ -431,6 +457,15 @@ function InfoTab({
             <div>
               <dt className="text-xs text-text-secondary">전화</dt>
               <dd className="mt-0.5 text-sm text-text-primary">{customer.phone ?? '-'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-text-secondary">SA 사업카드</dt>
+              <dd className="mt-0.5 text-sm">
+                {linkedBusiness
+                  ? <span className="text-text-primary font-medium">{linkedBusiness.name}</span>
+                  : <span className="text-text-disabled">미연결</span>
+                }
+              </dd>
             </div>
             <div>
               <dt className="text-xs text-text-secondary">생성</dt>
