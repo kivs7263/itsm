@@ -6,7 +6,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart2,
   Clock,
-  Construction,
   Star,
   MessageSquare,
   Users,
@@ -15,12 +14,19 @@ import {
   X,
   FileText,
   ChevronRight,
+  BookOpen,
+  Timer,
+  Target,
+  Zap,
+  AlertTriangle,
+  Layers,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type {
   ReportSummary,
   TicketStatus,
+  TicketPriority,
   CSATSummary,
   Report,
   ReportsResponse,
@@ -178,6 +184,72 @@ function ScoreBar({ star, count, max }: { star: number; count: number; max: numb
       </span>
     </div>
   );
+}
+
+// -----------------------------------------------------------------------
+// 우선순위 색상
+// -----------------------------------------------------------------------
+const PRIORITY_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  critical: { bg: 'bg-red-50 dark:bg-red-950/30',    text: 'text-red-600 dark:text-red-400',    label: '긴급' },
+  high:     { bg: 'bg-orange-50 dark:bg-orange-950/30', text: 'text-orange-600 dark:text-orange-400', label: '높음' },
+  medium:   { bg: 'bg-yellow-50 dark:bg-yellow-950/30', text: 'text-yellow-600 dark:text-yellow-400', label: '보통' },
+  low:      { bg: 'bg-blue-50 dark:bg-blue-950/30',   text: 'text-blue-600 dark:text-blue-400',   label: '낮음' },
+};
+
+// -----------------------------------------------------------------------
+// KPI 메트릭 카드
+// -----------------------------------------------------------------------
+function KpiCard({
+  label,
+  value,
+  sub,
+  icon,
+  iconColor,
+  iconBg,
+  isLoading,
+  tooltip,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  icon: React.ReactNode;
+  iconColor: string;
+  iconBg: string;
+  isLoading: boolean;
+  tooltip?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-2" title={tooltip}>
+      <div className="flex items-center gap-2">
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+          style={{ background: iconBg }}
+        >
+          <span style={{ color: iconColor }}>{icon}</span>
+        </div>
+        <p className="text-xs text-text-secondary font-medium">{label}</p>
+      </div>
+      {isLoading ? (
+        <Skeleton className="h-8 w-20 mt-1" />
+      ) : (
+        <div>
+          <p className="text-2xl font-bold text-text-primary tabular-nums">{value}</p>
+          {sub && <p className="text-xs text-text-secondary mt-0.5">{sub}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
+// MTTR 포맷 헬퍼 (분 → "Xh Ym" 또는 "Xm")
+// -----------------------------------------------------------------------
+function formatMttr(minutes: number | null | undefined): string {
+  if (minutes == null) return '-';
+  if (minutes < 60) return `${Math.round(minutes)}분`;
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
 // -----------------------------------------------------------------------
@@ -714,9 +786,17 @@ export default function ReportsPage() {
     enabled: !!tenantSlug,
   });
 
-  const monthlyTickets = report?.monthly_tickets ?? [];
-  const byStatus       = report?.by_status ?? [];
-  const complianceRate = report?.sla_compliance_rate ?? 0;
+  const monthlyTickets  = report?.monthly_tickets ?? [];
+  const byStatus        = report?.by_status ?? [];
+  const complianceRate  = report?.sla_compliance_rate ?? 0;
+  const byPriority      = report?.by_priority ?? [];
+  const mttrMinutes     = report?.mttr_minutes;
+  const fcrRate         = report?.fcr_rate;
+  const kbTotalViews    = report?.kb_total_views ?? 0;
+  const kbArticleCount  = report?.kb_article_count ?? 0;
+  const kbTopArticles   = report?.kb_top_articles ?? [];
+  const totalHours      = report?.total_hours ?? 0;
+  const billableHours   = report?.billable_hours ?? 0;
 
   const maxMonthlyCount = Math.max(...monthlyTickets.map((m) => m.count), 1);
 
@@ -735,23 +815,65 @@ export default function ReportsPage() {
 
       {/* 본문 */}
       <div className="flex-1 overflow-auto p-6 flex flex-col gap-6">
-        {/* Coming soon 배너 */}
-        <div className="flex items-center gap-3 rounded-lg border border-border-default bg-surface p-4">
-          <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-            style={{ background: 'rgba(245, 192, 0, 0.12)' }}
-          >
-            <Construction size={18} style={{ color: '#F5C000' }} />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-text-primary">상세 리포트는 준비 중입니다</p>
-            <p className="text-xs text-text-secondary mt-0.5">
-              고급 분석, 커스텀 대시보드, 엑셀 내보내기 기능이 곧 제공됩니다.
-            </p>
-          </div>
-          <span className="ml-auto inline-flex items-center rounded-full bg-info-bg text-info-text px-2.5 py-1 text-xs font-medium">
-            Coming Soon
-          </span>
+
+        {/* ── KPI 핵심 지표 6종 ── */}
+        <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
+          <KpiCard
+            label="평균 해결 시간 (MTTR)"
+            value={formatMttr(mttrMinutes)}
+            sub="티켓 생성→해결 평균"
+            icon={<Timer size={16} />}
+            iconColor="#F5C000"
+            iconBg="rgba(245,192,0,0.12)"
+            isLoading={isLoading}
+            tooltip="Mean Time To Resolve — 해결/종료된 티켓 기준"
+          />
+          <KpiCard
+            label="일회 해결률 (FCR)"
+            value={fcrRate != null ? `${fcrRate}%` : '-'}
+            sub="에스컬레이션 없이 해결"
+            icon={<Target size={16} />}
+            iconColor="#22c55e"
+            iconBg="rgba(34,197,94,0.12)"
+            isLoading={isLoading}
+            tooltip="First Contact Resolution — 에스컬레이션 없이 해결된 티켓 비율"
+          />
+          <KpiCard
+            label="SLA 준수율"
+            value={`${(complianceRate * 100).toFixed(1)}%`}
+            sub={`위반 ${report?.sla_breach_count ?? 0}건`}
+            icon={<Clock size={16} />}
+            iconColor="#3b82f6"
+            iconBg="rgba(59,130,246,0.12)"
+            isLoading={isLoading}
+          />
+          <KpiCard
+            label="이번 달 해결"
+            value={String(report?.monthly_resolved ?? 0)}
+            sub="resolved + closed"
+            icon={<Zap size={16} />}
+            iconColor="#a855f7"
+            iconBg="rgba(168,85,247,0.12)"
+            isLoading={isLoading}
+          />
+          <KpiCard
+            label="KB 조회수"
+            value={kbTotalViews.toLocaleString()}
+            sub={`게시 문서 ${kbArticleCount}건`}
+            icon={<BookOpen size={16} />}
+            iconColor="#F5C000"
+            iconBg="rgba(245,192,0,0.12)"
+            isLoading={isLoading}
+          />
+          <KpiCard
+            label="총 공수"
+            value={`${totalHours}h`}
+            sub={`청구 ${billableHours}h`}
+            icon={<Layers size={16} />}
+            iconColor="#64748b"
+            iconBg="rgba(100,116,139,0.12)"
+            isLoading={isLoading}
+          />
         </div>
 
         {/* 보고서 관리 섹션 */}
@@ -848,6 +970,69 @@ export default function ReportsPage() {
                   </p>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── 우선순위 분포 + KB Top 아티클 ── */}
+        <div className="grid grid-cols-2 gap-6">
+          {/* 우선순위별 분포 */}
+          <div className="rounded-lg border border-border-default bg-surface">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-border-subtle">
+              <AlertTriangle size={16} className="text-text-secondary" />
+              <h2 className="text-sm font-semibold text-text-primary">우선순위별 분포</h2>
+            </div>
+            <div className="p-5">
+              {isLoading ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+                </div>
+              ) : byPriority.length === 0 ? (
+                <p className="text-sm text-text-secondary text-center py-8">데이터가 없습니다.</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {(['critical', 'high', 'medium', 'low'] as TicketPriority[]).map((p) => {
+                    const item = byPriority.find((b) => b.priority === p);
+                    const c = PRIORITY_COLORS[p];
+                    return (
+                      <div key={p} className={`rounded-lg border border-border-subtle p-3 flex flex-col gap-1 ${c.bg}`}>
+                        <span className={`text-[10px] font-medium ${c.text}`}>{c.label}</span>
+                        <span className="text-2xl font-bold text-text-primary tabular-nums">{item?.count ?? 0}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* KB 인기 문서 Top 5 */}
+          <div className="rounded-lg border border-border-default bg-surface">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-border-subtle">
+              <BookOpen size={16} className="text-text-secondary" />
+              <h2 className="text-sm font-semibold text-text-primary">KB 인기 문서</h2>
+              {!isLoading && kbArticleCount > 0 && (
+                <span className="text-xs text-text-tertiary ml-auto">총 {kbArticleCount}건 · {kbTotalViews.toLocaleString()}회</span>
+              )}
+            </div>
+            <div className="p-5">
+              {isLoading ? (
+                <div className="flex flex-col gap-3">
+                  {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+                </div>
+              ) : kbTopArticles.length === 0 ? (
+                <p className="text-sm text-text-secondary text-center py-8">게시된 문서가 없습니다.</p>
+              ) : (
+                <div className="flex flex-col divide-y divide-border-subtle">
+                  {kbTopArticles.map((art, idx) => (
+                    <div key={art.id} className="flex items-center gap-3 py-2.5">
+                      <span className="text-xs font-bold text-text-tertiary w-4 shrink-0 tabular-nums">{idx + 1}</span>
+                      <span className="flex-1 text-sm text-text-primary line-clamp-1">{art.title}</span>
+                      <span className="text-xs text-text-tertiary tabular-nums shrink-0">{art.view_count.toLocaleString()}회</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

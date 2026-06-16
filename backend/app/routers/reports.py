@@ -34,12 +34,17 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, case, extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import text as sa_text
+
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_roles
+from app.models.escalation import TicketEscalation
+from app.models.kb_article import KbArticle
 from app.models.report import Report, ReportStatus
 from app.models.sla import SLAEvent, SLAEventType
 from app.models.ticket import Ticket, TicketStatus
 from app.models.user import User, UserRole
+from app.models.work_log import TicketWorkLog
 from app.services import csat_service
 
 logger = logging.getLogger(__name__)
@@ -198,12 +203,150 @@ async def _build_summary_data(
 
     sla_compliance_rate = round(1.0 - (breach_count / total), 4) if total > 0 else 1.0
 
+    # ------------------------------------------------------------------
+    # MTTR (Mean Time To Resolve) — 분 단위, resolved/closed 티켓만
+    # ------------------------------------------------------------------
+    mttr_result = await db.scalar(
+        select(
+            func.avg(
+                extract("epoch", Ticket.resolved_at - Ticket.created_at) / 60
+            )
+        )
+        .where(
+            and_(
+                Ticket.tenant_id == tenant_id,
+                Ticket.status.in_([TicketStatus.resolved, TicketStatus.closed]),
+                Ticket.resolved_at.isnot(None),
+            )
+        )
+    )
+    mttr_minutes = round(float(mttr_result), 1) if mttr_result is not None else None
+
+    # ------------------------------------------------------------------
+    # FCR (First Contact Resolution) — 에스컬레이션 없이 해결된 비율
+    # ------------------------------------------------------------------
+    resolved_total = sum(
+        r["count"] for r in by_status
+        if r["status"] in ("resolved", "closed")
+    )
+    if resolved_total > 0:
+        escalated_ids_q = (
+            await db.execute(
+                select(TicketEscalation.ticket_id)
+                .where(TicketEscalation.tenant_id == tenant_id)
+                .distinct()
+            )
+        )
+        escalated_ticket_ids = {str(r[0]) for r in escalated_ids_q.all()}
+
+        resolved_rows = (
+            await db.execute(
+                select(Ticket.id)
+                .where(
+                    and_(
+                        Ticket.tenant_id == tenant_id,
+                        Ticket.status.in_([TicketStatus.resolved, TicketStatus.closed]),
+                    )
+                )
+            )
+        ).all()
+        fcr_count = sum(1 for r in resolved_rows if str(r[0]) not in escalated_ticket_ids)
+        fcr_rate = round(fcr_count / resolved_total * 100, 1)
+    else:
+        fcr_rate = None
+
+    # ------------------------------------------------------------------
+    # 우선순위별 분포
+    # ------------------------------------------------------------------
+    priority_rows = (
+        await db.execute(
+            select(Ticket.priority, func.count().label("cnt"))
+            .where(and_(*base_where))
+            .group_by(Ticket.priority)
+        )
+    ).all()
+    by_priority = [
+        {
+            "priority": str(r.priority.value if hasattr(r.priority, "value") else r.priority),
+            "count": r.cnt,
+        }
+        for r in priority_rows
+    ]
+
+    # ------------------------------------------------------------------
+    # KB 지식베이스 지표
+    # ------------------------------------------------------------------
+    kb_total_views = await db.scalar(
+        select(func.sum(KbArticle.view_count))
+        .where(
+            and_(
+                KbArticle.tenant_id == tenant_id,
+                KbArticle.is_published.is_(True),
+            )
+        )
+    ) or 0
+    kb_article_count = await db.scalar(
+        select(func.count())
+        .select_from(KbArticle)
+        .where(
+            and_(
+                KbArticle.tenant_id == tenant_id,
+                KbArticle.is_published.is_(True),
+            )
+        )
+    ) or 0
+
+    # KB 상위 5개 문서 (view_count 기준)
+    kb_top_rows = (
+        await db.execute(
+            select(KbArticle.id, KbArticle.title, KbArticle.view_count)
+            .where(
+                and_(
+                    KbArticle.tenant_id == tenant_id,
+                    KbArticle.is_published.is_(True),
+                )
+            )
+            .order_by(KbArticle.view_count.desc())
+            .limit(5)
+        )
+    ).all()
+    kb_top_articles = [
+        {"id": str(r.id), "title": r.title, "view_count": r.view_count or 0}
+        for r in kb_top_rows
+    ]
+
+    # ------------------------------------------------------------------
+    # 공수 (Work Time) 집계
+    # ------------------------------------------------------------------
+    work_hours_result = await db.execute(
+        select(
+            func.sum(TicketWorkLog.hours).label("total_hours"),
+            func.sum(
+                case(
+                    (TicketWorkLog.billable.is_(True), TicketWorkLog.hours),
+                    else_=0,
+                )
+            ).label("billable_hours"),
+        ).where(TicketWorkLog.tenant_id == tenant_id)
+    )
+    work_row = work_hours_result.one()
+    total_hours = float(work_row.total_hours or 0)
+    billable_hours = float(work_row.billable_hours or 0)
+
     return {
         "monthly_tickets": monthly_tickets,
         "by_status": by_status,
         "sla_compliance_rate": sla_compliance_rate,
         "sla_breach_count": breach_count,
         "monthly_resolved": monthly_resolved,
+        "mttr_minutes": mttr_minutes,
+        "fcr_rate": fcr_rate,
+        "by_priority": by_priority,
+        "kb_total_views": int(kb_total_views),
+        "kb_article_count": int(kb_article_count),
+        "kb_top_articles": kb_top_articles,
+        "total_hours": round(total_hours, 1),
+        "billable_hours": round(billable_hours, 1),
     }
 
 

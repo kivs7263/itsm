@@ -326,6 +326,15 @@ export interface ReportSummary {
   sla_breach_count?: number;
   monthly_resolved?: number;
   csat_summary?: CSATSummary;
+  // KPI-1 추가 지표
+  mttr_minutes?: number | null;
+  fcr_rate?: number | null;
+  by_priority?: { priority: TicketPriority; count: number }[];
+  kb_total_views?: number;
+  kb_article_count?: number;
+  kb_top_articles?: { id: string; title: string; view_count: number }[];
+  total_hours?: number;
+  billable_hours?: number;
 }
 
 // -----------------------------------------------------------------------
