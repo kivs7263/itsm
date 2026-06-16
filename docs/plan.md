@@ -113,6 +113,22 @@
 
 ---
 
+### P1-KPI: 리포트 KPI 대시보드 고도화 [ DONE 2026-06-16 ]
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `KPI-1` | backend reports.py — MTTR·FCR·우선순위 분포·KB 지표·공수 집계 확장 | M | `[ DONE 2026-06-16 ]` |
+| `KPI-2` | frontend lib/types.ts ReportSummary 확장 (8개 신규 필드) | S | `[ DONE 2026-06-16 ]` |
+| `KPI-3` | frontend reports/page.tsx — KPI 6종 카드 행 + 우선순위 분포 + KB Top 5 섹션 | M | `[ DONE 2026-06-16 ]` |
+
+**산출물**:
+- MTTR (Mean Time To Resolve): resolved/closed 티켓 평균 해결 시간(분)
+- FCR (First Contact Resolution): 에스컬레이션 없이 해결된 비율(%)
+- 우선순위별 분포: critical/high/medium/low 2×2 그리드
+- KB 조회수·문서수·인기글 Top 5 테이블
+
+---
+
 ## Phase STRUCT: ITSM 구조 개선
 > 2026-06-16 | 구조 진단 기반 — 계층 구조·이력·상세 뷰 3가지 결함 수정
 > 문제: 티켓 생성 시 고객 미연결 / 고객 지원 이력 뷰 없음 / 티켓 전용 페이지 없음
@@ -1509,3 +1525,73 @@ POST /portal/{token}/comments                — 고객 코멘트 추가
 | `ESC-B4` | SSO Portal — 알림 템플릿 관리 페이지 |
 | `ESC-B5` | 3차 에스컬레이션 UI |
 | `ESC-B6` | 고객 포털 계정 로그인 (KC B2C realm 분리) |
+
+---
+
+## Phase AI: AI 티켓 분류 + KB 자동 답변 (Backlog)
+> 목표: 티켓 접수 시 자동 분류 + 엔지니어에게 관련 KB 문서 제안
+> 전제: OPENAI_API_KEY 환경변수 필요
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `AI-1` | 티켓 생성 시 priority·category 자동 분류 (GPT-4o-mini, fire-and-forget) | M | `[ PENDING ]` |
+| `AI-2` | 티켓 상세 "관련 KB" 섹션 — 시맨틱 유사도 Top 3 문서 제안 | M | `[ PENDING ]` |
+| `AI-3` | 설정 > AI 탭 — 자동 분류 on/off 토글, 신뢰도 임계값 조정 | S | `[ PENDING ]` |
+
+**아키텍처**:
+- 분류 결과: `tickets.ai_priority`, `tickets.ai_category`, `tickets.ai_confidence` 컬럼 추가
+- OPENAI_API_KEY 없으면 전체 AI 기능 graceful skip (503 금지 — 서비스 중단 없음)
+- 기존 pgvector 임베딩(P6-1)과 연계: 신규 티켓 description 임베딩 → KB 유사도
+
+---
+
+## Phase API: 공개 REST API + Webhook (Backlog)
+> 목표: 고객사 자체 시스템 연동 지원 (외부 판매 핵심)
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `API-1` | API 키 발급/관리 — `tenant_api_keys` 테이블 + 설정 UI | M | `[ PENDING ]` |
+| `API-2` | 공개 REST API v1 — `/v1/tickets` CRUD + Bearer 인증 | M | `[ PENDING ]` |
+| `API-3` | Outbound Webhook — 티켓 이벤트 시 고객 URL로 POST | M | `[ PENDING ]` |
+| `API-4` | API 사용량 제한 (rate limit) + 사용량 대시보드 | S | `[ PENDING ]` |
+
+**스펙**:
+- 인증: `Authorization: Bearer <api_key>` (JWT 아님, DB 검증)
+- API 키 해시: SHA-256 저장 (평문 1회만 노출)
+- Webhook payload: `{ event, ticket_id, ticket_number, status, priority, updated_at }`
+- Webhook 재시도: 3회 (즉시, 1분, 5분) → failed 시 내부 알림
+
+---
+
+## Phase BILLING: 플랜 모델 + Stripe 빌링 (Backlog)
+> 목표: SaaS 수익화 — Free/Pro/Enterprise 3티어
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `BILLING-1` | 플랜 정의 — `plans` + `tenant_subscriptions` 테이블 | S | `[ PENDING ]` |
+| `BILLING-2` | Stripe Customer + Subscription 생성 (checkout session) | L | `[ PENDING ]` |
+| `BILLING-3` | Stripe Webhook 처리 — 구독 상태 동기화 | M | `[ PENDING ]` |
+| `BILLING-4` | 플랜 제한 적용 — 티켓/사용자/API 호출 한도 enforcement | M | `[ PENDING ]` |
+| `BILLING-5` | SSO Portal 청구서 탭 — 현재 플랜·결제 이력·업그레이드 | M | `[ PENDING ]` |
+
+**플랜 스펙 (초안)**:
+| 플랜 | 티켓/월 | 사용자 | API 호출/일 | 가격 |
+|---|---|---|---|---|
+| Free | 50 | 3 | 0 | 무료 |
+| Pro | 무제한 | 20 | 10,000 | $49/월 |
+| Enterprise | 무제한 | 무제한 | 무제한 | 협의 |
+
+---
+
+## Phase I18N: 다국어 지원 — 영문 UI (Backlog)
+> 목표: 글로벌 판매 대비 영문 UI 완성
+> 전제: next-intl 또는 i18next 도입
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `I18N-1` | i18n 인프라 — next-intl 설치 + 한/영 로케일 파일 분리 | M | `[ PENDING ]` |
+| `I18N-2` | UI 문자열 추출 — 전체 컴포넌트 하드코딩 → `t()` 교체 | L | `[ PENDING ]` |
+| `I18N-3` | 백엔드 에러 메시지 다국어 (Accept-Language 헤더 기반) | M | `[ PENDING ]` |
+| `I18N-4` | 언어 전환 UI — 설정 또는 헤더 드롭다운 | S | `[ PENDING ]` |
+
+**참고**: 영문 UI 완성 전까지 demo 시 브라우저 자동 번역(Chrome) 안내 가능.
