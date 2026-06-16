@@ -42,8 +42,10 @@ async def list_businesses(
     if not settings.SA_BACKEND_URL:
         return []
 
-    tenant_id = str(current_user.tenant_id)
-    cache_key = f"itsm:businesses_cache:{tenant_id}"
+    itsm_tenant_id = str(current_user.tenant_id)
+    # SA_TENANT_ID 설정이 있으면 SA 테넌트 기준으로 조회 (ITSM ≠ SA 테넌트 환경 대응)
+    sa_tenant_id = settings.SA_TENANT_ID or itsm_tenant_id
+    cache_key = f"itsm:businesses_cache:{itsm_tenant_id}"
 
     redis = get_redis()
     cached = await redis.get(cache_key)
@@ -61,7 +63,7 @@ async def list_businesses(
 
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
-            resp = await client.get(url, headers=headers, params={"tenant_id": tenant_id})
+            resp = await client.get(url, headers=headers, params={"tenant_id": sa_tenant_id})
         if resp.status_code == 200:
             data = resp.json()
             await redis.setex(cache_key, _CACHE_TTL, json.dumps(data))

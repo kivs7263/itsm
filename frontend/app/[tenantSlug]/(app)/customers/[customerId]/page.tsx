@@ -77,11 +77,13 @@ function TreeNode({
   node,
   selectedId,
   onSelect,
+  onAddChild,
   depth,
 }: {
   node: CustomerTreeNode;
   selectedId: string;
   onSelect: (id: string) => void;
+  onAddChild: (parentId: string, parentName: string) => void;
   depth: number;
 }) {
   const [open, setOpen] = useState(true);
@@ -89,33 +91,43 @@ function TreeNode({
 
   return (
     <li>
-      <button
-        className={cn(
-          'flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-left transition-colors',
-          selectedId === node.id
-            ? 'bg-surface-selected text-text-primary font-medium'
-            : 'text-text-secondary hover:bg-surface-hover',
-        )}
-        style={{ paddingLeft: `${depth * 16 + 8}px` }}
-        onClick={() => onSelect(node.id)}
-      >
-        {hasChildren ? (
-          <span
-            className="shrink-0"
-            onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
-          >
-            {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-          </span>
-        ) : (
-          <span className="w-3.5 shrink-0" />
-        )}
-        {node.kind === 'account' ? (
-          <Building2 size={13} className="shrink-0" />
-        ) : (
-          <Users size={13} className="shrink-0" />
-        )}
-        <span className="truncate">{node.name}</span>
-      </button>
+      <div className="group relative">
+        <button
+          className={cn(
+            'flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-left transition-colors pr-7',
+            selectedId === node.id
+              ? 'bg-surface-selected text-text-primary font-medium'
+              : 'text-text-secondary hover:bg-surface-hover',
+          )}
+          style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          onClick={() => onSelect(node.id)}
+        >
+          {hasChildren ? (
+            <span
+              className="shrink-0"
+              onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+            >
+              {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            </span>
+          ) : (
+            <span className="w-3.5 shrink-0" />
+          )}
+          {node.kind === 'account' ? (
+            <Building2 size={13} className="shrink-0" />
+          ) : (
+            <Users size={13} className="shrink-0" />
+          )}
+          <span className="truncate">{node.name}</span>
+        </button>
+        <button
+          type="button"
+          title="하위 부서 추가"
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center justify-center w-5 h-5 rounded hover:bg-surface-raised text-text-disabled hover:text-text-primary transition-colors"
+          onClick={(e) => { e.stopPropagation(); onAddChild(node.id, node.name); }}
+        >
+          <Plus size={11} />
+        </button>
+      </div>
       {hasChildren && open && (
         <ul>
           {node.children.map((child) => (
@@ -124,6 +136,7 @@ function TreeNode({
               node={child}
               selectedId={selectedId}
               onSelect={onSelect}
+              onAddChild={onAddChild}
               depth={depth + 1}
             />
           ))}
@@ -1756,6 +1769,21 @@ export default function CustomerDetailPage() {
 
   const [activeTab, setActiveTab] = useState<TabId>('info');
   const [selectedNodeId, setSelectedNodeId] = useState<string>(customerId);
+  const [addDivision, setAddDivision] = useState<{ parentId: string; parentName: string } | null>(null);
+  const [newDivisionName, setNewDivisionName] = useState('');
+
+  const addDivisionMutation = useMutation({
+    mutationFn: ({ parentId, name }: { parentId: string; name: string }) =>
+      api.post(`/${tenantSlug}/customers/${parentId}/divisions`, { name }),
+    onSuccess: (res) => {
+      toast.success('하위 부서가 추가되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['customer-tree', tenantSlug, customerId] });
+      setSelectedNodeId(res.data.id);
+      setAddDivision(null);
+      setNewDivisionName('');
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
 
   const { data: customer, isLoading: customerLoading } = useQuery<Customer>({
     queryKey: ['customer', tenantSlug, customerId],
@@ -1852,10 +1880,57 @@ export default function CustomerDetailPage() {
                   node={node}
                   selectedId={selectedNodeId}
                   onSelect={setSelectedNodeId}
+                  onAddChild={(parentId, parentName) => { setAddDivision({ parentId, parentName }); setNewDivisionName(''); }}
                   depth={0}
                 />
               ))}
             </ul>
+          )}
+
+          {/* 하위 부서 추가 인라인 폼 */}
+          {addDivision && (
+            <div className="px-3 py-3 border-t border-border-subtle bg-surface-raised flex flex-col gap-2">
+              <p className="text-xs text-text-secondary truncate">
+                <span className="font-medium text-text-primary">{addDivision.parentName}</span> 하위 부서
+              </p>
+              <input
+                autoFocus
+                type="text"
+                value={newDivisionName}
+                onChange={(e) => setNewDivisionName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newDivisionName.trim()) {
+                    addDivisionMutation.mutate({ parentId: addDivision.parentId, name: newDivisionName.trim() });
+                  }
+                  if (e.key === 'Escape') { setAddDivision(null); setNewDivisionName(''); }
+                }}
+                placeholder="부서명 입력"
+                className="h-7 w-full rounded border border-border-default bg-surface px-2 text-xs text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-1 focus:ring-border-strong"
+              />
+              <div className="flex gap-1.5">
+                <Button
+                  size="sm"
+                  className="flex-1 h-7 text-xs"
+                  disabled={!newDivisionName.trim()}
+                  isLoading={addDivisionMutation.isPending}
+                  onClick={() => {
+                    if (newDivisionName.trim()) {
+                      addDivisionMutation.mutate({ parentId: addDivision.parentId, name: newDivisionName.trim() });
+                    }
+                  }}
+                >
+                  추가
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs px-2"
+                  onClick={() => { setAddDivision(null); setNewDivisionName(''); }}
+                >
+                  취소
+                </Button>
+              </div>
+            </div>
           )}
         </aside>
 
