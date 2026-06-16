@@ -119,11 +119,12 @@ class TicketComment(Base):
     )
     author_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,   # 고객 포털 코멘트는 author 없음 (source='customer_portal')
     )
     body = Column(Text, nullable=False)
     is_internal = Column(Boolean, nullable=False, default=False)
+    source = Column(String(30), nullable=True)  # None=내부, 'customer_portal'=고객 발신
     created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
 
 

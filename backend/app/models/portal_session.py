@@ -1,11 +1,10 @@
 """고객 포털 세션 모델."""
 from __future__ import annotations
 
-from sqlalchemy import Column, ForeignKey, Index, String
+from sqlalchemy import Column, DateTime, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.models.base import Base, gen_uuid, utcnow
-from sqlalchemy import DateTime
 
 
 class PortalSession(Base):
@@ -25,6 +24,13 @@ class PortalSession(Base):
         ForeignKey("customers.id", ondelete="CASCADE"),
         nullable=False,
     )
+    ticket_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tickets.id", ondelete="CASCADE"),
+        nullable=True,
+    )
     token_hash = Column(String(255), unique=True, nullable=False)
+    purpose = Column(String(30), nullable=False, default="magic_link")
+    used_at = Column(DateTime(timezone=True), nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)

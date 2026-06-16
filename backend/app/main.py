@@ -220,3 +220,8 @@ app.include_router(escalations_router.team_router, prefix="/api")  # /api/{slug}
 # ESC-3 고객 외부 알림 이력
 from app.routers import external_notifications as ext_notif_router  # noqa: E402
 app.include_router(ext_notif_router.router, prefix="/api")         # /api/{slug}/notifications/external
+
+# ESC-4 고객 포털 매직링크
+from app.routers import portal as portal_router  # noqa: E402
+app.include_router(portal_router.router_staff, prefix="/api")      # /api/{slug}/tickets/{id}/portal-link
+app.include_router(portal_router.router_portal)                    # /portal/* (인증 없음)
