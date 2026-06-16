@@ -12,6 +12,7 @@ import {
   TrendingUp,
   CheckCircle2,
   BarChart2,
+  Play,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { ReportSummary, Ticket } from '@/lib/types';
@@ -155,6 +156,169 @@ function EngineerDashboard({ tenantSlug }: { tenantSlug: string }) {
 }
 
 // -----------------------------------------------------------------------
+// Active Timer 위젯
+// -----------------------------------------------------------------------
+interface ActiveTimerItem {
+  user_id: string;
+  user_name: string | null;
+  ticket_id: string;
+  ticket_number: string | null;
+  ticket_title: string | null;
+  started_at: string;
+  elapsed_seconds: number;
+}
+
+function useElapsedFromSeconds(seconds: number, startedAt: string): string {
+  const [elapsed, setElapsed] = React.useState(seconds);
+  React.useEffect(() => {
+    const base = Date.now() - new Date(startedAt).getTime();
+    setElapsed(Math.floor(base / 1000));
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+  const h = Math.floor(elapsed / 3600);
+  const m = Math.floor((elapsed % 3600) / 60);
+  const s = elapsed % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function ActiveTimerRow({ item }: { item: ActiveTimerItem }) {
+  const elapsed = useElapsedFromSeconds(item.elapsed_seconds, item.started_at);
+  return (
+    <div className="flex items-center gap-3 py-2.5 border-b border-border-subtle last:border-0">
+      <div className="w-7 h-7 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+        <Play size={11} className="text-amber-600 dark:text-amber-400" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-text-primary truncate">
+          {item.user_name ?? '알 수 없음'}
+        </p>
+        <p className="text-xs text-text-secondary truncate">
+          {item.ticket_number ? `${item.ticket_number} · ` : ''}{item.ticket_title ?? '-'}
+        </p>
+      </div>
+      <span className="font-mono text-sm font-semibold text-amber-600 dark:text-amber-400 tabular-nums shrink-0">
+        {elapsed}
+      </span>
+    </div>
+  );
+}
+
+function ActiveTimersWidget({ tenantSlug }: { tenantSlug: string }) {
+  const { data: items = [], isLoading } = useQuery<ActiveTimerItem[]>({
+    queryKey: ['active-timers', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/work-logs/active-timers`).then((r) => r.data),
+    refetchInterval: 15000,
+  });
+
+  return (
+    <div className="rounded-lg border border-border-default bg-surface p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-medium text-text-primary flex items-center gap-1.5">
+          <Clock size={13} className="text-amber-500" />
+          현재 작업 중
+        </h2>
+        <span className="text-xs text-text-secondary bg-surface-elevated rounded-full px-2 py-0.5">
+          {items.length}명
+        </span>
+      </div>
+      {isLoading ? (
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-text-secondary text-center py-4">
+          현재 타이머를 실행 중인 팀원이 없습니다.
+        </p>
+      ) : (
+        <div className="divide-y divide-border-subtle">
+          {items.map((item) => (
+            <ActiveTimerRow key={item.user_id} item={item} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
+// 주간 공수 위젯
+// -----------------------------------------------------------------------
+interface WeeklyUserHours {
+  user_id: string;
+  user_name: string | null;
+  total_hours: number;
+  billable_hours: number;
+  log_count: number;
+}
+
+function WeeklyHoursWidget({ tenantSlug }: { tenantSlug: string }) {
+  const { data: rows = [], isLoading } = useQuery<WeeklyUserHours[]>({
+    queryKey: ['weekly-hours', tenantSlug],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/work-logs/weekly-by-user`).then((r) => r.data),
+    refetchInterval: 60000,
+  });
+
+  const maxHours = Math.max(...rows.map((r) => r.total_hours), 0.1);
+
+  return (
+    <div className="rounded-lg border border-border-default bg-surface p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-medium text-text-primary flex items-center gap-1.5">
+          <BarChart2 size={13} className="text-[#F5C000]" />
+          이번 주 공수
+        </h2>
+        <span className="text-xs text-text-secondary">
+          {new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })} 기준
+        </span>
+      </div>
+      {isLoading ? (
+        <div className="flex flex-col gap-2">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-8 w-full" />)}
+        </div>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-text-secondary text-center py-4">
+          이번 주 공수 기록이 없습니다.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          {rows.map((row) => (
+            <div key={row.user_id}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-text-primary font-medium">
+                  {row.user_name ?? '알 수 없음'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-text-secondary">{row.log_count}건</span>
+                  <span className="text-xs font-semibold text-text-primary tabular-nums">
+                    {row.total_hours}h
+                  </span>
+                </div>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-surface-elevated overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-amber-400"
+                  style={{ width: `${(row.total_hours / maxHours) * 100}%` }}
+                />
+              </div>
+              {row.billable_hours > 0 && row.billable_hours < row.total_hours && (
+                <p className="text-xs text-text-disabled mt-0.5">
+                  유상 {row.billable_hours}h · 무상 {Math.round((row.total_hours - row.billable_hours) * 100) / 100}h
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
 // 팀장/관리자 대시보드
 // -----------------------------------------------------------------------
 function TeamDashboard({ tenantSlug }: { tenantSlug: string }) {
@@ -220,6 +384,12 @@ function TeamDashboard({ tenantSlug }: { tenantSlug: string }) {
           </div>
         </div>
       )}
+
+      {/* 공수 위젯 */}
+      <div className="grid grid-cols-2 gap-4">
+        <ActiveTimersWidget tenantSlug={tenantSlug} />
+        <WeeklyHoursWidget tenantSlug={tenantSlug} />
+      </div>
     </div>
   );
 }

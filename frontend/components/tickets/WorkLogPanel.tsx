@@ -39,6 +39,8 @@ const COMPLETION_LABELS: Record<string, { label: string; cls: string }> = {
 interface TimerActive {
   active: boolean;
   ticket_id: string | null;
+  ticket_number: string | null;
+  ticket_title: string | null;
   started_at: string | null;
   elapsed_seconds: number | null;
 }
@@ -95,6 +97,8 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
   const queryClient = useQueryClient();
 
   const [showStopModal, setShowStopModal] = React.useState(false);
+  // 다른 티켓 타이머 실행 중일 때 먼저 중지 요청하는 모달
+  const [showOtherTimerModal, setShowOtherTimerModal] = React.useState(false);
 
   // 수동 입력 폼 상태
   const [showForm, setShowForm] = React.useState(false);
@@ -128,7 +132,7 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
     return { total: Math.round(total * 100) / 100, billable: Math.round(billable * 100) / 100 };
   }, [logs]);
 
-  // 타이머 시작
+  // 타이머 시작 (다른 티켓 타이머 실행 중이면 먼저 중지 모달)
   const startMutation = useMutation({
     mutationFn: () =>
       api.post(`/${tenantSlug}/work-logs/timer/start?ticket_id=${ticketId}`),
@@ -138,6 +142,14 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
+
+  function handleStartTimer() {
+    if (timer?.active && timer.ticket_id !== ticketId) {
+      setShowOtherTimerModal(true);
+      return;
+    }
+    startMutation.mutate();
+  }
 
 
   // 수동 입력 저장
@@ -174,6 +186,7 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
 
   return (
     <>
+    {/* 현재 티켓 타이머 중지 */}
     <WorkLogStopModal
       open={showStopModal}
       onClose={() => setShowStopModal(false)}
@@ -181,6 +194,19 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
       elapsed={elapsed}
       onStopped={() => {
         queryClient.invalidateQueries({ queryKey: ['work-logs', tenantSlug, ticketId] });
+      }}
+    />
+    {/* 다른 티켓 타이머 먼저 중지 → 이 티켓 시작 */}
+    <WorkLogStopModal
+      open={showOtherTimerModal}
+      onClose={() => setShowOtherTimerModal(false)}
+      tenantSlug={tenantSlug}
+      elapsed={elapsed}
+      title={timer?.ticket_title
+        ? `${timer.ticket_number ?? ''} ${timer.ticket_title} 작업 일지 기록`
+        : '이전 작업 일지 기록'}
+      onStopped={() => {
+        startMutation.mutate();
       }}
     />
     <div className="flex flex-col gap-4 p-5">
@@ -226,14 +252,28 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
             </Button>
           </div>
         ) : timer?.active && !isThisTicketTimer ? (
-          <p className="text-xs text-amber-600">
-            다른 티켓에서 타이머가 실행 중입니다. 먼저 중지 후 시작하세요.
-          </p>
+          <div className="flex flex-col gap-2">
+            <p className="text-xs text-amber-600">
+              {timer.ticket_number
+                ? `${timer.ticket_number}`
+                : '다른 티켓'}
+              {timer.ticket_title ? ` — ${timer.ticket_title}` : ''}
+              {' '}에서 타이머 실행 중
+            </p>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setShowOtherTimerModal(true)}
+              leftIcon={<Play size={12} />}
+            >
+              중지 후 이 티켓 시작
+            </Button>
+          </div>
         ) : (
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => startMutation.mutate()}
+            onClick={handleStartTimer}
             isLoading={startMutation.isPending}
             leftIcon={<Play size={12} />}
           >

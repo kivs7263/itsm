@@ -31,6 +31,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.dependencies import require_roles
 from app.core.dependencies import get_current_user
 from app.core.redis import get_redis
 from app.models import Ticket, TicketWorkLog, User, UserRole, WorkType
@@ -121,8 +122,28 @@ class WorkLogSummaryOut(BaseModel):
 class TimerActiveOut(BaseModel):
     active: bool
     ticket_id: uuid.UUID | None = None
+    ticket_number: str | None = None
+    ticket_title: str | None = None
     started_at: datetime | None = None
     elapsed_seconds: int | None = None
+
+
+class ActiveTimerItem(BaseModel):
+    user_id: uuid.UUID
+    user_name: str | None
+    ticket_id: uuid.UUID
+    ticket_number: str | None
+    ticket_title: str | None
+    started_at: datetime
+    elapsed_seconds: int
+
+
+class WeeklyUserHours(BaseModel):
+    user_id: uuid.UUID
+    user_name: str | None
+    total_hours: float
+    billable_hours: float
+    log_count: int
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -302,6 +323,7 @@ async def timer_stop(
 async def timer_active(
     tenant_slug: str,
     current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
 ):
     redis = get_redis()
     key = TIMER_KEY.format(
@@ -312,11 +334,20 @@ async def timer_active(
         return TimerActiveOut(active=False)
 
     ticket_id_str, started_at_iso = raw.decode().split("|", 1)
+    ticket_id = uuid.UUID(ticket_id_str)
     started_at = datetime.fromisoformat(started_at_iso)
     elapsed = int((datetime.now(timezone.utc) - started_at).total_seconds())
+
+    row = (await db.execute(
+        select(Ticket.title, Ticket.ticket_number)
+        .where(Ticket.id == ticket_id, Ticket.tenant_id == current_user.tenant_id)
+    )).one_or_none()
+
     return TimerActiveOut(
         active=True,
-        ticket_id=uuid.UUID(ticket_id_str),
+        ticket_id=ticket_id,
+        ticket_number=row.ticket_number if row else None,
+        ticket_title=row.title if row else None,
         started_at=started_at,
         elapsed_seconds=elapsed,
     )
@@ -365,6 +396,138 @@ async def work_logs_summary(
         billable_ratio=round(billable / total, 4) if total > 0 else 0.0,
         log_count=row.cnt,
     )
+
+
+@router.get(
+    "/{tenant_slug}/work-logs/active-timers",
+    response_model=list[ActiveTimerItem],
+    summary="팀 전체 active 타이머 목록 (team_lead+ 전용)",
+)
+async def list_active_timers(
+    tenant_slug: str,
+    current_user: Annotated[User, Depends(require_roles(UserRole.team_lead, UserRole.admin))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> list[ActiveTimerItem]:
+    redis = get_redis()
+    pattern = TIMER_KEY.format(tenant_id=current_user.tenant_id, user_id="*")
+    keys = await redis.keys(pattern)
+    if not keys:
+        return []
+
+    results: list[ActiveTimerItem] = []
+    now = datetime.now(timezone.utc)
+
+    for key in keys:
+        raw = await redis.get(key)
+        if not raw:
+            continue
+        try:
+            ticket_id_str, started_at_iso = raw.decode().split("|", 1)
+            ticket_id = uuid.UUID(ticket_id_str)
+            started_at = datetime.fromisoformat(started_at_iso)
+        except Exception:
+            continue
+
+        user_id_str = key.decode().split(":")[-1]
+        try:
+            user_id = uuid.UUID(user_id_str)
+        except Exception:
+            continue
+
+        user_row = (await db.execute(
+            select(User.id, User.name).where(
+                User.id == user_id,
+                User.tenant_id == current_user.tenant_id,
+            )
+        )).one_or_none()
+
+        ticket_row = (await db.execute(
+            select(Ticket.title, Ticket.ticket_number).where(
+                Ticket.id == ticket_id,
+                Ticket.tenant_id == current_user.tenant_id,
+            )
+        )).one_or_none()
+
+        elapsed = int((now - started_at).total_seconds())
+        results.append(ActiveTimerItem(
+            user_id=user_id,
+            user_name=user_row.name if user_row else None,
+            ticket_id=ticket_id,
+            ticket_number=ticket_row.ticket_number if ticket_row else None,
+            ticket_title=ticket_row.title if ticket_row else None,
+            started_at=started_at,
+            elapsed_seconds=max(0, elapsed),
+        ))
+
+    results.sort(key=lambda x: x.started_at)
+    return results
+
+
+@router.get(
+    "/{tenant_slug}/work-logs/weekly-by-user",
+    response_model=list[WeeklyUserHours],
+    summary="주간 에이전트별 공수 집계 (team_lead+ 전용)",
+)
+async def weekly_hours_by_user(
+    tenant_slug: str,
+    current_user: Annotated[User, Depends(require_roles(UserRole.team_lead, UserRole.admin))] = None,
+    db: AsyncSession = Depends(get_db),
+    since: datetime | None = Query(None),
+    until: datetime | None = Query(None),
+) -> list[WeeklyUserHours]:
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    if since is None:
+        # 이번 주 월요일 00:00 UTC
+        days_since_monday = now.weekday()
+        since = (now - timedelta(days=days_since_monday)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+    if until is None:
+        until = now
+
+    rows = (await db.execute(
+        select(
+            TicketWorkLog.user_id,
+            func.coalesce(func.sum(TicketWorkLog.hours), 0).label("total"),
+            func.coalesce(
+                func.sum(TicketWorkLog.hours).filter(TicketWorkLog.billable.is_(True)), 0
+            ).label("billable"),
+            func.count().label("cnt"),
+        )
+        .where(
+            TicketWorkLog.tenant_id == current_user.tenant_id,
+            TicketWorkLog.logged_at >= since,
+            TicketWorkLog.logged_at <= until,
+            TicketWorkLog.user_id.isnot(None),
+        )
+        .group_by(TicketWorkLog.user_id)
+        .order_by(func.sum(TicketWorkLog.hours).desc())
+    )).all()
+
+    # user_id → name 일괄 조회
+    user_ids = [r.user_id for r in rows if r.user_id]
+    names: dict[uuid.UUID, str | None] = {}
+    if user_ids:
+        user_rows = (await db.execute(
+            select(User.id, User.name).where(
+                User.id.in_(user_ids),
+                User.tenant_id == current_user.tenant_id,
+            )
+        )).all()
+        names = {ur.id: ur.name for ur in user_rows}
+
+    return [
+        WeeklyUserHours(
+            user_id=r.user_id,
+            user_name=names.get(r.user_id),
+            total_hours=round(float(r.total), 2),
+            billable_hours=round(float(r.billable), 2),
+            log_count=r.cnt,
+        )
+        for r in rows
+    ]
 
 
 # ──────────────────────────────────────────────────────────────────────────────

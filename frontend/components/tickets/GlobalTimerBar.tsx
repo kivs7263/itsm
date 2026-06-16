@@ -1,14 +1,17 @@
 'use client';
 
 import * as React from 'react';
-import { Square, Clock } from 'lucide-react';
+import { Square, Clock, ExternalLink } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { WorkLogStopModal } from './WorkLogStopModal';
 
 interface TimerActive {
   active: boolean;
   ticket_id: string | null;
+  ticket_number: string | null;
+  ticket_title: string | null;
   started_at: string | null;
   elapsed_seconds: number | null;
 }
@@ -37,6 +40,7 @@ interface GlobalTimerBarProps {
 }
 
 export function GlobalTimerBar({ tenantSlug }: GlobalTimerBarProps) {
+  const router = useRouter();
   const [showStopModal, setShowStopModal] = React.useState(false);
 
   const { data: timer } = useQuery<TimerActive>({
@@ -50,12 +54,38 @@ export function GlobalTimerBar({ tenantSlug }: GlobalTimerBarProps) {
 
   if (!timer?.active) return null;
 
+  const ticketLabel = timer.ticket_number
+    ? `${timer.ticket_number}`
+    : timer.ticket_id?.slice(0, 6) ?? '';
+
+  function goToTicket() {
+    if (!timer?.ticket_id) return;
+    router.push(`/${tenantSlug}/tickets?focus=${timer.ticket_id}`);
+  }
+
   return (
     <>
-      <div className="flex items-center gap-3 rounded-md bg-amber-500 text-[#1A1A1A] px-3 py-1.5">
-        <Clock size={13} className="shrink-0 animate-pulse" />
-        <span className="text-xs font-medium whitespace-nowrap">타이머 실행 중</span>
+      <div className="flex items-center gap-2 rounded-md bg-amber-500 text-[#1A1A1A] pl-2.5 pr-1.5 py-1">
+        <Clock size={12} className="shrink-0 animate-pulse" />
         <span className="font-mono text-sm font-semibold tabular-nums">{elapsed}</span>
+
+        {/* 티켓 정보 — 클릭 시 해당 티켓으로 이동 */}
+        <button
+          onClick={goToTicket}
+          className="flex items-center gap-1 max-w-[180px] hover:underline"
+          title={timer.ticket_title ?? undefined}
+        >
+          {ticketLabel && (
+            <span className="text-xs font-medium opacity-70 shrink-0">{ticketLabel}</span>
+          )}
+          {timer.ticket_title && (
+            <span className="text-xs truncate">{timer.ticket_title}</span>
+          )}
+          <ExternalLink size={10} className="shrink-0 opacity-60" />
+        </button>
+
+        <div className="w-px h-4 bg-[#1A1A1A]/20 mx-0.5" />
+
         <button
           onClick={() => setShowStopModal(true)}
           className="flex items-center gap-1 rounded bg-[#1A1A1A]/20 hover:bg-[#1A1A1A]/30 px-2 py-0.5 text-xs font-medium transition-colors whitespace-nowrap"

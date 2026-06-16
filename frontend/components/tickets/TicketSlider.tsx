@@ -1,13 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import { X, Send, Play, Square, Plus, Trash2, Clock } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
-import type { Ticket, TicketComment, TicketStatus, TicketPriority } from '@/lib/types';
+import type { Ticket, TicketStatus, TicketPriority } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { formatRelativeTime } from '@/lib/utils';
 import { SlaBadge } from './SlaBadge';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,9 +17,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { WorkLogPanel } from './WorkLogPanel';
+import { ActivityTab } from './ActivityTab';
 import { InstallationStepPanel } from './InstallationStepPanel';
-import { ReplyTemplatePicker } from './ReplyTemplatePicker';
 
 // -----------------------------------------------------------------------
 // 상태/우선순위 배지 색상
@@ -40,7 +38,7 @@ const PRIORITY_LABELS: Record<TicketPriority, string> = {
   critical: '긴급',
 };
 
-type SliderTab = 'conversation' | 'details' | 'work-logs' | 'installation';
+type SliderTab = 'activity' | 'details' | 'installation';
 
 // -----------------------------------------------------------------------
 // Props
@@ -50,35 +48,6 @@ interface TicketSliderProps {
   open: boolean;
   onClose: () => void;
   tenantSlug: string;
-}
-
-// -----------------------------------------------------------------------
-// 댓글 아이템
-// -----------------------------------------------------------------------
-function CommentItem({ comment }: { comment: TicketComment }) {
-  return (
-    <div
-      className={cn(
-        'rounded-lg p-3 text-sm',
-        comment.is_internal
-          ? 'bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800/30'
-          : 'bg-surface-elevated',
-      )}
-    >
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-text-primary">{comment.author_name}</span>
-          {comment.is_internal && (
-            <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
-              내부 메모
-            </span>
-          )}
-        </div>
-        <span className="text-xs text-text-secondary">{formatRelativeTime(comment.created_at)}</span>
-      </div>
-      <p className="text-text-primary whitespace-pre-wrap">{comment.body}</p>
-    </div>
-  );
 }
 
 // -----------------------------------------------------------------------
@@ -141,9 +110,7 @@ function DetailsTab({ ticket }: { ticket: Ticket }) {
 // -----------------------------------------------------------------------
 export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSliderProps) {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = React.useState<SliderTab>('conversation');
-  const [commentBody, setCommentBody] = React.useState('');
-  const [isInternal, setIsInternal] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState<SliderTab>('activity');
 
   // Escape 키로 닫기
   React.useEffect(() => {
@@ -156,11 +123,7 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
 
   // 탭 리셋 (다른 티켓 열 때)
   React.useEffect(() => {
-    if (ticketId) {
-      setActiveTab('conversation');
-      setCommentBody('');
-      setIsInternal(false);
-    }
+    if (ticketId) setActiveTab('activity');
   }, [ticketId]);
 
   // 티켓 상세 조회
@@ -169,19 +132,6 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
     queryFn: () =>
       api.get(`/${tenantSlug}/tickets/${ticketId}`).then((r) => r.data),
     enabled: !!ticketId && open,
-  });
-
-  // 댓글 목록 조회
-  const { data: comments, isLoading: commentsLoading } = useQuery<TicketComment[]>({
-    queryKey: ['ticket-comments', tenantSlug, ticketId],
-    queryFn: () =>
-      api.get(`/${tenantSlug}/tickets/${ticketId}/comments`).then((r) => {
-        const d = r.data;
-        if (Array.isArray(d)) return d;
-        if (Array.isArray(d?.items)) return d.items;
-        return [];
-      }),
-    enabled: !!ticketId && open && activeTab === 'conversation',
   });
 
   // 상태 변경 mutation
@@ -207,26 +157,6 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
-
-  // 댓글 전송 mutation
-  const commentMutation = useMutation({
-    mutationFn: () =>
-      api.post(`/${tenantSlug}/tickets/${ticketId}/comments`, {
-        body: commentBody,
-        is_internal: isInternal,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ticket-comments', tenantSlug, ticketId] });
-      setCommentBody('');
-      setIsInternal(false);
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
-
-  function handleSendComment() {
-    if (!commentBody.trim()) return;
-    commentMutation.mutate();
-  }
 
   return (
     <>
@@ -326,9 +256,8 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
         <div className="flex border-b border-border-default shrink-0">
           {(
             [
-              'conversation',
+              'activity',
               'details',
-              'work-logs',
               ...(ticket?.request_type === 'installation' ? ['installation'] : []),
             ] as SliderTab[]
           ).map((tab) => (
@@ -342,91 +271,19 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
                   : 'text-text-secondary hover:text-text-primary',
               )}
             >
-              {tab === 'conversation'
-                ? '대화'
+              {tab === 'activity'
+                ? '활동'
                 : tab === 'details'
                   ? '상세정보'
-                  : tab === 'work-logs'
-                    ? '공수'
-                    : '설치'}
+                  : '설치'}
             </button>
           ))}
         </div>
 
         {/* 탭 콘텐츠 */}
-        <div className="flex-1 overflow-y-auto min-h-0">
-          {activeTab === 'conversation' && (
-            <div className="flex flex-col h-full">
-              {/* 댓글 목록 */}
-              <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-3">
-                {commentsLoading ? (
-                  <>
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                  </>
-                ) : (comments && comments.length > 0) ? (
-                  comments.map((c) => (
-                    <CommentItem key={c.id} comment={c} />
-                  ))
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full gap-2 text-text-secondary">
-                    <p className="text-sm">아직 대화 내용이 없습니다.</p>
-                    <p className="text-xs">첫 번째 메시지를 보내보세요.</p>
-                  </div>
-                )}
-              </div>
-
-              {/* 댓글 입력창 */}
-              <div className="shrink-0 border-t border-border-default p-4">
-                <div className="flex flex-col gap-2">
-                  <textarea
-                    value={commentBody}
-                    onChange={(e) => setCommentBody(e.target.value)}
-                    placeholder="메시지를 입력하세요..."
-                    rows={3}
-                    className="w-full rounded-md border border-border-default bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-disabled resize-none focus:outline-none focus:ring-2 focus:ring-border-strong"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                        e.preventDefault();
-                        handleSendComment();
-                      }
-                    }}
-                  />
-                  <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={isInternal}
-                        onChange={(e) => setIsInternal(e.target.checked)}
-                        className="h-3.5 w-3.5 rounded border-border-strong accent-brand cursor-pointer"
-                      />
-                      <span className="text-xs text-text-secondary">내부 메모</span>
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <ReplyTemplatePicker
-                        tenantSlug={tenantSlug}
-                        onSelect={(body) =>
-                          setCommentBody((prev) => (prev ? prev + '\n\n' + body : body))
-                        }
-                      />
-                      <Button
-                        size="sm"
-                        onClick={handleSendComment}
-                        isLoading={commentMutation.isPending}
-                        disabled={!commentBody.trim()}
-                        leftIcon={<Send size={12} />}
-                      >
-                        전송
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'work-logs' && ticketId && (
-            <WorkLogPanel ticketId={ticketId} tenantSlug={tenantSlug} />
+        <div className="flex-1 overflow-hidden min-h-0">
+          {activeTab === 'activity' && ticketId && (
+            <ActivityTab ticketId={ticketId} tenantSlug={tenantSlug} />
           )}
 
           {activeTab === 'installation' && ticketId && (
@@ -434,7 +291,7 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
           )}
 
           {activeTab === 'details' && (
-            <div className="p-5">
+            <div className="p-5 overflow-y-auto h-full">
               {ticketLoading ? (
                 <div className="flex flex-col gap-3">
                   {Array.from({ length: 6 }).map((_, i) => (

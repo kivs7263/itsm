@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import React, { useState, useCallback, useEffect } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, LifeBuoy, Inbox, UserPlus, Info, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
@@ -104,6 +104,7 @@ function SkeletonRows() {
           <td className="px-4 py-3"><Skeleton className="h-5 w-12 rounded-full" /></td>
           <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded-full" /></td>
           <td className="px-4 py-3"><Skeleton className="h-5 w-14 rounded-full" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-4 w-10" /></td>
           <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
         </tr>
       ))}
@@ -117,7 +118,7 @@ function SkeletonRows() {
 function EmptyState({ onNew }: { onNew: () => void }) {
   return (
     <tr>
-      <td colSpan={9}>
+      <td colSpan={10}>
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <div
             className="flex h-14 w-14 items-center justify-center rounded-2xl"
@@ -322,6 +323,7 @@ type TicketTab = 'my-tickets' | 'queue';
 
 export default function TicketsPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const tenantSlug = params?.tenantSlug as string;
 
   const [activeTab, setActiveTab] = useState<TicketTab>('my-tickets');
@@ -334,6 +336,15 @@ export default function TicketsPage() {
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [sliderOpen, setSliderOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+
+  // 헤더 타이머에서 클릭 시 ?focus=<id> 로 넘어오면 슬라이더 자동 오픈
+  useEffect(() => {
+    const focusId = searchParams?.get('focus');
+    if (focusId) {
+      setSelectedTicketId(focusId);
+      setSliderOpen(true);
+    }
+  }, [searchParams]);
 
   // 티켓 목록 조회
   const { data, isLoading } = useQuery<TicketsResponse | Ticket[]>({
@@ -512,6 +523,7 @@ export default function TicketsPage() {
               <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">담당자</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">우선순위</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">상태</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">공수</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">SLA</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">생성일</th>
             </tr>
@@ -585,6 +597,14 @@ export default function TicketsPage() {
                   {/* 상태 배지 */}
                   <td className="px-4 py-3">
                     <StatusBadge status={ticket.status} />
+                  </td>
+
+                  {/* 누적 공수 */}
+                  <td className="px-4 py-3 text-xs tabular-nums">
+                    {(ticket as any).total_hours > 0
+                      ? <span className="text-text-primary font-medium">{(ticket as any).total_hours}h</span>
+                      : <span className="text-text-disabled">-</span>
+                    }
                   </td>
 
                   {/* SLA 배지 */}

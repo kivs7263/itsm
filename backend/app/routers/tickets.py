@@ -41,6 +41,7 @@ from app.models import (
     TicketComment,
     TicketPriority,
     TicketStatus,
+    TicketWorkLog,
     User,
     UserRole,
 )
@@ -103,6 +104,7 @@ class TicketOut(BaseModel):
     request_type: str | None
     parent_ticket_id: uuid.UUID | None
     ticket_number: str | None
+    total_hours: float | None = None
     created_at: datetime
     updated_at: datetime
     resolved_at: datetime | None
@@ -280,18 +282,31 @@ async def list_tickets(
     total = await db.scalar(
         select(func.count()).select_from(Ticket).where(where_clause)
     )
+    hours_sq = (
+        select(func.coalesce(func.sum(TicketWorkLog.hours), 0))
+        .where(TicketWorkLog.ticket_id == Ticket.id)
+        .correlate(Ticket)
+        .scalar_subquery()
+    )
+
     rows = (
         await db.execute(
-            select(Ticket)
+            select(Ticket, hours_sq.label("total_hours"))
             .where(where_clause)
             .order_by(Ticket.created_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
-    ).scalars().all()
+    ).all()
+
+    items = []
+    for ticket, total_hours in rows:
+        d = TicketOut.model_validate(ticket).model_dump()
+        d["total_hours"] = round(float(total_hours), 2) if total_hours else 0.0
+        items.append(d)
 
     return {
-        "items": [TicketOut.model_validate(r) for r in rows],
+        "items": items,
         "total": total,
         "page": page,
         "page_size": page_size,

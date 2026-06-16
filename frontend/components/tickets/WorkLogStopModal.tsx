@@ -35,6 +35,7 @@ interface WorkLogStopModalProps {
   onClose: () => void;
   tenantSlug: string;
   elapsed: string;
+  title?: string;
   onStopped?: () => void;
 }
 
@@ -43,6 +44,7 @@ export function WorkLogStopModal({
   onClose,
   tenantSlug,
   elapsed,
+  title,
   onStopped,
 }: WorkLogStopModalProps) {
   const queryClient = useQueryClient();
@@ -87,7 +89,7 @@ export function WorkLogStopModal({
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>작업 일지 기록</DialogTitle>
+          <DialogTitle>{title ?? '작업 일지 기록'}</DialogTitle>
           <p className="text-sm text-text-secondary mt-0.5">
             경과 시간 <span className="font-mono font-semibold text-text-primary">{elapsed}</span>
           </p>
