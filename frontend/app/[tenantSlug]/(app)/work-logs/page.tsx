@@ -10,6 +10,8 @@ import {
   ChevronRight,
   Filter,
   ExternalLink,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { api, getErrorMessage } from '@/lib/api';
@@ -99,10 +101,11 @@ export default function WorkLogsPage() {
   params.set('page',      String(page));
   params.set('page_size', String(PAGE_SIZE));
 
-  const { data, isLoading } = useQuery<PageData>({
+  const { data, isLoading, isError, error, refetch } = useQuery<PageData>({
     queryKey: ['all-work-logs', tenantSlug, filterUserId, filterSince, filterUntil, filterBillable, filterStatus, page],
     queryFn: () => api.get(`/${tenantSlug}/work-logs?${params.toString()}`).then((r) => r.data),
     staleTime: 30000,
+    retry: 1,
   });
 
   const { data: users = [] } = useQuery<UserOption[]>({
@@ -263,7 +266,21 @@ export default function WorkLogsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border-subtle">
-            {isLoading ? (
+            {isError ? (
+            <tr>
+              <td colSpan={isManager ? 9 : 8} className="px-4 py-16 text-center">
+                <AlertCircle size={32} className="mx-auto mb-3 text-red-400" />
+                <p className="text-sm text-text-secondary mb-3">데이터를 불러오지 못했습니다.</p>
+                <button
+                  onClick={() => refetch()}
+                  className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+                >
+                  <RefreshCw size={12} />
+                  다시 시도
+                </button>
+              </td>
+            </tr>
+          ) : isLoading ? (
               Array.from({ length: 10 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
                   <td className="px-4 py-3"><div className="h-4 w-20 bg-surface-hover rounded" /></td>
