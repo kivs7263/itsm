@@ -87,7 +87,9 @@ class Ticket(Base):
         ForeignKey("tickets.id", ondelete="SET NULL"),
         nullable=True,
     )
-    ticket_number = Column(String(25), nullable=True, unique=False)  # TKT-YYYYMMDD-NNNN
+    ticket_number = Column(String(25), nullable=True)  # TKT-YYYYMMDD-NNNN (tenant+number unique via constraint)
+    sla_response_deadline = Column(DateTime(timezone=True), nullable=True)
+    sla_resolution_deadline = Column(DateTime(timezone=True), nullable=True)
     # P5-3 반복 장애 감지
     is_recurring_flag = Column(Boolean, nullable=False, default=False)
     recurring_detected_at = Column(DateTime(timezone=True), nullable=True)

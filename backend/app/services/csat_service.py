@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import logging
 import secrets
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -17,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.csat_survey import CSATSurvey, CSATStatus
 from app.models.ticket import Ticket
+
+logger = logging.getLogger(__name__)
 
 
 async def maybe_create_survey(
@@ -40,12 +43,13 @@ async def maybe_create_survey(
         return None
 
     now = datetime.now(timezone.utc)
+    survey_token = secrets.token_urlsafe(32)
     survey = CSATSurvey(
         id=uuid.uuid4(),
         tenant_id=ticket.tenant_id,
         ticket_id=ticket.id,
         customer_id=ticket.customer_id,
-        survey_token=secrets.token_urlsafe(32),
+        survey_token=survey_token,
         status=CSATStatus.pending,
         sent_at=now,
         expires_at=now + timedelta(days=7),
@@ -53,6 +57,35 @@ async def maybe_create_survey(
     )
     db.add(survey)
     await db.flush()
+
+    # 고객 이메일로 CSAT 링크 발송 (graceful — 이메일 미설정 시 skip)
+    try:
+        from app.services.external_notif_service import queue_notification, resolve_customer_email
+        from app.core.config import settings
+
+        email, name = await resolve_customer_email(db, ticket)
+        if email:
+            portal_base = getattr(settings, "PORTAL_BASE_URL", "").rstrip("/")
+            survey_url = f"{portal_base}/survey/{survey_token}" if portal_base else ""
+            if survey_url:
+                await queue_notification(
+                    db,
+                    tenant_id=ticket.tenant_id,
+                    ticket_id=ticket.id,
+                    escalation_id=None,
+                    channel="email",
+                    event_type="csat_survey",
+                    recipient=email,
+                    payload={
+                        "ticket_title": ticket.title,
+                        "ticket_number": ticket.ticket_number or str(ticket.id)[:8],
+                        "customer_name": name or "고객",
+                        "survey_url": survey_url,
+                    },
+                )
+    except Exception:
+        logger.warning("CSAT 이메일 큐 등록 실패 (무시)", exc_info=True)
+
     return survey
 
 

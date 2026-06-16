@@ -83,6 +83,20 @@ _TEMPLATES: dict[str, dict[str, str]] = {
             "빠른 시일 내 답변 드리겠습니다."
         ),
     },
+    # payload: customer_name, ticket_title, survey_url
+    "csat_survey": {
+        "subject": "[만족도 조사] {{ ticket_title }} 처리 결과 평가",
+        "heading": "처리 결과는 어떠셨나요?",
+        "body": (
+            "{{ customer_name }}님, 안녕하세요.<br>"
+            "<b>'{{ ticket_title }}'</b> 건이 처리 완료되었습니다.<br>"
+            "서비스 품질 향상을 위해 아래 링크에서 간단한 평가를 남겨 주시면 감사하겠습니다.<br><br>"
+            "<a href='{{ survey_url }}' style='display:inline-block;padding:10px 20px;"
+            "background:#F5C000;color:#1A1A1A;text-decoration:none;border-radius:6px;"
+            "font-weight:600;'>만족도 평가하기</a><br><br>"
+            "<span style='color:#999;font-size:12px;'>본 링크는 7일 후 만료됩니다.</span>"
+        ),
+    },
 }
 
 

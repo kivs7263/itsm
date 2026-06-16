@@ -17,6 +17,7 @@ class ContractType(str, enum.Enum):
 
 
 _contract_type_enum = Enum("warranty", "paid", "maintenance", name="contract_type_enum")
+_sla_grade_enum = Enum("bronze", "silver", "gold", "platinum", name="sla_grade_enum", create_type=False)
 
 
 class Contract(Base):
@@ -40,7 +41,7 @@ class Contract(Base):
     linked_business_id = Column(UUID(as_uuid=True), nullable=True)
     name = Column(String(200), nullable=False)
     type = Column(_contract_type_enum, nullable=False)
-    sla_grade = Column(String(50), nullable=False)
+    sla_grade = Column(_sla_grade_enum, nullable=False)
     support_hours = Column(String(100), nullable=True)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)

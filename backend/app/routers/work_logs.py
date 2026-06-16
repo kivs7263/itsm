@@ -260,6 +260,7 @@ async def delete_work_log(
 
     await db.delete(log)
     await db.commit()
+    await _mark_kpi_dirty(db, ticket_id, current_user.tenant_id)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -351,7 +352,7 @@ async def timer_active(
     pattern = TIMER_USER_SCAN.format(
         tenant_id=current_user.tenant_id, user_id=current_user.id
     )
-    keys = await redis.keys(pattern)
+    keys = [key async for key in redis.scan_iter(pattern)]
     if not keys:
         return []
 
@@ -445,7 +446,7 @@ async def list_active_timers(
 ) -> list[ActiveTimerItem]:
     redis = get_redis()
     pattern = TIMER_TENANT_SCAN.format(tenant_id=current_user.tenant_id)
-    keys = await redis.keys(pattern)
+    keys = [key async for key in redis.scan_iter(pattern)]
     if not keys:
         return []
 

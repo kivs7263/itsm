@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -48,6 +48,7 @@ from app.models import (
 from app.services import search_service
 
 logger = logging.getLogger(__name__)
+_SENTINEL = object()  # update_ticket에서 "필드 미전달" vs None 구분용
 
 # 분류 트리 라우터 (/{tenant_slug}/symptom-categories, /{tenant_slug}/cause-categories)
 classification_router = APIRouter(tags=["classifications"])
@@ -104,7 +105,11 @@ class TicketOut(BaseModel):
     request_type: str | None
     parent_ticket_id: uuid.UUID | None
     ticket_number: str | None
+    sla_response_deadline: datetime | None = None
+    sla_resolution_deadline: datetime | None = None
     total_hours: float | None = None
+    customer_name: str | None = None
+    assignee_name: str | None = None
     created_at: datetime
     updated_at: datetime
     resolved_at: datetime | None
@@ -171,13 +176,23 @@ async def _get_ticket_or_404(
 
 
 async def _generate_ticket_number(db: AsyncSession, tenant_id: uuid.UUID) -> str:
-    """TKT-YYYYMMDD-NNNN 형식 ticket_number 생성 (tenant별 daily 시퀀스)."""
+    """TKT-YYYYMMDD-NNNN 형식 ticket_number 생성.
+
+    pg_advisory_xact_lock으로 (tenant, date) 단위 직렬화 — 동시 생성 시 중복 방지.
+    트랜잭션 범위 lock이므로 commit/rollback 시 자동 해제.
+    """
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
     prefix = f"TKT-{today}-"
-    # 오늘 발급된 이 tenant의 최대 시퀀스 조회
+    # advisory lock key: tenant_id + date 기반 정수 (31비트 범위)
+    lock_key = abs(hash(f"{tenant_id}:{today}")) % (2 ** 31)
+    await db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
+
     result = await db.execute(
         text("""
-            SELECT MAX(CAST(SUBSTRING(ticket_number FROM :prefix_len + 1) AS INTEGER))
+            SELECT COALESCE(
+                MAX(CAST(SUBSTRING(ticket_number FROM :prefix_len + 1) AS INTEGER)),
+                0
+            )
             FROM tickets
             WHERE tenant_id = :tid
               AND ticket_number LIKE :prefix
@@ -186,6 +201,36 @@ async def _generate_ticket_number(db: AsyncSession, tenant_id: uuid.UUID) -> str
     )
     max_seq = result.scalar() or 0
     return f"{prefix}{str(max_seq + 1).zfill(4)}"
+
+
+async def _compute_sla_deadlines(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    contract_id: uuid.UUID | None,
+    base_time: datetime,
+) -> tuple[datetime | None, datetime | None]:
+    """계약 SLA 정책에서 response/resolution 마감 시각 계산."""
+    if not contract_id:
+        return None, None
+    row = await db.execute(
+        text("""
+            SELECT sp.response_minutes, sp.resolution_minutes
+            FROM sla_policies sp
+            JOIN contracts c
+                ON c.tenant_id = sp.tenant_id
+               AND sp.grade = c.sla_grade
+            WHERE c.id = :cid AND c.tenant_id = :tid
+            LIMIT 1
+        """),
+        {"cid": str(contract_id), "tid": str(tenant_id)},
+    )
+    policy = row.first()
+    if not policy:
+        return None, None
+    return (
+        base_time + timedelta(minutes=policy.response_minutes),
+        base_time + timedelta(minutes=policy.resolution_minutes),
+    )
 
 
 def _build_category_tree(
@@ -291,23 +336,56 @@ async def list_tickets(
 
     rows = (
         await db.execute(
-            select(Ticket, hours_sq.label("total_hours"))
-            .where(where_clause)
-            .order_by(Ticket.created_at.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+            text("""
+                SELECT
+                    t.*,
+                    COALESCE(SUM(wl.hours), 0) AS total_hours,
+                    cu.name AS customer_name,
+                    us.name AS assignee_name
+                FROM tickets t
+                LEFT JOIN customers cu ON cu.id = t.customer_id
+                LEFT JOIN users us ON us.id = t.assigned_to
+                LEFT JOIN ticket_work_logs wl ON wl.ticket_id = t.id
+                WHERE t.tenant_id = :tenant_id
+                  {status_cond}
+                  {priority_cond}
+                  {assigned_cond}
+                  {customer_cond}
+                  {search_cond}
+                GROUP BY t.id, cu.name, us.name
+                ORDER BY t.created_at DESC
+                LIMIT :limit OFFSET :offset
+            """.format(
+                status_cond="AND t.status = :status" if ticket_status else "",
+                priority_cond="AND t.priority = :priority" if priority else "",
+                assigned_cond="AND t.assigned_to = :assigned_to" if assigned_to else "",
+                customer_cond="AND t.customer_id = :customer_id" if customer_id else "",
+                search_cond="AND t.title ILIKE :search" if search else "",
+            )),
+            {
+                "tenant_id": str(current_user.tenant_id),
+                **( {"status": ticket_status.value if hasattr(ticket_status, "value") else ticket_status} if ticket_status else {}),
+                **( {"priority": priority.value if hasattr(priority, "value") else priority} if priority else {}),
+                **( {"assigned_to": str(assigned_to)} if assigned_to else {}),
+                **( {"customer_id": str(customer_id)} if customer_id else {}),
+                **( {"search": f"%{search}%"} if search else {}),
+                "limit": page_size,
+                "offset": (page - 1) * page_size,
+            },
         )
-    ).all()
+    ).mappings().all()
 
     items = []
-    for ticket, total_hours in rows:
-        d = TicketOut.model_validate(ticket).model_dump()
-        d["total_hours"] = round(float(total_hours), 2) if total_hours else 0.0
+    for row in rows:
+        d = dict(row)
+        d["total_hours"] = round(float(d.get("total_hours") or 0), 2)
+        d["customer_name"] = d.get("customer_name")
+        d["assignee_name"] = d.get("assignee_name")
         items.append(d)
 
     return {
         "items": items,
-        "total": total,
+        "total": total or 0,
         "page": page,
         "page_size": page_size,
     }
@@ -331,6 +409,10 @@ async def create_ticket(
     db: AsyncSession = Depends(get_db),
 ) -> TicketOut:
     ticket_number = await _generate_ticket_number(db, current_user.tenant_id)
+    now = datetime.now(timezone.utc)
+    sla_response_deadline, sla_resolution_deadline = await _compute_sla_deadlines(
+        db, current_user.tenant_id, data.contract_id, now
+    )
     ticket = Ticket(
         id=uuid.uuid4(),
         tenant_id=current_user.tenant_id,
@@ -346,6 +428,8 @@ async def create_ticket(
         request_type=data.request_type,
         parent_ticket_id=data.parent_ticket_id,
         ticket_number=ticket_number,
+        sla_response_deadline=sla_response_deadline,
+        sla_resolution_deadline=sla_resolution_deadline,
     )
     db.add(ticket)
     await db.commit()
@@ -435,23 +519,31 @@ async def update_ticket(
     ticket = await _get_ticket_or_404(db, current_user.tenant_id, ticket_id)
 
     update_fields = data.model_dump(exclude_unset=True)
+    new_contract_id = update_fields.get("contract_id", _SENTINEL)
+
     for field, value in update_fields.items():
         if field == "status" and value is not None:
             _apply_resolved_closed(ticket, value)
-            # 티켓 상태가 resolved 또는 closed로 변경 시 CSAT 설문 자동 생성
+            # resolved/closed → CSAT 설문 자동 생성 + 이메일 발송
             if value in (TicketStatus.resolved, TicketStatus.closed):
                 from app.services.csat_service import maybe_create_survey
                 await maybe_create_survey(db, ticket)
-            # 티켓 해결 시 고객 알림 (graceful)
+            # 해결 알림 (graceful)
             if value == TicketStatus.resolved:
                 try:
                     from app.services.notification_service import notify_ticket_resolved
-                    # customer_phone은 None — 실제 운영 시 Customer 테이블 조회로 교체 가능
-                    # dispatch는 None이면 카카오/SMS 자동 skip, 웹훅은 발송
                     await notify_ticket_resolved(db, ticket, customer_phone=None)
                 except Exception:
                     pass
         setattr(ticket, field, value)
+
+    # contract_id 변경 시 SLA deadline 재계산
+    if new_contract_id is not _SENTINEL:
+        r_dl, res_dl = await _compute_sla_deadlines(
+            db, current_user.tenant_id, new_contract_id, ticket.created_at
+        )
+        ticket.sla_response_deadline = r_dl
+        ticket.sla_resolution_deadline = res_dl
 
     await db.commit()
     await db.refresh(ticket)

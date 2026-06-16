@@ -80,17 +80,19 @@ async def _check_sla_once(_engine, redis) -> None:
             rows = await session.execute(
                 text("""
                     SELECT
-                        t.id              AS ticket_id,
+                        t.id                     AS ticket_id,
                         t.tenant_id,
                         t.created_at,
                         t.status,
+                        t.sla_response_deadline,
+                        t.sla_resolution_deadline,
                         sp.response_minutes,
                         sp.resolution_minutes
                     FROM tickets t
                     JOIN contracts c ON c.id = t.contract_id
                     JOIN sla_policies sp
                         ON sp.tenant_id = t.tenant_id
-                        AND sp.grade = c.sla_grade::sla_grade_enum
+                        AND sp.grade = c.sla_grade
                     WHERE t.status NOT IN ('resolved', 'closed')
                       AND t.contract_id IS NOT NULL
                 """)
@@ -104,7 +106,20 @@ async def _check_sla_once(_engine, redis) -> None:
                 if created_at.tzinfo is None:
                     created_at = created_at.replace(tzinfo=timezone.utc)
 
-                response_deadline = created_at + timedelta(minutes=row.response_minutes)
+                # DB에 저장된 deadline 우선 사용, 없으면 policy 분으로 계산
+                if row.sla_response_deadline:
+                    response_deadline = row.sla_response_deadline
+                    if response_deadline.tzinfo is None:
+                        response_deadline = response_deadline.replace(tzinfo=timezone.utc)
+                else:
+                    response_deadline = created_at + timedelta(minutes=row.response_minutes)
+
+                if row.sla_resolution_deadline:
+                    resolution_deadline = row.sla_resolution_deadline
+                    if resolution_deadline.tzinfo is None:
+                        resolution_deadline = resolution_deadline.replace(tzinfo=timezone.utc)
+                else:
+                    resolution_deadline = created_at + timedelta(minutes=row.resolution_minutes)
 
                 # breach_warning: response_deadline 30분 이내 + 아직 경과 안 됨
                 if 0 < (response_deadline - now).total_seconds() <= 1800:
@@ -122,7 +137,7 @@ async def _check_sla_once(_engine, redis) -> None:
                             session, row.tenant_id, ticket_id, "sla_warning"
                         )
 
-                # breached: response_deadline 경과
+                # response breached
                 elif now >= response_deadline:
                     breach_key = f"itsm:sla:breach:{ticket_id}"
                     if await redis.set(breach_key, "1", nx=True, ex=86400):
@@ -133,7 +148,23 @@ async def _check_sla_once(_engine, redis) -> None:
                             """),
                             {"tid": str(row.tenant_id), "tickid": str(ticket_id)},
                         )
-                        logger.info("SLA breached: ticket=%s", ticket_id)
+                        logger.info("SLA response breached: ticket=%s", ticket_id)
+                        await _enqueue_sla_notification(
+                            session, row.tenant_id, ticket_id, "sla_warning"
+                        )
+
+                # resolution breached (별도 키로 중복 방지)
+                if now >= resolution_deadline:
+                    res_breach_key = f"itsm:sla:res_breach:{ticket_id}"
+                    if await redis.set(res_breach_key, "1", nx=True, ex=86400):
+                        await session.execute(
+                            text("""
+                                INSERT INTO sla_events (id, tenant_id, ticket_id, event_type, fired_at)
+                                VALUES (gen_random_uuid(), :tid, :tickid, 'breached', now())
+                            """),
+                            {"tid": str(row.tenant_id), "tickid": str(ticket_id)},
+                        )
+                        logger.info("SLA resolution breached: ticket=%s", ticket_id)
                         await _enqueue_sla_notification(
                             session, row.tenant_id, ticket_id, "sla_warning"
                         )
