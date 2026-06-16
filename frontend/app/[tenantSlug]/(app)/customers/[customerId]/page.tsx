@@ -891,48 +891,251 @@ function InfraTab({ tenantSlug, customerId }: { tenantSlug: string; customerId: 
 // -----------------------------------------------------------------------
 // 탭: 티켓
 // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 지원 이력 타임라인 — 유틸
+// -----------------------------------------------------------------------
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+}
+
+interface SupportHistoryItem {
+  id: string;
+  ticket_number: string | null;
+  title: string;
+  request_type: string | null;
+  status: string;
+  priority: string;
+  created_at: string;
+  resolved_at: string | null;
+  closed_at: string | null;
+  total_hours: number;
+  billable_hours: number;
+  escalation_count: number;
+  escalation_team_names: string[];
+  assigned_user_name: string | null;
+  contract_name: string | null;
+  linked_kb_article_id: string | null;
+}
+
+interface SupportHistoryResponse {
+  items: SupportHistoryItem[];
+  total: number;
+}
+
+type SupportHistoryFilter = 'all' | 'active' | 'done';
+
+const REQUEST_TYPE_BADGE: Record<string, string> = {
+  incident: 'bg-red-100 text-red-700',
+  installation: 'bg-blue-100 text-blue-700',
+  upgrade: 'bg-purple-100 text-purple-700',
+  service_request: 'bg-green-100 text-green-700',
+  maintenance: 'bg-gray-100 text-gray-600',
+  technical_inquiry: 'bg-gray-100 text-gray-600',
+};
+
+const REQUEST_TYPE_LABEL: Record<string, string> = {
+  incident: '장애 지원',
+  installation: '설치',
+  upgrade: '업그레이드',
+  service_request: '서비스 요청',
+  maintenance: '유지보수',
+  technical_inquiry: '기술 문의',
+};
+
+const STATUS_BADGE: Record<string, string> = {
+  open: 'bg-blue-100 text-blue-700',
+  in_progress: 'bg-indigo-100 text-indigo-700',
+  pending: 'bg-amber-100 text-amber-700',
+  resolved: 'bg-green-100 text-green-700',
+  closed: 'bg-gray-100 text-gray-600',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  open: '접수',
+  in_progress: '처리 중',
+  pending: '대기',
+  resolved: '해결',
+  closed: '종료',
+};
+
+const PRIORITY_BADGE: Record<string, string> = {
+  critical: 'bg-red-100 text-red-700',
+  high: 'bg-orange-100 text-orange-700',
+  medium: 'bg-yellow-100 text-yellow-700',
+  low: 'bg-gray-100 text-gray-600',
+};
+
+const PRIORITY_LABEL: Record<string, string> = {
+  critical: '긴급',
+  high: '높음',
+  medium: '보통',
+  low: '낮음',
+};
+
+const STATUS_LEFT_BORDER: Record<string, string> = {
+  open: 'border-l-4 border-l-blue-500',
+  in_progress: 'border-l-4 border-l-blue-500',
+  pending: 'border-l-4 border-l-amber-400',
+  resolved: 'border-l-4 border-l-green-500',
+  closed: 'border-l-4 border-l-green-500',
+};
+
+function SupportHistoryCard({ item }: { item: SupportHistoryItem }) {
+  const borderClass = STATUS_LEFT_BORDER[item.status] ?? 'border-l-4 border-l-gray-300';
+  const requestBadge = REQUEST_TYPE_BADGE[item.request_type ?? ''] ?? 'bg-gray-100 text-gray-600';
+  const requestLabel = REQUEST_TYPE_LABEL[item.request_type ?? ''] ?? item.request_type ?? '';
+  const statusBadge = STATUS_BADGE[item.status] ?? 'bg-gray-100 text-gray-600';
+  const statusLabel = STATUS_LABEL[item.status] ?? item.status;
+  const priorityBadge = PRIORITY_BADGE[item.priority] ?? 'bg-gray-100 text-gray-600';
+  const priorityLabel = PRIORITY_LABEL[item.priority] ?? item.priority;
+
+  const endDate = item.resolved_at ?? item.closed_at;
+  const dateRange = endDate
+    ? `${fmtDate(item.created_at)} → ${fmtDate(endDate)}`
+    : `${fmtDate(item.created_at)} → 진행 중`;
+
+  return (
+    <div className={cn('bg-surface-raised rounded-lg p-4', borderClass)}>
+      {/* 상단 행: 뱃지들 + 티켓 번호 */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {item.request_type && (
+            <span className={cn('px-2 py-0.5 rounded text-xs font-medium', requestBadge)}>
+              {requestLabel}
+            </span>
+          )}
+          <span className={cn('px-2 py-0.5 rounded text-xs font-medium', statusBadge)}>
+            {statusLabel}
+          </span>
+          <span className={cn('px-2 py-0.5 rounded text-xs font-medium', priorityBadge)}>
+            {priorityLabel}
+          </span>
+        </div>
+        {item.ticket_number && (
+          <span className="text-xs font-mono text-text-secondary shrink-0">
+            {item.ticket_number}
+          </span>
+        )}
+      </div>
+
+      {/* 제목 */}
+      <p className="text-sm font-medium text-text-primary mb-2">{item.title}</p>
+
+      {/* 날짜/기간 */}
+      <p className="text-xs text-text-secondary mb-1.5">
+        <span className="mr-1">🗓</span>
+        {dateRange}
+        {item.total_hours > 0 && (
+          <span className="ml-1.5 text-text-secondary">({item.total_hours}h 공수)</span>
+        )}
+      </p>
+
+      {/* 담당자 / 계약 */}
+      {(item.assigned_user_name || item.contract_name) && (
+        <p className="text-xs text-text-secondary mb-1.5">
+          {item.assigned_user_name && (
+            <span className="mr-3"><span className="mr-1">👤</span>{item.assigned_user_name}</span>
+          )}
+          {item.contract_name && (
+            <span><span className="mr-1">📄</span>{item.contract_name}</span>
+          )}
+        </p>
+      )}
+
+      {/* 에스컬레이션 / KB */}
+      {(item.escalation_count > 0 || item.linked_kb_article_id) && (
+        <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+          {item.escalation_count > 0 && item.escalation_team_names.length > 0 && (
+            item.escalation_team_names.map((name) => (
+              <span
+                key={name}
+                className="px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700"
+              >
+                에스컬레이션: {name}
+              </span>
+            ))
+          )}
+          {item.linked_kb_article_id && (
+            <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+              KB 연결
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TicketsTab({ tenantSlug, customerId }: { tenantSlug: string; customerId: string }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ['customer-tickets', tenantSlug, customerId],
+  const [filter, setFilter] = useState<SupportHistoryFilter>('all');
+
+  const { data, isLoading } = useQuery<SupportHistoryResponse>({
+    queryKey: ['customer-support-history', tenantSlug, customerId],
     queryFn: () =>
-      api.get(`/${tenantSlug}/tickets`, { params: { customer_id: customerId, page_size: 50 } })
+      api.get(`/${tenantSlug}/customers/${customerId}/support-history`)
         .then((r) => r.data),
   });
 
-  const tickets: Ticket[] = data?.items ?? [];
+  const allItems: SupportHistoryItem[] = data?.items ?? [];
+  const total = data?.total ?? 0;
 
-  if (isLoading) return <div className="p-6"><Skeleton className="h-40 w-full" /></div>;
+  const filteredItems = allItems.filter((item) => {
+    if (filter === 'active') return ['open', 'in_progress', 'pending'].includes(item.status);
+    if (filter === 'done') return ['resolved', 'closed'].includes(item.status);
+    return true;
+  });
 
-  if (tickets.length === 0) {
+  if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-text-secondary text-sm">
-        연결된 티켓이 없습니다.
+      <div className="p-6 space-y-3">
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
       </div>
     );
   }
 
   return (
-    <div className="overflow-auto">
-      <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-surface border-b border-border-default">
-          <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">번호</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">제목</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">상태</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">생성일</th>
-          </tr>
-        </thead>
-        <tbody>
-          {tickets.map((t) => (
-            <tr key={t.id} className="border-b border-border-subtle">
-              <td className="px-4 py-2.5 text-text-secondary font-mono text-xs">{t.id.slice(0, 8)}</td>
-              <td className="px-4 py-2.5 text-text-primary">{t.title}</td>
-              <td className="px-4 py-2.5 text-text-secondary capitalize">{t.status}</td>
-              <td className="px-4 py-2.5 text-text-secondary text-xs">{formatRelativeTime(t.created_at)}</td>
-            </tr>
+    <div className="p-4 space-y-3">
+      {/* 상단: 건수 + 필터 */}
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm text-text-secondary">
+          지원 이력 <strong className="text-text-primary">{total}건</strong>
+        </span>
+        <div className="flex items-center gap-1 bg-surface-raised rounded-lg p-1">
+          {([
+            { value: 'all', label: '전체' },
+            { value: 'active', label: '진행 중' },
+            { value: 'done', label: '완료' },
+          ] as { value: SupportHistoryFilter; label: string }[]).map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setFilter(value)}
+              className={cn(
+                'px-3 py-1 rounded-md text-xs font-medium transition-colors',
+                filter === value
+                  ? 'bg-surface text-text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary',
+              )}
+            >
+              {label}
+            </button>
           ))}
-        </tbody>
-      </table>
+        </div>
+      </div>
+
+      {/* 목록 */}
+      {filteredItems.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-text-secondary text-sm">
+          지원 이력이 없습니다.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filteredItems.map((item) => (
+            <SupportHistoryCard key={item.id} item={item} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

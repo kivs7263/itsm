@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { X } from 'lucide-react';
+import { X, ExternalLink } from 'lucide-react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
@@ -221,13 +222,22 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
               </div>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="shrink-0 rounded-md p-1.5 text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-            aria-label="닫기"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {ticketId && (
+              <Link href={`/${tenantSlug}/tickets/${ticketId}`}>
+                <Button variant="ghost" size="icon" title="전체 화면으로 보기" className="h-8 w-8">
+                  <ExternalLink size={16} />
+                </Button>
+              </Link>
+            )}
+            <button
+              onClick={onClose}
+              className="rounded-md p-1.5 text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+              aria-label="닫기"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* 상태/우선순위 컨트롤 */}

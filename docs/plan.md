@@ -63,6 +63,24 @@
 
 ---
 
+## Phase STRUCT: ITSM 구조 개선
+> 2026-06-16 | 구조 진단 기반 — 계층 구조·이력·상세 뷰 3가지 결함 수정
+> 문제: 티켓 생성 시 고객 미연결 / 고객 지원 이력 뷰 없음 / 티켓 전용 페이지 없음
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `STRUCT-1` | CreateTicketModal 고객/계약 연결 — 고객 검색 콤보박스 + 계약 드롭다운 + SLA 자동 적용 알림 | S | `[ DONE 2026-06-16 ]` |
+| `STRUCT-2a` | Backend: `GET /customers/{id}/support-history` — worklogs 합계·에스컬레이션 경로·계약명 조인 | M | `[ DONE 2026-06-16 ]` |
+| `STRUCT-2b` | Frontend: 고객 상세 TicketsTab → 지원 이력 타임라인 탭 교체 (STRUCT-2a 선행) | M | `[ DONE 2026-06-16 ]` |
+| `STRUCT-3` | Frontend: 티켓 전용 풀 페이지 `/tickets/[ticketId]` + TicketSlider 딥링크 버튼 | M | `[ DONE 2026-06-16 ]` |
+
+**성공 기준**:
+- 티켓 생성 시 고객 선택 → 계약 자동 로드 → SLA 등급 표시
+- 고객 상세 > 지원 이력 탭에서 티켓별 기간·공수·에스컬레이션·담당자 확인
+- 티켓 번호로 URL 딥링크 공유 가능 (`/[slug]/tickets/[ticketId]`)
+
+---
+
 ## Phase WL: 공수/작업 UX 전면 개선
 > 2026-06-16 | 리서치 기반 — 업계 표준 대비 구조적 결함 수정
 > Freshdesk/Linear/Jira SM 패턴 적용

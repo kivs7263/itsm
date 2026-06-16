@@ -5,18 +5,19 @@ prefix : /{tenant_slug}/customers
 격리   : 모든 쿼리 tenant_id == current_user.tenant_id
 
 엔드포인트:
-  GET    /{tenant_slug}/customers                          — 목록 (search + 페이지네이션)
-  POST   /{tenant_slug}/customers                          — 생성
-  GET    /{tenant_slug}/customers/{id}                     — 상세
-  PATCH  /{tenant_slug}/customers/{id}                     — 수정
-  DELETE /{tenant_slug}/customers/{id}                     — 삭제 (admin/team_lead)
-  POST   /{tenant_slug}/customers/{id}/divisions           — 하위 부서 등록
-  GET    /{tenant_slug}/customers/{id}/tree                — 하위 부서 트리 (recursive CTE)
-  GET    /{tenant_slug}/customers/{id}/rollup              — 상위 기준 집계
-  GET    /{tenant_slug}/customers/{id}/notes               — 메모 목록
-  POST   /{tenant_slug}/customers/{id}/notes               — 메모 작성
-  PATCH  /{tenant_slug}/customers/{id}/notes/{note_id}     — 메모 수정
-  DELETE /{tenant_slug}/customers/{id}/notes/{note_id}     — 메모 삭제
+  GET    /{tenant_slug}/customers                                    — 목록 (search + 페이지네이션)
+  POST   /{tenant_slug}/customers                                    — 생성
+  GET    /{tenant_slug}/customers/{id}                               — 상세
+  PATCH  /{tenant_slug}/customers/{id}                               — 수정
+  DELETE /{tenant_slug}/customers/{id}                               — 삭제 (admin/team_lead)
+  POST   /{tenant_slug}/customers/{id}/divisions                     — 하위 부서 등록
+  GET    /{tenant_slug}/customers/{id}/tree                          — 하위 부서 트리 (recursive CTE)
+  GET    /{tenant_slug}/customers/{id}/rollup                        — 상위 기준 집계
+  GET    /{tenant_slug}/customers/{id}/notes                         — 메모 목록
+  POST   /{tenant_slug}/customers/{id}/notes                         — 메모 작성
+  PATCH  /{tenant_slug}/customers/{id}/notes/{note_id}               — 메모 수정
+  DELETE /{tenant_slug}/customers/{id}/notes/{note_id}               — 메모 삭제
+  GET    /{tenant_slug}/customers/{id}/support-history               — 고객 지원 이력 (tickets 집계)
 """
 from __future__ import annotations
 
@@ -869,6 +870,168 @@ async def delete_contact(
 
     await db.delete(contact)
     await db.commit()
+
+
+# ------------------------------------------------------------------
+# 고객 지원 이력 (support-history)
+# ------------------------------------------------------------------
+
+
+class SupportHistoryItem(BaseModel):
+    id: uuid.UUID
+    ticket_number: str | None
+    title: str
+    request_type: str | None
+    status: str
+    priority: str
+    created_at: datetime
+    resolved_at: datetime | None
+    closed_at: datetime | None
+    total_hours: float
+    billable_hours: float
+    escalation_count: int
+    escalation_team_names: list[str]
+    assigned_user_name: str | None
+    contract_name: str | None
+    linked_kb_article_id: uuid.UUID | None
+
+
+class SupportHistoryOut(BaseModel):
+    items: list[SupportHistoryItem]
+    total: int
+
+
+@router.get(
+    "/{customer_id}/support-history",
+    response_model=SupportHistoryOut,
+    summary="고객 지원 이력 (티켓 집계 포함)",
+)
+async def get_support_history(
+    tenant_slug: str,
+    customer_id: uuid.UUID,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status: str | None = Query(None, pattern="^(open|in_progress|pending|resolved|closed)$"),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> SupportHistoryOut:
+    await _get_or_404(db, current_user.tenant_id, customer_id)
+
+    tid = current_user.tenant_id
+    cid = customer_id
+    offset = (page - 1) * page_size
+
+    status_filter = "AND t.status = :status" if status else ""
+
+    count_sql = text(f"""
+        SELECT COUNT(*)
+        FROM tickets t
+        WHERE t.tenant_id = :tid
+          AND t.customer_id = :cid
+          {status_filter}
+    """)
+    count_params: dict = {"tid": tid, "cid": cid}
+    if status:
+        count_params["status"] = status
+
+    total = (await db.execute(count_sql, count_params)).scalar() or 0
+
+    history_sql = text(f"""
+        SELECT
+            t.id,
+            t.ticket_number,
+            t.title,
+            t.request_type,
+            t.status,
+            t.priority,
+            t.created_at,
+            t.resolved_at,
+            t.closed_at,
+            t.assigned_to,
+            t.contract_id,
+            COALESCE(wl.total_hours, 0.0)    AS total_hours,
+            COALESCE(wl.billable_hours, 0.0) AS billable_hours,
+            COALESCE(esc.escalation_count, 0) AS escalation_count,
+            COALESCE(esc.team_names, ARRAY[]::text[]) AS escalation_team_names,
+            u.name                            AS assigned_user_name,
+            c.name                            AS contract_name,
+            kb.id                             AS linked_kb_article_id
+        FROM tickets t
+        -- 공수 집계 서브쿼리
+        LEFT JOIN (
+            SELECT
+                ticket_id,
+                SUM(hours)                                           AS total_hours,
+                SUM(CASE WHEN billable THEN hours ELSE 0 END)        AS billable_hours
+            FROM ticket_work_logs
+            WHERE tenant_id = :tid
+            GROUP BY ticket_id
+        ) wl ON wl.ticket_id = t.id
+        -- 에스컬레이션 집계 서브쿼리
+        LEFT JOIN (
+            SELECT
+                te.ticket_id,
+                COUNT(te.id)                        AS escalation_count,
+                ARRAY_AGG(st.name ORDER BY te.created_at) AS team_names
+            FROM ticket_escalations te
+            JOIN support_teams st ON st.id = te.to_team_id
+            WHERE te.tenant_id = :tid
+            GROUP BY te.ticket_id
+        ) esc ON esc.ticket_id = t.id
+        -- 담당자
+        LEFT JOIN users u ON u.id = t.assigned_to
+        -- 계약
+        LEFT JOIN contracts c ON c.id = t.contract_id
+        -- KB 문서 (LIMIT 1 — DISTINCT ON 사용)
+        LEFT JOIN LATERAL (
+            SELECT id
+            FROM kb_articles
+            WHERE linked_ticket_id = t.id
+              AND tenant_id = :tid
+            ORDER BY created_at ASC
+            LIMIT 1
+        ) kb ON TRUE
+        WHERE t.tenant_id = :tid
+          AND t.customer_id = :cid
+          {status_filter}
+        ORDER BY t.created_at DESC
+        LIMIT :limit OFFSET :offset
+    """)
+
+    query_params: dict = {
+        "tid": tid,
+        "cid": cid,
+        "limit": page_size,
+        "offset": offset,
+    }
+    if status:
+        query_params["status"] = status
+
+    rows = (await db.execute(history_sql, query_params)).fetchall()
+
+    items = [
+        SupportHistoryItem(
+            id=r.id,
+            ticket_number=r.ticket_number,
+            title=r.title,
+            request_type=r.request_type,
+            status=r.status,
+            priority=r.priority,
+            created_at=r.created_at,
+            resolved_at=r.resolved_at,
+            closed_at=r.closed_at,
+            total_hours=float(r.total_hours),
+            billable_hours=float(r.billable_hours),
+            escalation_count=int(r.escalation_count),
+            escalation_team_names=list(r.escalation_team_names) if r.escalation_team_names else [],
+            assigned_user_name=r.assigned_user_name,
+            contract_name=r.contract_name,
+            linked_kb_article_id=r.linked_kb_article_id,
+        )
+        for r in rows
+    ]
+
+    return SupportHistoryOut(items=items, total=total)
 
 
 # ------------------------------------------------------------------

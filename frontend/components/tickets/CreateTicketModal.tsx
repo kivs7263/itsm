@@ -14,9 +14,10 @@ import {
   MessageSquare,
   ClipboardCheck,
   ArrowLeft,
+  X,
 } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
-import type { KnownIssue, SymptomCategory } from '@/lib/types';
+import type { KnownIssue, SymptomCategory, Customer, Contract, ContractTier } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -106,6 +107,8 @@ const createTicketSchema = z.object({
   channel: z.enum(['email', 'phone', 'portal', 'internal']),
   source: z.string().optional(),
   symptom_category_id: z.string().optional(),
+  customer_id: z.string().optional(),
+  contract_id: z.string().optional(),
 });
 
 type CreateTicketValues = z.infer<typeof createTicketSchema>;
@@ -167,6 +170,16 @@ function RequestTypeStep({
 }
 
 // -----------------------------------------------------------------------
+// SLA 등급 뱃지 색상
+// -----------------------------------------------------------------------
+const SLA_GRADE_CONFIG: Record<string, { label: string; cls: string; desc: string }> = {
+  bronze:   { label: 'Bronze',   cls: 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300', desc: '응답 8시간 이내' },
+  silver:   { label: 'Silver',   cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',       desc: '응답 4시간 이내' },
+  gold:     { label: 'Gold',     cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',   desc: '응답 2시간 이내' },
+  platinum: { label: 'Platinum', cls: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400', desc: '응답 1시간 이내' },
+};
+
+// -----------------------------------------------------------------------
 // Step 2: 유형별 폼
 // -----------------------------------------------------------------------
 function TicketFormStep({
@@ -183,6 +196,70 @@ function TicketFormStep({
   const queryClient = useQueryClient();
   const typeInfo = REQUEST_TYPES.find((t) => t.id === requestType)!;
   const Icon = typeInfo.icon;
+
+  // 고객/계약 상태 (Zod 폼 외부 관리 — 검색 UI가 복잡)
+  const [customerQuery, setCustomerQuery] = React.useState('');
+  const [selectedCustomer, setSelectedCustomer] = React.useState<Customer | null>(null);
+  const [selectedContractId, setSelectedContractId] = React.useState<string>('');
+  const [customerDropdownOpen, setCustomerDropdownOpen] = React.useState(false);
+  const searchTimerRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const [debouncedQuery, setDebouncedQuery] = React.useState('');
+
+  // 고객 검색 debounce
+  React.useEffect(() => {
+    clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedQuery(customerQuery);
+    }, 300);
+    return () => clearTimeout(searchTimerRef.current);
+  }, [customerQuery]);
+
+  // 고객 검색 쿼리
+  const { data: customerSearchData } = useQuery<{ items: Customer[] }>({
+    queryKey: ['customer-search', tenantSlug, debouncedQuery],
+    queryFn: () =>
+      api
+        .get(`/${tenantSlug}/customers`, { params: { search: debouncedQuery, page_size: 10 } })
+        .then((r) => r.data),
+    enabled: debouncedQuery.length > 0 && !selectedCustomer,
+    staleTime: 30 * 1000,
+  });
+
+  const customerResults: Customer[] = customerSearchData?.items ?? [];
+
+  // 계약 목록 (고객 선택 후 활성화)
+  const { data: contractsData } = useQuery<{ items: Contract[] }>({
+    queryKey: ['contracts-for-ticket', tenantSlug, selectedCustomer?.id],
+    queryFn: () =>
+      api
+        .get(`/${tenantSlug}/contracts`, {
+          params: { customer_id: selectedCustomer!.id, page_size: 20 },
+        })
+        .then((r) => r.data),
+    enabled: !!selectedCustomer,
+    staleTime: 60 * 1000,
+  });
+
+  const contracts: Contract[] = contractsData?.items ?? [];
+
+  // 선택된 계약
+  const selectedContract = contracts.find((c) => c.id === selectedContractId) ?? null;
+
+  // 고객 선택 시 계약 초기화
+  function handleSelectCustomer(customer: Customer) {
+    setSelectedCustomer(customer);
+    setCustomerQuery(customer.company ? `${customer.name} (${customer.company})` : customer.name);
+    setCustomerDropdownOpen(false);
+    setSelectedContractId('');
+  }
+
+  // 고객 선택 해제
+  function handleClearCustomer() {
+    setSelectedCustomer(null);
+    setCustomerQuery('');
+    setSelectedContractId('');
+    setCustomerDropdownOpen(false);
+  }
 
   const {
     register,
@@ -242,6 +319,8 @@ function TicketFormStep({
       await api.post(`/${tenantSlug}/tickets`, {
         ...values,
         request_type: requestType,
+        customer_id: selectedCustomer?.id || undefined,
+        contract_id: selectedContractId || undefined,
       });
       toast.success('티켓이 생성되었습니다.');
       await queryClient.invalidateQueries({ queryKey: ['tickets', tenantSlug] });
@@ -261,6 +340,98 @@ function TicketFormStep({
         </div>
 
         <div className="flex flex-col gap-4">
+          {/* 고객 선택 */}
+          <FormField label="고객">
+            <div className="relative">
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={customerQuery}
+                  onChange={(e) => {
+                    setCustomerQuery(e.target.value);
+                    if (!selectedCustomer) setCustomerDropdownOpen(true);
+                    else setSelectedCustomer(null);
+                  }}
+                  onFocus={() => {
+                    if (!selectedCustomer && customerQuery.length > 0) setCustomerDropdownOpen(true);
+                  }}
+                  placeholder="고객명 검색..."
+                  readOnly={!!selectedCustomer}
+                  className="h-9 w-full rounded-md border border-border-default bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
+                />
+                {selectedCustomer && (
+                  <button
+                    type="button"
+                    onClick={handleClearCustomer}
+                    className="shrink-0 rounded p-1.5 text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+                    aria-label="고객 선택 해제"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              {/* 검색 결과 드롭다운 */}
+              {customerDropdownOpen && customerResults.length > 0 && (
+                <ul className="absolute z-10 mt-1 w-full rounded-md border border-border-default bg-surface shadow-lg max-h-48 overflow-y-auto">
+                  {customerResults.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectCustomer(c)}
+                        className="w-full text-left px-3 py-2 text-sm text-text-primary hover:bg-surface-hover transition-colors"
+                      >
+                        {c.name}
+                        {c.company && (
+                          <span className="ml-1 text-text-secondary">({c.company})</span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </FormField>
+
+          {/* 계약 선택 */}
+          <FormField label="계약">
+            <Select
+              value={selectedContractId}
+              onValueChange={setSelectedContractId}
+              disabled={!selectedCustomer}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={selectedCustomer ? '계약 선택...' : '고객을 먼저 선택하세요'} />
+              </SelectTrigger>
+              <SelectContent>
+                {contracts.map((contract) => (
+                  <SelectItem key={contract.id} value={contract.id}>
+                    {contract.name} (SLA: {contract.sla_grade})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* SLA 등급 뱃지 */}
+            {selectedContract && (() => {
+              const grade = selectedContract.sla_grade.toLowerCase();
+              const cfg = SLA_GRADE_CONFIG[grade] ?? {
+                label: selectedContract.sla_grade,
+                cls: 'bg-neutral-100 text-neutral-600',
+                desc: '',
+              };
+              return (
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${cfg.cls}`}>
+                    SLA {cfg.label}
+                  </span>
+                  {cfg.desc && (
+                    <span className="text-xs text-text-secondary">{cfg.desc}</span>
+                  )}
+                </div>
+              );
+            })()}
+          </FormField>
+
           {/* 제목 */}
           <FormField label="제목" required error={errors.title?.message}>
             <input
