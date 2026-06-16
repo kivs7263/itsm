@@ -11,11 +11,10 @@ import {
   Filter,
   ExternalLink,
 } from 'lucide-react';
-import { useSlug } from '@/lib/slug';
+import { useParams, useRouter } from 'next/navigation';
 import { api, getErrorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -73,7 +72,8 @@ const COMPLETION_LABELS: Record<string, { label: string; cls: string }> = {
 // ──────────────────────────────────────────────────────────────────────────────
 
 export default function WorkLogsPage() {
-  const tenantSlug = useSlug();
+  const routeParams = useParams();
+  const tenantSlug = routeParams.tenantSlug as string;
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
