@@ -32,6 +32,9 @@ export interface Ticket {
   sla_resolution_deadline?: string | null; // ISO datetime
   // P5-3 반복 장애
   is_recurring_flag?: boolean;
+  // ESC-5 에스컬레이션
+  escalation_level?: number;
+  escalation_count?: number;
 }
 
 export interface TicketComment {
@@ -533,4 +536,44 @@ export interface SymptomCategoryItem {
   name: string;
   parent_id: string | null;
   children?: SymptomCategoryItem[];
+}
+
+// -----------------------------------------------------------------------
+// 에스컬레이션 타입
+// -----------------------------------------------------------------------
+export type EscalationReason =
+  | 'technical_complexity'
+  | 'permission_lack'
+  | 'sla_breach'
+  | 'sla_warning'
+  | 'customer_request'
+  | 'manual'
+  | 'other';
+
+export interface EscalationOut {
+  id: string;
+  ticket_id: string;
+  from_level: number;
+  to_level: number;
+  from_assigned: string | null;
+  to_team_id: string;
+  to_team_name: string | null;
+  to_assigned: string | null;
+  to_assigned_name: string | null;
+  reason: string;
+  handover_memo: string;
+  customer_summary: string | null;
+  triggered_by: string | null;
+  triggered_by_name: string | null;
+  acknowledged_at: string | null;
+  created_at: string;
+}
+
+export interface SupportTeam {
+  id: string;
+  name: string;
+  level: number;
+  description: string | null;
+  is_active: boolean;
+  member_count: number;
 }

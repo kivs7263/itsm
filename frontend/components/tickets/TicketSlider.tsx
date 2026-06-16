@@ -9,6 +9,7 @@ import type { Ticket, TicketStatus, TicketPriority } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { SlaBadge } from './SlaBadge';
 import { Button } from '@/components/ui/button';
+import { EscalationModal } from './EscalationModal';
 import {
   Select,
   SelectContent,
@@ -111,6 +112,7 @@ function DetailsTab({ ticket }: { ticket: Ticket }) {
 export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSliderProps) {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = React.useState<SliderTab>('activity');
+  const [escModalOpen, setEscModalOpen] = React.useState(false);
 
   // Escape 키로 닫기
   React.useEffect(() => {
@@ -160,6 +162,20 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
 
   return (
     <>
+      {/* 에스컬레이션 모달 */}
+      {ticketId && (
+        <EscalationModal
+          open={escModalOpen}
+          onClose={() => setEscModalOpen(false)}
+          ticketId={ticketId}
+          tenantSlug={tenantSlug}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['ticket', tenantSlug, ticketId] });
+            queryClient.invalidateQueries({ queryKey: ['tickets', tenantSlug] });
+          }}
+        />
+      )}
+
       {/* 오버레이 */}
       {open && (
         <div
@@ -197,6 +213,11 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
               <div className="flex items-center gap-2 mt-2 flex-wrap">
                 <SlaBadge deadline={ticket.sla_response_deadline} label="응답" />
                 <SlaBadge deadline={ticket.sla_resolution_deadline} label="해결" />
+                {ticket.escalation_level != null && ticket.escalation_level > 1 && (
+                  <span className="inline-flex items-center rounded-full bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 text-xs font-medium text-orange-700 dark:text-orange-400">
+                    {ticket.escalation_level}차 대응
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -248,6 +269,16 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="ml-auto">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setEscModalOpen(true)}
+                className="h-7 text-xs text-orange-600 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-900/20"
+              >
+                2차 이관
+              </Button>
             </div>
           </div>
         )}

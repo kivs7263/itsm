@@ -5,7 +5,8 @@ import { Play, Clock, Plus, Trash2, Send } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
-import type { TicketComment } from '@/lib/types';
+import type { TicketComment, EscalationOut } from '@/lib/types';
+import { EscalationEventCard } from './EscalationEventCard';
 import { cn, formatRelativeTime, formatWorkHours } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -42,7 +43,8 @@ interface TimerActiveItem {
 
 type ActivityItem =
   | { kind: 'comment'; timestamp: string; data: TicketComment }
-  | { kind: 'work_log'; timestamp: string; data: WorkLog };
+  | { kind: 'work_log'; timestamp: string; data: WorkLog }
+  | { kind: 'escalation'; timestamp: string; data: EscalationOut };
 
 const WORK_TYPE_LABELS: Record<string, string> = {
   remote:   '원격',
@@ -223,6 +225,19 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
     refetchInterval: 30000,
   });
 
+  const { data: escalations = [] } = useQuery<EscalationOut[]>({
+    queryKey: ['escalations', tenantSlug, ticketId],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/tickets/${ticketId}/escalations`).then((r) => {
+        const d = r.data;
+        if (Array.isArray(d)) return d;
+        if (Array.isArray(d?.items)) return d.items;
+        return [];
+      }),
+    enabled: !!ticketId,
+    refetchInterval: 30000,
+  });
+
   const { data: timers = [] } = useQuery<TimerActiveItem[]>({
     queryKey: ['work-timer', tenantSlug],
     queryFn: () =>
@@ -253,9 +268,14 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
         timestamp: l.logged_at,
         data: l,
       })),
+      ...(escalations ?? []).map((e) => ({
+        kind: 'escalation' as const,
+        timestamp: e.created_at,
+        data: e,
+      })),
     ];
     return items.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  }, [comments, workLogs]);
+  }, [comments, workLogs, escalations]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
@@ -419,6 +439,13 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
             activityItems.map((item) =>
               item.kind === 'comment' ? (
                 <CommentBubble key={`c-${item.data.id}`} comment={item.data} />
+              ) : item.kind === 'escalation' ? (
+                <EscalationEventCard
+                  key={`e-${item.data.id}`}
+                  esc={item.data}
+                  ticketId={ticketId}
+                  tenantSlug={tenantSlug}
+                />
               ) : (
                 <WorkLogCard
                   key={`w-${item.data.id}`}
