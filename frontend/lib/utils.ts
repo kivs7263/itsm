@@ -58,3 +58,16 @@ export function formatBadgeCount(count: number): string {
   if (count > 99) return '99+';
   return String(count);
 }
+
+/**
+ * formatWorkHours — 공수 시간 표시
+ * 1분 미만 → "N초", 1시간 미만 → "N분", 이상 → "1.5h"
+ */
+export function formatWorkHours(hours: number): string {
+  const totalSecs = Math.round(hours * 3600);
+  if (totalSecs < 60) return `${totalSecs}초`;
+  const totalMins = Math.round(hours * 60);
+  if (totalMins < 60) return `${totalMins}분`;
+  const h = Math.round(hours * 100) / 100;
+  return `${h}h`;
+}

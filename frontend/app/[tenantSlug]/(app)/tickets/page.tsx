@@ -9,8 +9,7 @@ import { api, getErrorMessage } from '@/lib/api';
 import type { Ticket, TicketStatus, TicketPriority, TicketsResponse } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
 import { isTeamLeadOrAbove, type UserRole } from '@/lib/auth';
-import { cn } from '@/lib/utils';
-import { formatRelativeTime } from '@/lib/utils';
+import { cn, formatRelativeTime, formatWorkHours } from '@/lib/utils';
 import { SlaBadge } from '@/components/tickets/SlaBadge';
 import { TicketSlider } from '@/components/tickets/TicketSlider';
 import { CreateTicketModal } from '@/components/tickets/CreateTicketModal';
@@ -602,7 +601,7 @@ export default function TicketsPage() {
                   {/* 누적 공수 */}
                   <td className="px-4 py-3 text-xs tabular-nums">
                     {(ticket as any).total_hours > 0
-                      ? <span className="text-text-primary font-medium">{(ticket as any).total_hours}h</span>
+                      ? <span className="text-text-primary font-medium">{formatWorkHours((ticket as any).total_hours)}</span>
                       : <span className="text-text-disabled">-</span>
                     }
                   </td>

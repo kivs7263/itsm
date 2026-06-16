@@ -6,8 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type { TicketComment } from '@/lib/types';
-import { cn } from '@/lib/utils';
-import { formatRelativeTime } from '@/lib/utils';
+import { cn, formatRelativeTime, formatWorkHours } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WorkLogStopModal } from './WorkLogStopModal';
@@ -130,7 +129,7 @@ function WorkLogCard({
       <div className="flex-1 min-w-0 rounded-lg border border-border-subtle bg-surface-elevated p-2.5">
         <div className="flex items-start justify-between gap-2 mb-1">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm font-semibold text-text-primary tabular-nums">{log.hours}h</span>
+            <span className="text-sm font-semibold text-text-primary tabular-nums">{formatWorkHours(log.hours)}</span>
             <span className={cn(
               'text-xs rounded-full px-1.5 py-0.5',
               log.billable

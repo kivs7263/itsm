@@ -5,7 +5,7 @@ import { Play, Trash2, Plus } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
-import { cn } from '@/lib/utils';
+import { cn, formatWorkHours } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WorkLogStopModal } from './WorkLogStopModal';
@@ -378,7 +378,7 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-text-primary">
-                      {log.hours}h
+                      {formatWorkHours(log.hours)}
                     </span>
                     <span className={cn(
                       'text-xs rounded-full px-1.5 py-0.5',

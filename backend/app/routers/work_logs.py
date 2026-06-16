@@ -317,7 +317,7 @@ async def timer_stop(
 
     # hours=0 이면 경과 시간 자동 계산, >0 이면 수동 오버라이드
     elapsed_seconds = (datetime.now(timezone.utc) - started_at).total_seconds()
-    auto_hours = round(elapsed_seconds / 3600, 2)
+    auto_hours = round(elapsed_seconds / 3600, 4)
     hours = body.hours if body.hours > 0 else auto_hours
 
     log = TicketWorkLog(
@@ -325,7 +325,7 @@ async def timer_stop(
         ticket_id=ticket_id,
         user_id=current_user.id,
         work_type=body.work_type.value,
-        hours=Decimal(str(max(0.25, hours))),
+        hours=Decimal(str(max(0, hours))),
         billable=body.billable,
         description=body.description,
         completion_status=body.completion_status.value,
@@ -650,12 +650,11 @@ async def list_all_work_logs(
     for log in logs:
         tnum, ttitle = ticket_map.get(log.ticket_id, (None, None))
         base = _serialize(log, None)
-        items.append(WorkLogWithTicketOut(
-            **base.model_dump(),
-            user_name=user_map.get(log.user_id) if log.user_id else None,
-            ticket_number=tnum,
-            ticket_title=ttitle,
-        ))
+        d = base.model_dump()
+        d["user_name"] = user_map.get(log.user_id) if log.user_id else None
+        d["ticket_number"] = tnum
+        d["ticket_title"] = ttitle
+        items.append(WorkLogWithTicketOut(**d))
 
     return WorkLogPageOut(
         items=items,

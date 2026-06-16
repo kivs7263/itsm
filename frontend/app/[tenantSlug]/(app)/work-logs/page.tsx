@@ -15,8 +15,7 @@ import {
 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { api, getErrorMessage } from '@/lib/api';
-import { cn } from '@/lib/utils';
-import { formatRelativeTime } from '@/lib/utils';
+import { cn, formatRelativeTime, formatWorkHours } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -433,7 +432,7 @@ export default function WorkLogsPage() {
 
                     {/* 공수 */}
                     <td className="px-4 py-2.5 text-center">
-                      <span className="font-semibold tabular-nums text-text-primary">{log.hours}h</span>
+                      <span className="font-semibold tabular-nums text-text-primary">{formatWorkHours(log.hours)}</span>
                     </td>
 
                     {/* 유상 */}
