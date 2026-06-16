@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Send } from 'lucide-react';
+import { ArrowLeft, Send, BookOpen } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
 import type { Ticket, TicketComment, EscalationOut, TicketPriority, TicketStatus } from '@/lib/types';
 import { cn, formatRelativeTime } from '@/lib/utils';
@@ -13,6 +13,7 @@ import { SlaBadge } from '@/components/tickets/SlaBadge';
 import { EscalationEventCard } from '@/components/tickets/EscalationEventCard';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CreateKbModal } from '@/components/kb/CreateKbModal';
 
 // -----------------------------------------------------------------------
 // WorkLog 인라인 타입 정의
@@ -107,6 +108,7 @@ function SlaTimeDisplay({ deadline, label }: { deadline: string | null | undefin
       >
         {timeText}
       </span>
+
     </div>
   );
 }
@@ -201,6 +203,7 @@ export default function TicketDetailPage() {
 
   const queryClient = useQueryClient();
   const [commentBody, setCommentBody] = React.useState('');
+  const [kbModalOpen, setKbModalOpen] = React.useState(false);
   const [isInternal, setIsInternal] = React.useState(false);
 
   // 티켓 상세 조회
@@ -370,6 +373,16 @@ export default function TicketDetailPage() {
             )}
             <SlaBadge deadline={ticket.sla_response_deadline} label="응답" />
             <SlaBadge deadline={ticket.sla_resolution_deadline} label="해결" />
+            {(ticket.status === 'resolved' || ticket.status === 'closed') && (
+              <button
+                type="button"
+                onClick={() => setKbModalOpen(true)}
+                className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+              >
+                <BookOpen size={10} />
+                KB로 저장
+              </button>
+            )}
           </div>
         </div>
 
@@ -549,6 +562,16 @@ export default function TicketDetailPage() {
           </div>
         </div>
       </div>
+    <CreateKbModal
+      open={kbModalOpen}
+      onClose={() => setKbModalOpen(false)}
+      tenantSlug={tenantSlug}
+      prefill={{
+        title: ticket.title,
+        content: ticket.description ?? '',
+        linkedTicketId: ticket.id,
+      }}
+    />
     </div>
   );
 }

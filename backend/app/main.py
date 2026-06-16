@@ -156,6 +156,7 @@ app.include_router(search_router.router, prefix="/api")
 # P2-4 KB
 from app.routers import kb as kb_router  # noqa: E402
 app.include_router(kb_router.router, prefix="/api")
+app.include_router(kb_router.router_portal_kb)              # /portal/{slug}/kb/search (비인증)
 
 # P3-2 Change Management
 from app.routers import change_management as change_management_router  # noqa: E402

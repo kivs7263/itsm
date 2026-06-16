@@ -5,16 +5,14 @@ prefix : /{tenant_slug}/kb
 격리   : 모든 쿼리 tenant_id == current_user.tenant_id
 
 엔드포인트:
-  GET    /{tenant_slug}/kb               — 목록 (is_published=true, 페이지네이션)
+  GET    /{tenant_slug}/kb               — 목록 (is_published=true + 본인 미게시 포함)
   POST   /{tenant_slug}/kb               — 작성 (engineer 이상)
   GET    /{tenant_slug}/kb/search?q=...  — 전문 검색 (Meilisearch) ← 고정 경로 먼저 등록
-  GET    /{tenant_slug}/kb/{id}          — 상세
+  GET    /{tenant_slug}/kb/{id}          — 상세 (view_count 증가)
   PATCH  /{tenant_slug}/kb/{id}          — 수정 (engineer 이상)
   DELETE /{tenant_slug}/kb/{id}          — 삭제 (engineer 이상)
-
-검색:
-  - Meilisearch 사용 (graceful fallback: DB ILIKE로 폴백)
-  - 작성/수정/삭제 시 인덱싱 비동기 호출 (실패 무시, 메인 저장 성공 우선)
+  POST   /{tenant_slug}/kb/{id}/vote     — 투표 (helpful/not_helpful)
+  GET    /portal/{tenant_slug}/kb/search — 포털 공개 검색 (비인증)
 """
 from __future__ import annotations
 
@@ -22,11 +20,11 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -40,6 +38,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/{tenant_slug}/kb",
     tags=["kb"],
+)
+
+# 포털 공개 검색 라우터 (비인증)
+router_portal_kb = APIRouter(
+    prefix="/portal/{tenant_slug}/kb",
+    tags=["portal-kb"],
 )
 
 # engineer 이상 권한 허용 역할
@@ -75,11 +79,19 @@ class KbArticleResponse(BaseModel):
     tags: list[str]
     linked_ticket_id: uuid.UUID | None
     author_id: uuid.UUID
+    author_name: str | None = None
     is_published: bool
+    view_count: int = 0
+    helpful_votes: int = 0
+    not_helpful_votes: int = 0
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class KbVoteRequest(BaseModel):
+    vote: Literal["helpful", "not_helpful"]
 
 
 # ------------------------------------------------------------------
@@ -88,7 +100,6 @@ class KbArticleResponse(BaseModel):
 
 
 def _require_writer(current_user: User) -> None:
-    """engineer 이상 역할 검증."""
     if current_user.role not in _WRITER_ROLES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -109,14 +120,14 @@ def _to_kb_doc(article: KbArticle, author_name: str) -> search_service.KbDoc:
 
 
 # ------------------------------------------------------------------
-# 목록
+# 목록 (KB-6: 본인 미게시 포함)
 # ------------------------------------------------------------------
 
 
 @router.get(
     "",
     response_model=dict,
-    summary="KB 문서 목록 (is_published=true, 페이지네이션)",
+    summary="KB 문서 목록 (게시 + 본인 미게시)",
 )
 async def list_kb_articles(
     tenant_slug: str,
@@ -126,18 +137,27 @@ async def list_kb_articles(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     offset = (page - 1) * limit
-    base_where = and_(
-        KbArticle.tenant_id == current_user.tenant_id,
-        KbArticle.is_published.is_(True),
-    )
+
+    # 게시 문서 + 본인(또는 admin) 미게시 문서 포함
+    is_admin = current_user.role in {UserRole.admin}
+    if is_admin:
+        visibility = KbArticle.tenant_id == current_user.tenant_id
+    else:
+        visibility = and_(
+            KbArticle.tenant_id == current_user.tenant_id,
+            or_(
+                KbArticle.is_published.is_(True),
+                KbArticle.author_id == current_user.id,
+            ),
+        )
 
     total = await db.scalar(
-        select(func.count()).select_from(KbArticle).where(base_where)
+        select(func.count()).select_from(KbArticle).where(visibility)
     )
     rows = (
         await db.execute(
             select(KbArticle)
-            .where(base_where)
+            .where(visibility)
             .order_by(KbArticle.created_at.desc())
             .offset(offset)
             .limit(limit)
@@ -200,31 +220,30 @@ async def create_kb_article(
         tags=data.tags,
         linked_ticket_id=data.linked_ticket_id,
         author_id=current_user.id,
+        author_name=current_user.name,
         is_published=data.is_published,
     )
     db.add(article)
     await db.commit()
     await db.refresh(article)
 
-    # Meilisearch 인덱싱 (실패 무시)
     await search_service.index_kb(_to_kb_doc(article, current_user.name))
 
-    # 시맨틱 임베딩 fire-and-forget (OPENAI_API_KEY 없으면 내부에서 조용히 skip)
-    from app.routers.kb_semantic import _embed_article_async  # 순환 import 방지: 런타임 import
+    from app.routers.kb_semantic import _embed_article_async
     asyncio.create_task(_embed_article_async(article.id, article.title, article.content))
 
     return KbArticleResponse.model_validate(article)
 
 
 # ------------------------------------------------------------------
-# 상세
+# 상세 (view_count 증가)
 # ------------------------------------------------------------------
 
 
 @router.get(
     "/{kb_id}",
     response_model=KbArticleResponse,
-    summary="KB 문서 상세",
+    summary="KB 문서 상세 (조회수 증가)",
 )
 async def get_kb_article(
     tenant_slug: str,
@@ -233,6 +252,20 @@ async def get_kb_article(
     db: AsyncSession = Depends(get_db),
 ) -> KbArticleResponse:
     article = await _get_or_404(db, current_user.tenant_id, kb_id)
+
+    # 본인 또는 admin이 아닌 경우 미게시 문서 차단
+    is_admin = current_user.role in {UserRole.admin}
+    if not article.is_published and article.author_id != current_user.id and not is_admin:
+        raise HTTPException(status_code=404, detail="KB 문서를 찾을 수 없습니다.")
+
+    # view_count 원자적 증가
+    await db.execute(
+        text("UPDATE kb_articles SET view_count = view_count + 1 WHERE id = :id"),
+        {"id": str(kb_id)},
+    )
+    await db.commit()
+    await db.refresh(article)
+
     return KbArticleResponse.model_validate(article)
 
 
@@ -259,18 +292,15 @@ async def update_kb_article(
     update_data = data.model_dump(exclude_none=True)
     for field, value in update_data.items():
         setattr(article, field, value)
-    # 명시적 null 처리 (linked_ticket_id=null 허용)
     if "linked_ticket_id" in data.model_fields_set and data.linked_ticket_id is None:
         article.linked_ticket_id = None
 
     await db.commit()
     await db.refresh(article)
 
-    # Meilisearch 갱신 (실패 무시)
     await search_service.index_kb(_to_kb_doc(article, current_user.name))
 
-    # 시맨틱 임베딩 갱신 fire-and-forget
-    from app.routers.kb_semantic import _embed_article_async  # 런타임 import
+    from app.routers.kb_semantic import _embed_article_async
     asyncio.create_task(_embed_article_async(article.id, article.title, article.content))
 
     return KbArticleResponse.model_validate(article)
@@ -298,8 +328,107 @@ async def delete_kb_article(
     await db.delete(article)
     await db.commit()
 
-    # Meilisearch 삭제 (실패 무시)
     await search_service.delete_kb(str(current_user.tenant_id), str(kb_id))
+
+
+# ------------------------------------------------------------------
+# 투표 (helpful / not_helpful)
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "/{kb_id}/vote",
+    response_model=dict,
+    summary="KB 문서 투표 (helpful/not_helpful)",
+)
+async def vote_kb_article(
+    tenant_slug: str,
+    kb_id: uuid.UUID,
+    data: KbVoteRequest,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    article = await _get_or_404(db, current_user.tenant_id, kb_id)
+
+    col = "helpful_votes" if data.vote == "helpful" else "not_helpful_votes"
+    await db.execute(
+        text(f"UPDATE kb_articles SET {col} = {col} + 1 WHERE id = :id"),
+        {"id": str(kb_id)},
+    )
+    await db.commit()
+    await db.refresh(article)
+
+    return {
+        "helpful_votes": article.helpful_votes,
+        "not_helpful_votes": article.not_helpful_votes,
+    }
+
+
+# ------------------------------------------------------------------
+# 포털 공개 KB 검색 (비인증, KB-7)
+# ------------------------------------------------------------------
+
+
+class PortalKbResult(BaseModel):
+    id: uuid.UUID
+    title: str
+    content: str
+    tags: list[str]
+    created_at: datetime
+
+
+@router_portal_kb.get(
+    "/search",
+    response_model=list[PortalKbResult],
+    summary="포털 공개 KB 검색 (비인증)",
+)
+async def portal_kb_search(
+    tenant_slug: str,
+    q: str = Query(..., min_length=1, max_length=200),
+    limit: int = Query(10, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+) -> list[PortalKbResult]:
+    """고객 포털 비인증 KB 검색 — 게시된 문서만, tenant_slug 기준 격리."""
+    from sqlalchemy import select as sa_select
+    from app.models.tenant import Tenant
+
+    tenant = (
+        await db.execute(
+            sa_select(Tenant).where(Tenant.slug == tenant_slug)
+        )
+    ).scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="테넌트를 찾을 수 없습니다.")
+
+    q_lower = q.lower()
+    rows = (
+        await db.execute(
+            sa_select(KbArticle)
+            .where(
+                and_(
+                    KbArticle.tenant_id == tenant.id,
+                    KbArticle.is_published.is_(True),
+                    or_(
+                        func.lower(KbArticle.title).contains(q_lower),
+                        func.lower(KbArticle.content).contains(q_lower),
+                    ),
+                )
+            )
+            .order_by(KbArticle.view_count.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+
+    return [
+        PortalKbResult(
+            id=r.id,
+            title=r.title,
+            content=r.content[:300] + "..." if len(r.content) > 300 else r.content,
+            tags=r.tags or [],
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
 
 
 # ------------------------------------------------------------------
@@ -310,7 +439,6 @@ async def delete_kb_article(
 async def _get_or_404(
     db: AsyncSession, tenant_id: uuid.UUID, kb_id: uuid.UUID
 ) -> KbArticle:
-    """크로스 테넌트 → 404 (존재 노출 금지)."""
     row = (
         await db.execute(
             select(KbArticle).where(

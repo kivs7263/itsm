@@ -490,7 +490,11 @@ export interface KbArticle {
   tags: string[];
   linked_ticket_id: string | null;
   author_id: string;
+  author_name: string | null;
   is_published: boolean;
+  view_count: number;
+  helpful_votes: number;
+  not_helpful_votes: number;
   created_at: string;
   updated_at: string;
 }

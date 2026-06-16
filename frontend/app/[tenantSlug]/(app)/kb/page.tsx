@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, Search, AlertTriangle } from 'lucide-react';
+import { BookOpen, Search, AlertTriangle, Plus } from 'lucide-react';
 import { api } from '@/lib/api';
 import type {
   KbArticle,
@@ -12,11 +12,22 @@ import type {
 } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/useAuth';
+import { isTeamLeadOrAbove, type UserRole } from '@/lib/auth';
+import { CreateKbModal } from '@/components/kb/CreateKbModal';
 
 // -----------------------------------------------------------------------
 // 탭 타입
 // -----------------------------------------------------------------------
 type SearchTab = 'keyword' | 'semantic';
+
+// -----------------------------------------------------------------------
+// 작성자 역할 확인 (engineer 이상)
+// -----------------------------------------------------------------------
+function canWrite(role: string | undefined): boolean {
+  return ['engineer', 'team_lead', 'admin'].includes(role ?? '');
+}
 
 // -----------------------------------------------------------------------
 // 스켈레톤
@@ -38,7 +49,15 @@ function SkeletonCards() {
 // -----------------------------------------------------------------------
 // 빈 상태
 // -----------------------------------------------------------------------
-function EmptyState({ message }: { message: string }) {
+function EmptyState({
+  message,
+  showCta,
+  onNew,
+}: {
+  message: string;
+  showCta?: boolean;
+  onNew?: () => void;
+}) {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-4">
       <div
@@ -47,7 +66,14 @@ function EmptyState({ message }: { message: string }) {
       >
         <BookOpen size={28} strokeWidth={1.5} style={{ color: '#F5C000' }} />
       </div>
-      <p className="text-sm text-text-secondary">{message}</p>
+      <div className="text-center">
+        <p className="text-sm text-text-secondary">{message}</p>
+      </div>
+      {showCta && onNew && (
+        <Button size="sm" leftIcon={<Plus size={14} />} onClick={onNew}>
+          첫 문서 작성하기
+        </Button>
+      )}
     </div>
   );
 }
@@ -70,13 +96,28 @@ function SemanticUnavailableBanner() {
 // -----------------------------------------------------------------------
 // KB 아티클 카드 (키워드 검색·목록용)
 // -----------------------------------------------------------------------
-function KbArticleCard({ article }: { article: KbArticle }) {
+function KbArticleCard({
+  article,
+  onClick,
+}: {
+  article: KbArticle;
+  onClick: () => void;
+}) {
   return (
-    <div className="rounded-lg border border-border-subtle bg-surface p-4 hover:bg-surface-hover transition-colors duration-fast cursor-pointer">
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full text-left rounded-lg border border-border-subtle bg-surface p-4 hover:bg-surface-hover hover:border-border-default transition-all duration-fast"
+    >
       <div className="flex items-start justify-between gap-2 min-w-0">
         <p className="font-medium text-text-primary line-clamp-1 text-sm">
           {typeof article.title === 'string' ? article.title : '(제목 없음)'}
         </p>
+        {!article.is_published && (
+          <span className="shrink-0 inline-flex items-center rounded-full bg-border-subtle px-2 py-0.5 text-[10px] font-medium text-text-secondary">
+            초안
+          </span>
+        )}
       </div>
       <p className="mt-1.5 text-xs text-text-secondary line-clamp-2">
         {typeof article.content === 'string' ? article.content : ''}
@@ -93,17 +134,22 @@ function KbArticleCard({ article }: { article: KbArticle }) {
           ))}
         </div>
       )}
-    </div>
+    </button>
   );
 }
 
 // -----------------------------------------------------------------------
 // 시맨틱 검색 결과 카드
 // -----------------------------------------------------------------------
-function SemanticResultCard({ result }: { result: SemanticSearchResult }) {
+function SemanticResultCard({
+  result,
+  onClick,
+}: {
+  result: SemanticSearchResult;
+  onClick: () => void;
+}) {
   const similarityPct = Math.round(result.similarity * 100);
 
-  // similarity 색상: 80%+ 초록, 60%+ 노랑, 이하 회색
   const simColor =
     similarityPct >= 80
       ? 'bg-status-resolved-bg text-status-resolved'
@@ -112,7 +158,11 @@ function SemanticResultCard({ result }: { result: SemanticSearchResult }) {
         : 'bg-border-subtle text-text-secondary';
 
   return (
-    <div className="rounded-lg border border-border-subtle bg-surface p-4 hover:bg-surface-hover transition-colors duration-fast cursor-pointer">
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full text-left rounded-lg border border-border-subtle bg-surface p-4 hover:bg-surface-hover hover:border-border-default transition-all duration-fast"
+    >
       <div className="flex items-start justify-between gap-2 min-w-0">
         <p className="font-medium text-text-primary line-clamp-1 text-sm flex-1">
           {typeof result.title === 'string' ? result.title : '(제목 없음)'}
@@ -138,7 +188,7 @@ function SemanticResultCard({ result }: { result: SemanticSearchResult }) {
           {result.content}
         </p>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -148,11 +198,16 @@ function SemanticResultCard({ result }: { result: SemanticSearchResult }) {
 function KeywordTab({
   tenantSlug,
   q,
+  onArticleClick,
+  onNew,
+  canCreate,
 }: {
   tenantSlug: string;
   q: string;
+  onArticleClick: (id: string) => void;
+  onNew: () => void;
+  canCreate: boolean;
 }) {
-  // 검색어 없으면 목록, 있으면 전문 검색
   const isSearching = q.trim().length >= 1;
 
   const listQuery = useQuery<KbArticlesResponse>({
@@ -163,7 +218,6 @@ function KeywordTab({
     staleTime: 60_000,
   });
 
-  // Meilisearch 전문 검색 — plain array 반환
   const searchQuery = useQuery<KbArticle[]>({
     queryKey: ['kb-keyword', tenantSlug, q],
     queryFn: () =>
@@ -188,7 +242,11 @@ function KeywordTab({
     return (
       <div className="space-y-2">
         {results.map((article) => (
-          <KbArticleCard key={article.id} article={article} />
+          <KbArticleCard
+            key={article.id}
+            article={article}
+            onClick={() => onArticleClick(article.id)}
+          />
         ))}
       </div>
     );
@@ -197,12 +255,22 @@ function KeywordTab({
   if (listQuery.isLoading) return <SkeletonCards />;
   const items = listQuery.data?.items ?? [];
   if (items.length === 0) {
-    return <EmptyState message="등록된 지식베이스 문서가 없습니다." />;
+    return (
+      <EmptyState
+        message="등록된 지식베이스 문서가 없습니다."
+        showCta={canCreate}
+        onNew={onNew}
+      />
+    );
   }
   return (
     <div className="space-y-2">
       {items.map((article) => (
-        <KbArticleCard key={article.id} article={article} />
+        <KbArticleCard
+          key={article.id}
+          article={article}
+          onClick={() => onArticleClick(article.id)}
+        />
       ))}
     </div>
   );
@@ -214,9 +282,11 @@ function KeywordTab({
 function SemanticTab({
   tenantSlug,
   q,
+  onArticleClick,
 }: {
   tenantSlug: string;
   q: string;
+  onArticleClick: (id: string) => void;
 }) {
   const enabled = !!tenantSlug && q.trim().length >= 2;
 
@@ -233,10 +303,9 @@ function SemanticTab({
         }),
     enabled,
     staleTime: 30_000,
-    retry: false, // 503 시 재시도 금지
+    retry: false,
   });
 
-  // 503 응답 감지
   const is503 =
     error !== null &&
     (error as { response?: { status?: number } })?.response?.status === 503;
@@ -272,7 +341,11 @@ function SemanticTab({
   return (
     <div className="space-y-2">
       {results.map((result) => (
-        <SemanticResultCard key={String(result.id)} result={result} />
+        <SemanticResultCard
+          key={String(result.id)}
+          result={result}
+          onClick={() => onArticleClick(String(result.id))}
+        />
       ))}
     </div>
   );
@@ -283,26 +356,43 @@ function SemanticTab({
 // -----------------------------------------------------------------------
 export default function KbPage() {
   const params = useParams();
+  const router = useRouter();
   const tenantSlug = params?.tenantSlug as string;
+  const { user } = useAuth();
 
   const [activeTab, setActiveTab] = useState<SearchTab>('keyword');
   const [q, setQ] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
 
   const handleTabChange = useCallback((tab: SearchTab) => {
     setActiveTab(tab);
     setQ('');
   }, []);
 
+  const handleArticleClick = useCallback((id: string) => {
+    router.push(`/${tenantSlug}/kb/${id}`);
+  }, [router, tenantSlug]);
+
+  const writerAccess = canWrite(user?.role);
+
   return (
     <div className="flex flex-col h-full">
       {/* 페이지 헤더 */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border-default bg-surface shrink-0">
         <h1 className="text-xl font-semibold text-text-primary">지식베이스</h1>
+        {writerAccess && (
+          <Button
+            size="sm"
+            leftIcon={<Plus size={14} />}
+            onClick={() => setCreateOpen(true)}
+          >
+            새 문서
+          </Button>
+        )}
       </div>
 
       {/* 탭 + 검색 바 */}
       <div className="px-6 pt-4 pb-3 border-b border-border-subtle bg-surface shrink-0 space-y-3">
-        {/* 탭 토글 */}
         <div className="flex gap-1 p-0.5 rounded-lg bg-border-subtle w-fit">
           <button
             type="button"
@@ -330,7 +420,6 @@ export default function KbPage() {
           </button>
         </div>
 
-        {/* 검색 입력 */}
         <div className="relative max-w-lg">
           <Search
             size={14}
@@ -353,11 +442,27 @@ export default function KbPage() {
       {/* 결과 영역 */}
       <div className="flex-1 overflow-auto min-h-0 px-6 py-4">
         {activeTab === 'keyword' ? (
-          <KeywordTab tenantSlug={tenantSlug} q={q} />
+          <KeywordTab
+            tenantSlug={tenantSlug}
+            q={q}
+            onArticleClick={handleArticleClick}
+            onNew={() => setCreateOpen(true)}
+            canCreate={writerAccess}
+          />
         ) : (
-          <SemanticTab tenantSlug={tenantSlug} q={q} />
+          <SemanticTab
+            tenantSlug={tenantSlug}
+            q={q}
+            onArticleClick={handleArticleClick}
+          />
         )}
       </div>
+
+      <CreateKbModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        tenantSlug={tenantSlug}
+      />
     </div>
   );
 }

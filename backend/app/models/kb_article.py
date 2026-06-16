@@ -1,7 +1,8 @@
 """KB 지식베이스 문서 모델."""
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Column, ForeignKey, Index, String, Text, DateTime
+import sqlalchemy as sa
+from sqlalchemy import Boolean, Column, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -35,6 +36,10 @@ class KbArticle(Base, TimestampMixin):
         nullable=False,
     )
     is_published = Column(Boolean, nullable=False, default=True)
+    view_count = Column(sa.Integer, nullable=False, default=0, server_default="0")
+    helpful_votes = Column(sa.Integer, nullable=False, default=0, server_default="0")
+    not_helpful_votes = Column(sa.Integer, nullable=False, default=0, server_default="0")
+    author_name = Column(String(255), nullable=True)
     # P5-4 알려진 이슈
     is_known_issue = Column(Boolean, nullable=False, default=False)
     ki_severity = Column(String(20), nullable=True)
