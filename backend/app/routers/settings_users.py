@@ -24,10 +24,15 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import func, update as sa_update
+
 from app.core.database import get_db
 from app.core.dependencies import require_roles
 from app.core.security import hash_password
 from app.models import User, UserRole
+from app.models.tenant import Tenant
+from app.models.sla import SLAPolicy
+from app.models.tenant_notification_config import TenantNotificationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -263,3 +268,87 @@ async def activate_user(
     await db.commit()
     await db.refresh(user)
     return UserOut.model_validate(user)
+
+
+# ------------------------------------------------------------------
+# 온보딩 Setup Status (별도 prefix /{tenant_slug}/settings/setup)
+# ------------------------------------------------------------------
+
+setup_router = APIRouter(
+    prefix="/{tenant_slug}/settings/setup",
+    tags=["settings-setup"],
+)
+
+
+class SetupChecklist(BaseModel):
+    smtp: bool = False
+    sla: bool = False
+    users_invited: bool = False
+
+
+class SetupStatusOut(BaseModel):
+    setup_completed: bool
+    checklist: SetupChecklist
+
+
+@setup_router.get("", response_model=SetupStatusOut, summary="온보딩 설정 상태 조회")
+async def get_setup_status(
+    tenant_slug: str,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> SetupStatusOut:
+    tenant = await db.get(Tenant, current_user.tenant_id)
+    setup_completed = bool((tenant.settings or {}).get("setup_completed", False))
+
+    smtp_ok = (
+        await db.scalar(
+            select(TenantNotificationConfig).where(
+                and_(
+                    TenantNotificationConfig.tenant_id == current_user.tenant_id,
+                    TenantNotificationConfig.smtp_host.isnot(None),
+                )
+            )
+        )
+    ) is not None
+
+    sla_count = await db.scalar(
+        select(func.count()).select_from(SLAPolicy).where(
+            SLAPolicy.tenant_id == current_user.tenant_id
+        )
+    )
+
+    user_count = await db.scalar(
+        select(func.count()).select_from(User).where(
+            and_(
+                User.tenant_id == current_user.tenant_id,
+                User.is_active.is_(True),
+            )
+        )
+    )
+
+    return SetupStatusOut(
+        setup_completed=setup_completed,
+        checklist=SetupChecklist(
+            smtp=smtp_ok,
+            sla=(sla_count or 0) > 0,
+            users_invited=(user_count or 0) > 1,
+        ),
+    )
+
+
+@setup_router.post("/complete", summary="온보딩 완료 처리")
+async def complete_setup(
+    tenant_slug: str,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    tenant = await db.get(Tenant, current_user.tenant_id)
+    new_settings = dict(tenant.settings or {})
+    new_settings["setup_completed"] = True
+    await db.execute(
+        sa_update(Tenant)
+        .where(Tenant.id == current_user.tenant_id)
+        .values(settings=new_settings)
+    )
+    await db.commit()
+    return {"ok": True}

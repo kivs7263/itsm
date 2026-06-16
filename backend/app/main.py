@@ -209,9 +209,10 @@ app.include_router(kb_semantic_router.router, prefix="/api")               # /ap
 from app.routers import reports as reports_router  # noqa: E402
 app.include_router(reports_router.router, prefix="/api")                   # /api/{slug}/reports
 
-# P4-3 Settings — 사용자 관리
+# P4-3 Settings — 사용자 관리 + 온보딩 setup
 from app.routers import settings_users as settings_users_router  # noqa: E402
 app.include_router(settings_users_router.router, prefix="/api")            # /api/{slug}/settings/users
+app.include_router(settings_users_router.setup_router, prefix="/api")      # /api/{slug}/settings/setup
 
 # ESC 에스컬레이션 + 지원팀
 from app.routers import escalations as escalations_router  # noqa: E402

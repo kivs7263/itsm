@@ -101,6 +101,18 @@
 
 ---
 
+### P1-ONB: 온보딩 위저드 [ DONE 2026-06-16 ]
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `ONB-1` | backend setup_router — GET /settings/setup (체크리스트), POST /settings/setup/complete | S | `[ DONE 2026-06-16 ]` |
+| `ONB-2` | frontend OnboardingWizard.tsx — 5단계 모달 (환영·이메일·SLA·팀원·완료) | M | `[ DONE 2026-06-16 ]` |
+| `ONB-3` | layout.tsx 연동 — admin + !setup_completed 시 자동 표시 | S | `[ DONE 2026-06-16 ]` |
+
+**동작**: admin 계정 첫 로그인 시 위저드 자동 표시 → 5단계 완료 후 `tenant.settings.setup_completed=true` → 이후 미표시. 각 단계 건너뛰기 가능.
+
+---
+
 ## Phase STRUCT: ITSM 구조 개선
 > 2026-06-16 | 구조 진단 기반 — 계층 구조·이력·상세 뷰 3가지 결함 수정
 > 문제: 티켓 생성 시 고객 미연결 / 고객 지원 이력 뷰 없음 / 티켓 전용 페이지 없음

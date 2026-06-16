@@ -17,6 +17,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { BusinessContextBar } from '@/components/layout/BusinessContextBar';
 import { useSlug } from '@/lib/slug';
 import { GlobalTimerBar } from '@/components/tickets/GlobalTimerBar';
+import { OnboardingWizard, useOnboarding } from '@/components/onboarding/OnboardingWizard';
 
 // -----------------------------------------------------------------------
 // 인라인 스피너 (외부 컴포넌트 의존 최소화)
@@ -127,6 +128,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const params = useParams();
   const tenantSlug = params?.tenantSlug as string | undefined;
   const { user, tenants, isLoading, isAuthenticated } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const { needsOnboarding } = useOnboarding(tenantSlug, isAdmin);
+  const [wizardDismissed, setWizardDismissed] = React.useState(false);
 
   // 미인증 리다이렉트
   useEffect(() => {
@@ -194,6 +198,14 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
       {/* 하단 네비게이션 — 모바일만 */}
       <BottomNav />
+
+      {/* 온보딩 위저드 — admin 첫 로그인 시 */}
+      {tenantSlug && needsOnboarding && !wizardDismissed && (
+        <OnboardingWizard
+          tenantSlug={tenantSlug}
+          onClose={() => setWizardDismissed(true)}
+        />
+      )}
     </div>
   );
 }
