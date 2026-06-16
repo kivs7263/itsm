@@ -56,7 +56,6 @@ class CustomerCreate(BaseModel):
     contract_grade: str | None = Field(None, max_length=50)
     parent_id: uuid.UUID | None = None
     kind: str = Field("account", pattern="^(account|division)$")
-    linked_business_id: uuid.UUID | None = None
 
 
 class CustomerUpdate(BaseModel):
@@ -67,7 +66,6 @@ class CustomerUpdate(BaseModel):
     contract_grade: str | None = Field(None, max_length=50)
     parent_id: uuid.UUID | None = None
     kind: str | None = Field(None, pattern="^(account|division)$")
-    linked_business_id: uuid.UUID | None = None
 
 
 class DivisionCreate(BaseModel):
@@ -86,7 +84,6 @@ class CustomerOut(BaseModel):
     contract_grade: str | None
     parent_id: uuid.UUID | None
     kind: str
-    linked_business_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
 
@@ -294,7 +291,6 @@ async def create_customer(
         contract_grade=data.contract_grade,
         parent_id=data.parent_id,
         kind=data.kind,
-        linked_business_id=data.linked_business_id,
     )
     db.add(customer)
     await db.commit()

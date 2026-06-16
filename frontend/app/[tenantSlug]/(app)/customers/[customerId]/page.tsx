@@ -161,7 +161,6 @@ interface InfoFormState {
   phone: string;
   contract_grade: string;
   kind: string;
-  linked_business_id: string | null;
 }
 
 function InfoTab({
@@ -189,7 +188,6 @@ function InfoTab({
     phone: customer.phone ?? '',
     contract_grade: customer.contract_grade ?? '',
     kind: customer.kind ?? 'account',
-    linked_business_id: customer.linked_business_id ?? null,
   });
 
   useEffect(() => {
@@ -200,18 +198,8 @@ function InfoTab({
       phone: customer.phone ?? '',
       contract_grade: customer.contract_grade ?? '',
       kind: customer.kind ?? 'account',
-      linked_business_id: customer.linked_business_id ?? null,
     });
   }, [customer]);
-
-  // SA 사업카드 목록
-  const { data: businessesData } = useQuery<{ id: string; name: string }[]>({
-    queryKey: ['businesses', tenantSlug],
-    queryFn: () => api.get(`/${tenantSlug}/businesses`).then((r) => r.data),
-    staleTime: 5 * 60 * 1000,
-  });
-  const businesses = businessesData ?? [];
-  const linkedBusiness = businesses.find((b) => b.id === (infoForm.linked_business_id ?? customer.linked_business_id));
 
   const patchMutation = useMutation({
     mutationFn: (data: Partial<InfoFormState>) =>
@@ -413,23 +401,9 @@ function InfoTab({
                   <option value="division">하위 부서</option>
                 </select>
               </div>
-              <div className="col-span-2">
-                <label className="text-xs text-text-secondary mb-1 block">SA 사업카드 연결</label>
-                <select
-                  className={inputCls}
-                  value={infoForm.linked_business_id ?? ''}
-                  onChange={(e) => setInfoForm((f) => ({ ...f, linked_business_id: e.target.value || null }))}
-                >
-                  <option value="">연결 안 함</option>
-                  {businesses.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-text-disabled mt-1">SA Workspace에서 관리하는 사업카드와 이 고객을 연결합니다.</p>
-              </div>
             </div>
             <div className="flex gap-2 justify-end">
-              <Button variant="ghost" size="sm" onClick={() => { setIsEditing(false); setInfoForm({ name: customer.name ?? '', company: (customer as { company?: string }).company ?? '', email: customer.email ?? '', phone: customer.phone ?? '', contract_grade: customer.contract_grade ?? '', kind: customer.kind ?? 'account', linked_business_id: customer.linked_business_id ?? null }); }}>
+              <Button variant="ghost" size="sm" onClick={() => { setIsEditing(false); setInfoForm({ name: customer.name ?? '', company: (customer as { company?: string }).company ?? '', email: customer.email ?? '', phone: customer.phone ?? '', contract_grade: customer.contract_grade ?? '', kind: customer.kind ?? 'account' }); }}>
                 취소
               </Button>
               <Button
@@ -457,15 +431,6 @@ function InfoTab({
             <div>
               <dt className="text-xs text-text-secondary">전화</dt>
               <dd className="mt-0.5 text-sm text-text-primary">{customer.phone ?? '-'}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-text-secondary">SA 사업카드</dt>
-              <dd className="mt-0.5 text-sm">
-                {linkedBusiness
-                  ? <span className="text-text-primary font-medium">{linkedBusiness.name}</span>
-                  : <span className="text-text-disabled">미연결</span>
-                }
-              </dd>
             </div>
             <div>
               <dt className="text-xs text-text-secondary">생성</dt>
@@ -1373,7 +1338,7 @@ function ContractsTab({ tenantSlug, customerId }: { tenantSlug: string; customer
   const queryClient = useQueryClient();
   const [editContract, setEditContract] = useState<Contract | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const emptyForm = { name: '', type: 'maintenance', sla_grade: 'standard', start_date: '', end_date: '', amount: '', memo: '' };
+  const emptyForm = { name: '', type: 'maintenance', sla_grade: 'standard', start_date: '', end_date: '', amount: '', memo: '', linked_business_id: '' };
   const [form, setForm] = useState({ ...emptyForm });
 
   const { data, isLoading } = useQuery({
@@ -1385,12 +1350,21 @@ function ContractsTab({ tenantSlug, customerId }: { tenantSlug: string; customer
 
   const contracts: Contract[] = data?.items ?? [];
 
+  // SA 사업카드 목록
+  const { data: businessesData } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['businesses', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/businesses`).then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+  const businesses = businessesData ?? [];
+
   const createMutation = useMutation({
     mutationFn: (d: typeof form) =>
       api.post(`/${tenantSlug}/contracts`, {
         name: d.name, customer_id: customerId, type: d.type,
         sla_grade: d.sla_grade, start_date: d.start_date, end_date: d.end_date,
         amount: d.amount ? Number(d.amount) : null, memo: d.memo || null,
+        linked_business_id: d.linked_business_id || null,
       }).then((r) => r.data),
     onSuccess: () => {
       toast.success('계약이 생성되었습니다.');
@@ -1408,6 +1382,7 @@ function ContractsTab({ tenantSlug, customerId }: { tenantSlug: string; customer
         name: d.name, type: d.type, sla_grade: d.sla_grade,
         start_date: d.start_date, end_date: d.end_date,
         amount: d.amount ? Number(d.amount) : null, memo: d.memo || null,
+        linked_business_id: d.linked_business_id || null,
       }).then((r) => r.data),
     onSuccess: () => {
       toast.success('계약이 수정되었습니다.');
@@ -1429,7 +1404,7 @@ function ContractsTab({ tenantSlug, customerId }: { tenantSlug: string; customer
 
   function openEdit(c: Contract) {
     setEditContract(c);
-    setForm({ name: c.name, type: c.type, sla_grade: c.sla_grade, start_date: c.start_date, end_date: c.end_date, amount: c.amount ?? '', memo: c.memo ?? '' });
+    setForm({ name: c.name, type: c.type, sla_grade: c.sla_grade, start_date: c.start_date, end_date: c.end_date, amount: c.amount ?? '', memo: c.memo ?? '', linked_business_id: c.linked_business_id ?? '' });
   }
 
   const inputCls = 'h-8 w-full rounded-md border border-border-default bg-surface px-2.5 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong';
@@ -1465,6 +1440,15 @@ function ContractsTab({ tenantSlug, customerId }: { tenantSlug: string; customer
       <div>
         <label className="text-xs text-text-secondary mb-1 block">메모</label>
         <input className={inputCls} value={form.memo} onChange={(e) => setForm((p) => ({ ...p, memo: e.target.value }))} placeholder="비고 (선택)" />
+      </div>
+      <div className="col-span-2">
+        <label className="text-xs text-text-secondary mb-1 block">SA 사업카드 연결</label>
+        <select className={inputCls} value={form.linked_business_id} onChange={(e) => setForm((p) => ({ ...p, linked_business_id: e.target.value }))}>
+          <option value="">연결 안 함</option>
+          {businesses.map((b) => (
+            <option key={b.id} value={b.id}>{b.name}</option>
+          ))}
+        </select>
       </div>
       <div className="col-span-2 flex gap-2 pt-1">
         <Button size="sm" onClick={onSubmit} isLoading={loading} disabled={!form.name || !form.start_date || !form.end_date}>저장</Button>
@@ -1506,49 +1490,61 @@ function ContractsTab({ tenantSlug, customerId }: { tenantSlug: string; customer
               <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">유형</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">SLA</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">기간</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">SA 사업카드</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary">액션</th>
             </tr>
           </thead>
           <tbody>
-            {contracts.map((c) => (
-              <React.Fragment key={c.id}>
-                <tr className="border-b border-border-subtle hover:bg-surface-hover">
-                  <td className="px-4 py-2.5 text-text-primary font-medium">{c.name}</td>
-                  <td className="px-4 py-2.5 text-text-secondary">
-                    {CONTRACT_TYPE_LABELS[c.type] ?? c.type}
-                  </td>
-                  <td className="px-4 py-2.5 text-text-secondary text-xs">{c.sla_grade}</td>
-                  <td className="px-4 py-2.5 text-text-secondary text-xs">
-                    {c.start_date} ~ {c.end_date}
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button type="button" onClick={() => openEdit(c)} className="p-1 rounded text-text-secondary hover:text-text-primary hover:bg-surface-hover">
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { if (confirm('계약을 삭제하시겠습니까?')) deleteMutation.mutate(c.id); }}
-                        className="p-1 rounded text-text-secondary hover:text-error hover:bg-error-bg"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                {editContract?.id === c.id && (
-                  <tr className="border-b border-border-subtle">
-                    <td colSpan={5} className="p-0">
-                      <ContractForm
-                        onSubmit={() => updateMutation.mutate({ id: c.id, d: form })}
-                        onCancel={() => setEditContract(null)}
-                        loading={updateMutation.isPending}
-                      />
+            {contracts.map((c) => {
+              const linkedBiz = c.linked_business_id
+                ? businesses.find((b) => b.id === c.linked_business_id)
+                : null;
+              return (
+                <React.Fragment key={c.id}>
+                  <tr className="border-b border-border-subtle hover:bg-surface-hover">
+                    <td className="px-4 py-2.5 text-text-primary font-medium">{c.name}</td>
+                    <td className="px-4 py-2.5 text-text-secondary">
+                      {CONTRACT_TYPE_LABELS[c.type] ?? c.type}
+                    </td>
+                    <td className="px-4 py-2.5 text-text-secondary text-xs">{c.sla_grade}</td>
+                    <td className="px-4 py-2.5 text-text-secondary text-xs">
+                      {c.start_date} ~ {c.end_date}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs">
+                      {linkedBiz
+                        ? <span className="text-text-primary font-medium">{linkedBiz.name}</span>
+                        : <span className="text-text-disabled">-</span>
+                      }
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button type="button" onClick={() => openEdit(c)} className="p-1 rounded text-text-secondary hover:text-text-primary hover:bg-surface-hover">
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { if (confirm('계약을 삭제하시겠습니까?')) deleteMutation.mutate(c.id); }}
+                          className="p-1 rounded text-text-secondary hover:text-error hover:bg-error-bg"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                )}
-              </React.Fragment>
-            ))}
+                  {editContract?.id === c.id && (
+                    <tr className="border-b border-border-subtle">
+                      <td colSpan={6} className="p-0">
+                        <ContractForm
+                          onSubmit={() => updateMutation.mutate({ id: c.id, d: form })}
+                          onCancel={() => setEditContract(null)}
+                          loading={updateMutation.isPending}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
           </tbody>
         </table>
       )}

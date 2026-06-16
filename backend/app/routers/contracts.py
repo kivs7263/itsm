@@ -51,6 +51,7 @@ class ContractCreate(BaseModel):
     amount: Decimal | None = None
     support_hours: str | None = Field(None, max_length=100)
     memo: str | None = None
+    linked_business_id: uuid.UUID | None = None
 
 
 class ContractUpdate(BaseModel):
@@ -63,6 +64,7 @@ class ContractUpdate(BaseModel):
     amount: Decimal | None = None
     support_hours: str | None = Field(None, max_length=100)
     memo: str | None = None
+    linked_business_id: uuid.UUID | None = None
 
 
 class ContractOut(BaseModel):
@@ -77,6 +79,7 @@ class ContractOut(BaseModel):
     amount: Decimal | None
     support_hours: str | None
     memo: str | None
+    linked_business_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
 
@@ -198,6 +201,7 @@ async def create_contract(
         amount=data.amount,
         support_hours=data.support_hours,
         memo=data.memo,
+        linked_business_id=data.linked_business_id,
     )
     db.add(contract)
     await db.commit()
