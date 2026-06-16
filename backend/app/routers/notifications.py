@@ -72,8 +72,19 @@ class NotificationConfigOut(BaseModel):
     sms_api_key: str | None
     sms_api_secret: str | None
     sms_from_number: str | None
+    # SMTP (고객 외부 알림) — 비밀번호는 설정 여부만 반환 (보안)
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_user: str | None = None
+    smtp_password_configured: bool = False
+    smtp_use_tls: bool = True
+    smtp_from_email: str | None = None
+    smtp_from_name: str | None = None
+    kakao_template_ticket_created: str | None = None
+    kakao_template_escalated: str | None = None
+    kakao_template_resolved: str | None = None
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": False}
 
 
 class NotificationConfigUpdate(BaseModel):
@@ -84,6 +95,16 @@ class NotificationConfigUpdate(BaseModel):
     sms_api_key: str | None = None
     sms_api_secret: str | None = None
     sms_from_number: str | None = None
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_user: str | None = None
+    smtp_password: str | None = None   # 평문 수신 → 서비스 레이어에서 암호화
+    smtp_use_tls: bool | None = None
+    smtp_from_email: str | None = None
+    smtp_from_name: str | None = None
+    kakao_template_ticket_created: str | None = None
+    kakao_template_escalated: str | None = None
+    kakao_template_resolved: str | None = None
 
 
 # ------------------------------------------------------------------
@@ -197,15 +218,29 @@ async def get_notification_config(
     )
     if cfg is None:
         return NotificationConfigOut(
-            slack_webhook_url=None,
-            teams_webhook_url=None,
-            kakao_api_key=None,
-            kakao_sender_key=None,
-            sms_api_key=None,
-            sms_api_secret=None,
-            sms_from_number=None,
+            slack_webhook_url=None, teams_webhook_url=None,
+            kakao_api_key=None, kakao_sender_key=None,
+            sms_api_key=None, sms_api_secret=None, sms_from_number=None,
         )
-    return NotificationConfigOut.model_validate(cfg)
+    return NotificationConfigOut(
+        slack_webhook_url=cfg.slack_webhook_url,
+        teams_webhook_url=cfg.teams_webhook_url,
+        kakao_api_key=cfg.kakao_api_key,
+        kakao_sender_key=cfg.kakao_sender_key,
+        sms_api_key=cfg.sms_api_key,
+        sms_api_secret=cfg.sms_api_secret,
+        sms_from_number=cfg.sms_from_number,
+        smtp_host=cfg.smtp_host,
+        smtp_port=cfg.smtp_port,
+        smtp_user=cfg.smtp_user,
+        smtp_password_configured=bool(cfg.smtp_password_enc),
+        smtp_use_tls=cfg.smtp_use_tls if cfg.smtp_use_tls is not None else True,
+        smtp_from_email=cfg.smtp_from_email,
+        smtp_from_name=cfg.smtp_from_name,
+        kakao_template_ticket_created=cfg.kakao_template_ticket_created,
+        kakao_template_escalated=cfg.kakao_template_escalated,
+        kakao_template_resolved=cfg.kakao_template_resolved,
+    )
 
 
 # ------------------------------------------------------------------
@@ -224,8 +259,12 @@ async def upsert_notification_config(
     current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> NotificationConfigOut:
-    """채널 설정 upsert (SELECT FOR UPDATE → 있으면 UPDATE, 없으면 INSERT)."""
+    """채널 설정 upsert (SELECT FOR UPDATE → 있으면 UPDATE, 없으면 INSERT).
+
+    smtp_password 평문 수신 → AES-256-GCM 암호화 후 smtp_password_enc 저장.
+    """
     import uuid as _uuid
+    from app.services.crypto import encrypt_value
 
     cfg = await db.scalar(
         select(TenantNotificationConfig)
@@ -233,19 +272,46 @@ async def upsert_notification_config(
         .with_for_update()
     )
 
-    update_fields = data.model_dump(exclude_unset=False)
+    # smtp_password는 별도 처리 (암호화), 나머지 필드만 직접 매핑
+    raw_password = data.smtp_password
+    fields = data.model_dump(exclude_unset=False, exclude={"smtp_password"})
 
     if cfg is not None:
-        for field, value in update_fields.items():
-            setattr(cfg, field, value)
+        for field, value in fields.items():
+            if value is not None or field not in {
+                "smtp_host", "smtp_user", "smtp_from_email", "smtp_from_name",
+            }:
+                setattr(cfg, field, value)
+        if raw_password is not None:
+            cfg.smtp_password_enc = encrypt_value(raw_password)
     else:
         cfg = TenantNotificationConfig(
             id=_uuid.uuid4(),
             tenant_id=current_user.tenant_id,
-            **update_fields,
+            **{k: v for k, v in fields.items() if v is not None},
         )
+        if raw_password:
+            cfg.smtp_password_enc = encrypt_value(raw_password)
         db.add(cfg)
 
     await db.commit()
     await db.refresh(cfg)
-    return NotificationConfigOut.model_validate(cfg)
+    return NotificationConfigOut(
+        slack_webhook_url=cfg.slack_webhook_url,
+        teams_webhook_url=cfg.teams_webhook_url,
+        kakao_api_key=cfg.kakao_api_key,
+        kakao_sender_key=cfg.kakao_sender_key,
+        sms_api_key=cfg.sms_api_key,
+        sms_api_secret=cfg.sms_api_secret,
+        sms_from_number=cfg.sms_from_number,
+        smtp_host=cfg.smtp_host,
+        smtp_port=cfg.smtp_port,
+        smtp_user=cfg.smtp_user,
+        smtp_password_configured=bool(cfg.smtp_password_enc),
+        smtp_use_tls=cfg.smtp_use_tls if cfg.smtp_use_tls is not None else True,
+        smtp_from_email=cfg.smtp_from_email,
+        smtp_from_name=cfg.smtp_from_name,
+        kakao_template_ticket_created=cfg.kakao_template_ticket_created,
+        kakao_template_escalated=cfg.kakao_template_escalated,
+        kakao_template_resolved=cfg.kakao_template_resolved,
+    )

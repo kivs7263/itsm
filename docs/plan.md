@@ -1234,10 +1234,10 @@ ALTER TABLE tenant_notification_configs
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `ESC-2a` | SQLAlchemy 모델 — `SupportTeam`, `TicketEscalation`, `ExternalNotificationLog` | S | `[ PENDING ]` |
-| `ESC-2b` | 에스컬레이션 라우터 (`/tickets/{id}/escalations`) — CRUD | M | `[ PENDING ]` |
-| `ESC-2c` | 지원팀 라우터 (`/support-teams`) — CRUD (admin만) | S | `[ PENDING ]` |
-| `ESC-2d` | tickets 라우터 — `escalation_level`, 이력 포함 응답 확장 | S | `[ PENDING ]` |
+| `ESC-2a` | SQLAlchemy 모델 — `SupportTeam`, `TicketEscalation`, `ExternalNotificationLog` | S | `[ DONE 2026-06-16 ]` |
+| `ESC-2b` | 에스컬레이션 라우터 (`/tickets/{id}/escalations`) — CRUD | M | `[ DONE 2026-06-16 ]` |
+| `ESC-2c` | 지원팀 라우터 (`/support-teams`) — CRUD (admin만) | S | `[ DONE 2026-06-16 ]` |
+| `ESC-2d` | tickets 라우터 — `escalation_level`, 이력 포함 응답 확장 | S | `[ DONE 2026-06-16 ]` |
 
 **ESC-2b 엔드포인트 목록**
 
@@ -1271,11 +1271,11 @@ class EscalateRequest(BaseModel):
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `ESC-3a` | `app/services/external_notif_service.py` — 채널 추상화 + 발송 로직 | M | `[ PENDING ]` |
-| `ESC-3b` | 이메일 어댑터 (aiosmtplib) + Jinja2 템플릿 6종 | M | `[ PENDING ]` |
-| `ESC-3c` | Redis ZSET 재시도 큐 — 기존 SLA 워커 루프에 통합 | S | `[ PENDING ]` |
-| `ESC-3d` | SLA 위반 자동 트리거 — 80%/100% 도달 시 `ext_notif` 생성 | S | `[ PENDING ]` |
-| `ESC-3e` | 알림 발송 이력 API (`GET /{tenant}/notifications/external`) | S | `[ PENDING ]` |
+| `ESC-3a` | `app/services/external_notif_service.py` — 채널 추상화 + 발송 로직 | M | `[ DONE 2026-06-16 ]` |
+| `ESC-3b` | 이메일 어댑터 (aiosmtplib) + Jinja2 템플릿 6종 | M | `[ DONE 2026-06-16 ]` |
+| `ESC-3c` | Redis ZSET 재시도 큐 — 기존 SLA 워커 루프에 통합 | S | `[ DONE 2026-06-16 ]` |
+| `ESC-3d` | SLA 위반 자동 트리거 — 80%/100% 도달 시 `ext_notif` 생성 | S | `[ DONE 2026-06-16 ]` |
+| `ESC-3e` | 알림 발송 이력 API (`GET /{tenant}/notifications/external`) | S | `[ DONE 2026-06-16 ]` |
 
 **이메일 템플릿 6종 (Jinja2)**
 

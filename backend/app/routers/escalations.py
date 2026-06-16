@@ -22,7 +22,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated, Literal
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,6 +40,7 @@ from app.models.escalation import (
     SupportTeamMember,
     TicketEscalation,
 )
+from app.services.external_notif_service import queue_notification, resolve_customer_email
 
 esc_router = APIRouter(
     prefix="/{tenant_slug}/tickets/{ticket_id}/escalations",
@@ -205,7 +210,31 @@ async def escalate_ticket(
     await db.commit()
     await db.refresh(esc)
 
-    # TODO ESC-3: body.notify_channels 기반 외부 알림 큐 생성
+    # ESC-3: 고객 외부 알림 큐 등록 (설정된 채널 + notify_channels 교차)
+    if body.notify_channels and ticket.customer_id:
+        try:
+            customer_email, customer_name = await resolve_customer_email(db, ticket)
+            if customer_email:
+                summary = body.customer_summary or ""
+                for ch in body.notify_channels:
+                    await queue_notification(
+                        db,
+                        tenant_id=current_user.tenant_id,
+                        ticket_id=ticket_id,
+                        escalation_id=esc.id,
+                        channel=ch,
+                        event_type="ticket_escalated",
+                        recipient=customer_email,
+                        payload={
+                            "ticket_title": ticket.title,
+                            "ticket_number": ticket.ticket_number or str(ticket_id)[:8],
+                            "customer_name": customer_name,
+                            "customer_summary": summary,
+                        },
+                    )
+                await db.commit()
+        except Exception:
+            logger.warning("에스컬레이션 외부 알림 큐 실패 (무시)", exc_info=True)
 
     return await _enrich_escalation(esc, db)
 

@@ -216,3 +216,7 @@ app.include_router(settings_users_router.router, prefix="/api")            # /ap
 from app.routers import escalations as escalations_router  # noqa: E402
 app.include_router(escalations_router.esc_router, prefix="/api")   # /api/{slug}/tickets/{id}/escalations
 app.include_router(escalations_router.team_router, prefix="/api")  # /api/{slug}/support-teams
+
+# ESC-3 고객 외부 알림 이력
+from app.routers import external_notifications as ext_notif_router  # noqa: E402
+app.include_router(ext_notif_router.router, prefix="/api")         # /api/{slug}/notifications/external

@@ -17,12 +17,46 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, engine
 from app.core.redis import get_redis
+from app.services import external_notif_service
 
 logger = logging.getLogger(__name__)
 
 _LOCK_KEY = "itsm:sla_worker:lock"
 _LOCK_TTL = 90  # seconds — 1주기 60s + 여유
 _running = True
+
+
+async def _enqueue_sla_notification(session, tenant_id, ticket_id, event_type: str) -> None:
+    """티켓 고객에게 SLA 진행 상황 외부 알림 큐 등록."""
+    try:
+        from sqlalchemy import select as sa_select
+        from app.models import Ticket
+        from app.services.external_notif_service import queue_notification, resolve_customer_email
+
+        ticket = await session.get(Ticket, ticket_id)
+        if not ticket or not ticket.customer_id:
+            return
+
+        email, name = await resolve_customer_email(session, ticket)
+        if not email:
+            return
+
+        await queue_notification(
+            session,
+            tenant_id=tenant_id,
+            ticket_id=ticket_id,
+            escalation_id=None,
+            channel="email",
+            event_type=event_type,
+            recipient=email,
+            payload={
+                "ticket_title": ticket.title,
+                "ticket_number": ticket.ticket_number or str(ticket_id)[:8],
+                "customer_name": name,
+            },
+        )
+    except Exception:
+        logger.warning("SLA 외부 알림 큐 등록 실패 (무시)", exc_info=True)
 
 
 def _handle_signal(sig: int, _frame) -> None:
@@ -84,6 +118,9 @@ async def _check_sla_once(_engine, redis) -> None:
                             {"tid": str(row.tenant_id), "tickid": str(ticket_id)},
                         )
                         logger.info("SLA breach_warning: ticket=%s", ticket_id)
+                        await _enqueue_sla_notification(
+                            session, row.tenant_id, ticket_id, "sla_warning"
+                        )
 
                 # breached: response_deadline 경과
                 elif now >= response_deadline:
@@ -97,11 +134,22 @@ async def _check_sla_once(_engine, redis) -> None:
                             {"tid": str(row.tenant_id), "tickid": str(ticket_id)},
                         )
                         logger.info("SLA breached: ticket=%s", ticket_id)
+                        await _enqueue_sla_notification(
+                            session, row.tenant_id, ticket_id, "sla_warning"
+                        )
 
             await session.commit()
 
     finally:
         await redis.delete(_LOCK_KEY)
+
+    # 외부 알림 대기 큐 처리 (ESC-3c)
+    try:
+        sent = await external_notif_service.process_pending(redis)
+        if sent:
+            logger.info("외부 알림 발송: %d건", sent)
+    except Exception:
+        logger.exception("외부 알림 처리 오류")
 
 
 async def main() -> None:
