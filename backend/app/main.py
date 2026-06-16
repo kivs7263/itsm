@@ -211,3 +211,8 @@ app.include_router(reports_router.router, prefix="/api")                   # /ap
 # P4-3 Settings — 사용자 관리
 from app.routers import settings_users as settings_users_router  # noqa: E402
 app.include_router(settings_users_router.router, prefix="/api")            # /api/{slug}/settings/users
+
+# ESC 에스컬레이션 + 지원팀
+from app.routers import escalations as escalations_router  # noqa: E402
+app.include_router(escalations_router.esc_router, prefix="/api")   # /api/{slug}/tickets/{id}/escalations
+app.include_router(escalations_router.team_router, prefix="/api")  # /api/{slug}/support-teams

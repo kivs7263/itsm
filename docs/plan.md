@@ -1114,10 +1114,10 @@ CREATE TABLE ticket_known_issues (
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `ESC-1a` | **Migration 025** — `support_teams` + `ticket_escalations` | S | `[ PENDING ]` |
-| `ESC-1b` | **Migration 026** — `tickets` 컬럼 추가 | S | `[ PENDING ]` |
-| `ESC-1c` | **Migration 027** — `external_notification_logs` | S | `[ PENDING ]` |
-| `ESC-1d` | **Migration 028** — `tenant_notification_configs` SMTP/카카오 컬럼 | S | `[ PENDING ]` |
+| `ESC-1a` | **Migration 025** — `support_teams` + `ticket_escalations` | S | `[ DONE 2026-06-16 ]` |
+| `ESC-1b` | **Migration 026** — `tickets` 컬럼 추가 | S | `[ DONE 2026-06-16 ]` |
+| `ESC-1c` | **Migration 027** — `external_notification_logs` | S | `[ DONE 2026-06-16 ]` |
+| `ESC-1d` | **Migration 028** — `tenant_notification_configs` SMTP/카카오 컬럼 | S | `[ DONE 2026-06-16 ]` |
 
 **ESC-1a DDL**
 

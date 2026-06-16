@@ -65,6 +65,17 @@ from app.models.recurring_alert import RecurringAlert  # noqa: F401
 from app.models.ticket_known_issue import TicketKnownIssue  # noqa: F401
 from app.models.report import Report, ReportStatus  # noqa: F401
 from app.models.tenant_notification_config import TenantNotificationConfig  # noqa: F401
+from app.models.escalation import (  # noqa: F401
+    SupportTeam,
+    SupportTeamMember,
+    TicketEscalation,
+    EscalationReason,
+)
+from app.models.external_notification_log import (  # noqa: F401
+    ExternalNotificationLog,
+    ExtNotifChannel,
+    ExtNotifStatus,
+)
 
 __all__ = [
     "Base",
@@ -151,4 +162,13 @@ __all__ = [
     "ReportStatus",
     # tenant notification config (P4-3)
     "TenantNotificationConfig",
+    # escalation (ESC)
+    "SupportTeam",
+    "SupportTeamMember",
+    "TicketEscalation",
+    "EscalationReason",
+    # external notification log (ESC)
+    "ExternalNotificationLog",
+    "ExtNotifChannel",
+    "ExtNotifStatus",
 ]
