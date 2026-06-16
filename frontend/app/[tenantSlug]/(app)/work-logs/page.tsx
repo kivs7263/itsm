@@ -23,6 +23,77 @@ import { useAuth } from '@/hooks/useAuth';
 // Types
 // ──────────────────────────────────────────────────────────────────────────────
 
+interface ActiveTimerItem {
+  user_id: string;
+  user_name: string | null;
+  ticket_id: string;
+  ticket_number: string | null;
+  ticket_title: string | null;
+  started_at: string;
+  elapsed_seconds: number;
+}
+
+function useElapsedStr(startedAt: string): string {
+  const [secs, setSecs] = React.useState(() =>
+    Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000),
+  );
+  React.useEffect(() => {
+    setSecs(Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
+    const id = setInterval(
+      () => setSecs(Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)),
+      1000,
+    );
+    return () => clearInterval(id);
+  }, [startedAt]);
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function ActiveTimerRow({ item, tenantSlug, isManager, router }: {
+  item: ActiveTimerItem; tenantSlug: string; isManager: boolean; router: ReturnType<typeof useRouter>;
+}) {
+  const elapsed = useElapsedStr(item.started_at);
+  return (
+    <tr className="bg-amber-50/60 dark:bg-amber-950/20 border-l-2 border-amber-400">
+      <td className="px-4 py-2.5">
+        {item.ticket_number ? (
+          <button
+            onClick={() => router.push(`/${tenantSlug}/tickets?focus=${item.ticket_id}`)}
+            className="flex items-center gap-1 text-brand hover:underline text-xs font-medium"
+          >
+            {item.ticket_number}
+            <ExternalLink size={10} />
+          </button>
+        ) : <span className="text-text-disabled text-xs">—</span>}
+        {item.ticket_title && (
+          <p className="text-xs text-text-secondary truncate max-w-[120px] mt-0.5" title={item.ticket_title}>
+            {item.ticket_title}
+          </p>
+        )}
+      </td>
+      <td className="px-4 py-2.5">
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+          진행 중
+        </span>
+      </td>
+      {isManager && (
+        <td className="px-4 py-2.5 text-text-secondary text-xs">{item.user_name ?? '—'}</td>
+      )}
+      <td className="px-4 py-2.5 text-center">
+        <span className="font-mono text-xs font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
+          {elapsed}
+        </span>
+      </td>
+      <td className="px-4 py-2.5 text-center text-text-disabled text-xs">—</td>
+      <td className="px-4 py-2.5 text-center text-text-disabled text-xs">—</td>
+      <td className="px-4 py-2.5 text-center text-text-disabled text-xs">—</td>
+      <td className="px-4 py-2.5 text-right text-text-disabled text-xs">—</td>
+      <td />
+    </tr>
+  );
+}
+
 interface WorkLogItem {
   id: string;
   ticket_id: string;
@@ -106,6 +177,13 @@ export default function WorkLogsPage() {
     queryFn: () => api.get(`/${tenantSlug}/work-logs?${params.toString()}`).then((r) => r.data),
     staleTime: 30000,
     retry: 1,
+  });
+
+  const { data: activeTimers = [] } = useQuery<ActiveTimerItem[]>({
+    queryKey: ['active-timers', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/work-logs/active-timers`).then((r) => r.data),
+    refetchInterval: 15000,
+    enabled: isManager,
   });
 
   const { data: users = [] } = useQuery<UserOption[]>({
@@ -266,7 +344,16 @@ export default function WorkLogsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border-subtle">
-            {isError ? (
+            {isManager && activeTimers.map((item) => (
+            <ActiveTimerRow
+              key={item.ticket_id + item.user_id}
+              item={item}
+              tenantSlug={tenantSlug}
+              isManager={isManager}
+              router={router}
+            />
+          ))}
+          {isError ? (
             <tr>
               <td colSpan={isManager ? 9 : 8} className="px-4 py-16 text-center">
                 <AlertCircle size={32} className="mx-auto mb-3 text-red-400" />
