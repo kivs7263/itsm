@@ -141,7 +141,7 @@ function EmptyState({ onNew }: { onNew: () => void }) {
 }
 
 // -----------------------------------------------------------------------
-// 공유 큐 타입
+// 티켓 풀 타입
 // -----------------------------------------------------------------------
 interface QueueTicket {
   id: string;
@@ -170,7 +170,7 @@ const REQUEST_TYPE_LABELS: Record<string, string> = {
 };
 
 // -----------------------------------------------------------------------
-// 공유 큐 탭 (인라인 — 별도 /queue 페이지 없애고 여기서 처리)
+// 티켓 풀 탭 (인라인)
 // -----------------------------------------------------------------------
 function QueueTab({ tenantSlug }: { tenantSlug: string }) {
   const queryClient = useQueryClient();
@@ -423,7 +423,7 @@ export default function TicketsPage() {
                   : 'text-text-secondary hover:text-text-primary',
               )}
             >
-              공유 큐
+              티켓 풀
             </button>
           </div>
         </div>
@@ -438,7 +438,7 @@ export default function TicketsPage() {
         )}
       </div>
 
-      {/* 공유 큐 탭 */}
+      {/* 티켓 풀 탭 */}
       {activeTab === 'queue' && <QueueTab tenantSlug={tenantSlug} />}
 
       {/* 내 티켓 탭 — 필터 바 + 테이블 */}
@@ -522,7 +522,7 @@ export default function TicketsPage() {
               <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">담당자</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">우선순위</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">상태</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">공수</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">작업 시간</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">SLA</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">생성일</th>
             </tr>
@@ -557,7 +557,7 @@ export default function TicketsPage() {
 
                   {/* # */}
                   <td className="px-4 py-3 text-text-secondary text-xs font-mono tabular-nums">
-                    {ticket.id.slice(0, 6)}
+                    {ticket.ticket_number ?? '-'}
                   </td>
 
                   {/* 제목 */}

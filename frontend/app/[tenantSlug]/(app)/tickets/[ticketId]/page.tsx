@@ -273,6 +273,7 @@ export default function TicketDetailPage() {
 
   // 총 공수 합산
   const totalHours = workLogs.reduce((acc, l) => acc + l.hours, 0);
+  const billableHours = workLogs.reduce((acc, l) => acc + (l.billable ? l.hours : 0), 0);
 
   // 활동 타임라인 병합 (댓글 + 에스컬레이션)
   const activityItems: ActivityItem[] = React.useMemo(() => {
@@ -498,13 +499,25 @@ export default function TicketDetailPage() {
               </div>
             </SideSection>
 
-            {/* 공수 요약 */}
-            <SideSection title="공수">
-              <div className="flex justify-between text-sm">
-                <span className="text-text-secondary">총 투입 시간</span>
-                <span className="text-text-primary font-semibold tabular-nums">
-                  {totalHours > 0 ? `${totalHours.toFixed(1)}h` : '-'}
-                </span>
+            {/* 작업 시간 요약 */}
+            <SideSection title="작업 시간">
+              <div className="flex flex-col gap-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-text-secondary">누적 시간</span>
+                  <span className="text-text-primary font-semibold tabular-nums">
+                    {totalHours > 0 ? `${totalHours.toFixed(1)}h` : '-'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-text-secondary">청구 가능</span>
+                  <span className="text-text-primary tabular-nums">
+                    {billableHours > 0 ? `${billableHours.toFixed(1)}h` : '-'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-text-secondary">작업 일지</span>
+                  <span className="text-text-primary tabular-nums">{workLogs.length}건</span>
+                </div>
               </div>
             </SideSection>
 

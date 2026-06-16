@@ -3,7 +3,7 @@
 /**
  * BusinessContextBar — 앱 상단 사업카드 컨텍스트 필터 바
  *
- * SA 사업카드를 선택하면 sessionStorage에 active_business_id를 저장.
+ * SA 사업카드를 선택하면 localStorage에 active_business_id를 저장 (다중 탭 유지).
  * 티켓 목록 등에서 이 값을 읽어 필터 적용.
  * SA_BACKEND_URL 미설정 or 사업카드 0건 → 자동 숨김.
  */
@@ -27,22 +27,22 @@ export function useActiveBusiness() {
   const [active, setActiveState] = React.useState<{ id: string; name: string } | null>(null);
 
   React.useEffect(() => {
-    const id = sessionStorage.getItem(SESSION_KEY);
-    const name = sessionStorage.getItem(SESSION_NAME_KEY);
+    const id = localStorage.getItem(SESSION_KEY);
+    const name = localStorage.getItem(SESSION_NAME_KEY);
     if (id && name) setActiveState({ id, name });
   }, []);
 
   const setActive = React.useCallback((id: string, name: string) => {
-    sessionStorage.setItem(SESSION_KEY, id);
-    sessionStorage.setItem(SESSION_NAME_KEY, name);
+    localStorage.setItem(SESSION_KEY, id);
+    localStorage.setItem(SESSION_NAME_KEY, name);
     setActiveState({ id, name });
     // 다른 탭에서 읽을 수 있도록 storage event 발행 (같은 탭은 안 들림)
     window.dispatchEvent(new CustomEvent('itsm-business-changed', { detail: { id, name } }));
   }, []);
 
   const clearActive = React.useCallback(() => {
-    sessionStorage.removeItem(SESSION_KEY);
-    sessionStorage.removeItem(SESSION_NAME_KEY);
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_NAME_KEY);
     setActiveState(null);
     window.dispatchEvent(new CustomEvent('itsm-business-changed', { detail: null }));
   }, []);

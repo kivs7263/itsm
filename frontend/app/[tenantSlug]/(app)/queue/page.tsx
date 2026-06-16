@@ -102,7 +102,7 @@ function EmptyState() {
 }
 
 // -----------------------------------------------------------------------
-// 공유 큐 페이지
+// 티켓 풀 페이지
 // -----------------------------------------------------------------------
 export default function QueuePage() {
   const params = useParams();
@@ -140,7 +140,7 @@ export default function QueuePage() {
       {/* 헤더 */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border-default bg-surface shrink-0">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-text-primary">공유 큐</h1>
+          <h1 className="text-xl font-semibold text-text-primary">티켓 풀</h1>
           {total > 0 && (
             <span className="flex items-center justify-center h-5 min-w-5 rounded-full bg-error text-white text-[10px] font-bold px-1.5">
               {total}

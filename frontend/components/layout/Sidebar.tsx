@@ -44,10 +44,10 @@ type NavItem = { label: string; href: string; icon: React.ElementType };
 const ENGINEER_ITEMS: NavItem[] = [
   { label: '대시보드',   href: '/home',             icon: Home      },
   { label: '티켓',       href: '/tickets',          icon: LifeBuoy  },
-  { label: '공수',       href: '/work-logs',        icon: Clock     },
+  { label: '작업 시간',  href: '/work-logs',        icon: Clock     },
   { label: '고객',       href: '/customers',        icon: Users     },
   { label: '지식베이스', href: '/kb',               icon: BookOpen  },
-  { label: '반복 장애',  href: '/recurring-alerts', icon: RefreshCw },
+  { label: '반복 이슈',  href: '/recurring-alerts', icon: RefreshCw },
 ];
 
 const TEAM_LEAD_ITEMS: NavItem[] = [

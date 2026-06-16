@@ -131,7 +131,7 @@ function EngineerDashboard({ tenantSlug }: { tenantSlug: string }) {
                 {(myTickets?.items ?? []).slice(0, 8).map((t) => (
                   <tr key={t.id} className="border-t border-border-subtle">
                     <td className="px-4 py-2.5 font-mono text-xs text-text-secondary">
-                      {t.ticket_number ?? t.id.slice(0, 8)}
+                      {t.ticket_number ?? '-'}
                     </td>
                     <td className="px-4 py-2.5 text-text-primary truncate max-w-xs">{t.title}</td>
                     <td className="px-4 py-2.5 text-xs text-text-secondary">
