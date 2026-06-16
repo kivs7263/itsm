@@ -34,6 +34,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.redis import get_redis
 from app.models import Ticket, TicketWorkLog, User, UserRole, WorkType
+from app.models.work_log import CompletionStatus
 from app.models.contract import Contract
 
 logger = logging.getLogger(__name__)
@@ -73,8 +74,22 @@ class WorkLogCreate(BaseModel):
     work_type: WorkType = WorkType.remote
     hours: float = Field(..., gt=0, le=999.99, description="0.25 단위 (15분)")
     billable: bool = True
+    description: str | None = None
+    completion_status: CompletionStatus = CompletionStatus.completed
+    next_action: str | None = None
     memo: str | None = None
     started_at: datetime | None = None
+
+
+class WorkLogStopBody(BaseModel):
+    """타이머 중지 전용 — hours=0 이면 경과 시간 자동 계산."""
+    work_type: WorkType = WorkType.remote
+    hours: float = Field(0.0, ge=0, le=999.99)
+    billable: bool = True
+    description: str  # 수행한 내용 (필수)
+    completion_status: CompletionStatus = CompletionStatus.completed
+    next_action: str | None = None
+    memo: str | None = None
 
 
 class WorkLogOut(BaseModel):
@@ -85,6 +100,9 @@ class WorkLogOut(BaseModel):
     work_type: str
     hours: float
     billable: bool
+    description: str | None
+    completion_status: str | None
+    next_action: str | None
     memo: str | None
     started_at: datetime | None
     logged_at: datetime
@@ -132,6 +150,9 @@ async def create_work_log(
         work_type=body.work_type.value,
         hours=Decimal(str(round(body.hours, 2))),
         billable=body.billable,
+        description=body.description,
+        completion_status=body.completion_status.value,
+        next_action=body.next_action,
         memo=body.memo,
         started_at=body.started_at,
         logged_at=datetime.now(timezone.utc),
@@ -233,7 +254,7 @@ async def timer_start(
 @router.post("/{tenant_slug}/work-logs/timer/stop", response_model=WorkLogOut)
 async def timer_stop(
     tenant_slug: str,
-    body: WorkLogCreate,
+    body: WorkLogStopBody,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ):
@@ -251,7 +272,7 @@ async def timer_stop(
 
     await redis.delete(key)
 
-    # 경과 시간 기반 hours 자동 계산 (body.hours가 0이면 자동, >0이면 수동 오버라이드)
+    # hours=0 이면 경과 시간 자동 계산, >0 이면 수동 오버라이드
     elapsed_seconds = (datetime.now(timezone.utc) - started_at).total_seconds()
     auto_hours = round(elapsed_seconds / 3600, 2)
     hours = body.hours if body.hours > 0 else auto_hours
@@ -263,6 +284,9 @@ async def timer_stop(
         work_type=body.work_type.value,
         hours=Decimal(str(max(0.25, hours))),
         billable=body.billable,
+        description=body.description,
+        completion_status=body.completion_status.value,
+        next_action=body.next_action,
         memo=body.memo,
         started_at=started_at,
         logged_at=datetime.now(timezone.utc),
@@ -369,6 +393,9 @@ def _serialize(log: TicketWorkLog, user: User | None) -> WorkLogOut:
         work_type=log.work_type,
         hours=float(log.hours),
         billable=log.billable,
+        description=log.description,
+        completion_status=log.completion_status,
+        next_action=log.next_action,
         memo=log.memo,
         started_at=log.started_at,
         logged_at=log.logged_at,

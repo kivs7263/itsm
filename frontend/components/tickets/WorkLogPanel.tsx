@@ -1,13 +1,14 @@
 'use client';
 
 import * as React from 'react';
-import { Play, Square, Trash2, Plus } from 'lucide-react';
+import { Play, Trash2, Plus } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { WorkLogStopModal } from './WorkLogStopModal';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // 타입
@@ -21,10 +22,19 @@ interface WorkLog {
   work_type: string;
   hours: number;
   billable: boolean;
+  description: string | null;
+  completion_status: string | null;
+  next_action: string | null;
   memo: string | null;
   started_at: string | null;
   logged_at: string;
 }
+
+const COMPLETION_LABELS: Record<string, { label: string; cls: string }> = {
+  completed:      { label: '완료',         cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+  partial:        { label: '부분 완료',    cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+  needs_followup: { label: '추가 대응 필요', cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+};
 
 interface TimerActive {
   active: boolean;
@@ -84,6 +94,8 @@ interface WorkLogPanelProps {
 export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
   const queryClient = useQueryClient();
 
+  const [showStopModal, setShowStopModal] = React.useState(false);
+
   // 수동 입력 폼 상태
   const [showForm, setShowForm] = React.useState(false);
   const [formHours, setFormHours] = React.useState('');
@@ -127,23 +139,6 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  // 타이머 중지 → 자동 로그 생성
-  const stopMutation = useMutation({
-    mutationFn: () =>
-      api.post(`/${tenantSlug}/work-logs/timer/stop`, {
-        work_type: formType,
-        hours: 0,
-        billable: formBillable,
-        memo: formMemo || null,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['work-timer', tenantSlug] });
-      queryClient.invalidateQueries({ queryKey: ['work-logs', tenantSlug, ticketId] });
-      setFormMemo('');
-      toast.success('타이머가 중지되고 공수가 기록되었습니다.');
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
 
   // 수동 입력 저장
   const createMutation = useMutation({
@@ -178,6 +173,16 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
   const isThisTicketTimer = timer?.active && timer.ticket_id === ticketId;
 
   return (
+    <>
+    <WorkLogStopModal
+      open={showStopModal}
+      onClose={() => setShowStopModal(false)}
+      tenantSlug={tenantSlug}
+      elapsed={elapsed}
+      onStopped={() => {
+        queryClient.invalidateQueries({ queryKey: ['work-logs', tenantSlug, ticketId] });
+      }}
+    />
     <div className="flex flex-col gap-4 p-5">
       {/* 집계 스트립 */}
       {totalH && (
@@ -208,40 +213,16 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
         {timerLoading ? (
           <Skeleton className="h-9 w-full" />
         ) : isThisTicketTimer ? (
-          <div className="flex items-center gap-3">
-            <div className="flex-1 text-center">
-              <span className="font-mono text-2xl font-semibold text-text-primary tabular-nums">
-                {elapsed}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1.5 w-28">
-              <select
-                value={formType}
-                onChange={(e) => setFormType(e.target.value)}
-                className="h-7 text-xs rounded border border-border-default bg-surface px-2 text-text-primary"
-              >
-                {Object.entries(WORK_TYPE_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formBillable}
-                  onChange={(e) => setFormBillable(e.target.checked)}
-                  className="h-3 w-3 accent-brand"
-                />
-                <span className="text-xs text-text-secondary">유상</span>
-              </label>
-            </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-mono text-2xl font-semibold text-text-primary tabular-nums">
+              {elapsed}
+            </span>
             <Button
               size="sm"
-              variant="destructive"
-              onClick={() => stopMutation.mutate()}
-              isLoading={stopMutation.isPending}
-              leftIcon={<Square size={12} />}
+              onClick={() => setShowStopModal(true)}
+              className="bg-amber-500 hover:bg-amber-600 text-[#1A1A1A] border-0"
             >
-              중지
+              중지 및 기록
             </Button>
           </div>
         ) : timer?.active && !isThisTicketTimer ? (
@@ -368,14 +349,27 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
                     <span className="text-xs text-text-secondary bg-surface-hover rounded px-1.5 py-0.5">
                       {WORK_TYPE_LABELS[log.work_type] ?? log.work_type}
                     </span>
+                    {log.completion_status && COMPLETION_LABELS[log.completion_status] && (
+                      <span className={cn(
+                        'text-xs rounded-full px-1.5 py-0.5',
+                        COMPLETION_LABELS[log.completion_status].cls,
+                      )}>
+                        {COMPLETION_LABELS[log.completion_status].label}
+                      </span>
+                    )}
                   </div>
+                  {log.description && (
+                    <p className="text-xs text-text-primary mt-1 line-clamp-2">{log.description}</p>
+                  )}
+                  {log.next_action && (
+                    <p className="text-xs text-text-secondary mt-0.5">
+                      → {log.next_action}
+                    </p>
+                  )}
                   <p className="text-xs text-text-secondary mt-0.5">
                     {log.user_name ?? '알 수 없음'} ·{' '}
                     {new Date(log.logged_at).toLocaleDateString('ko-KR')}
                   </p>
-                  {log.memo && (
-                    <p className="text-xs text-text-secondary mt-0.5 truncate">{log.memo}</p>
-                  )}
                 </div>
                 <button
                   onClick={() => deleteMutation.mutate(log.id)}
@@ -394,5 +388,6 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
         )}
       </div>
     </div>
+    </>
   );
 }

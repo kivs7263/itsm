@@ -16,6 +16,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { BusinessContextBar } from '@/components/layout/BusinessContextBar';
 import { useSlug } from '@/lib/slug';
+import { GlobalTimerBar } from '@/components/tickets/GlobalTimerBar';
 
 // -----------------------------------------------------------------------
 // 인라인 스피너 (외부 컴포넌트 의존 최소화)
@@ -189,6 +190,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           {children}
         </div>
       </main>
+
+      {/* 글로벌 타이머 바 — 타이머 실행 중일 때만 표시 */}
+      {tenantSlug && <GlobalTimerBar tenantSlug={tenantSlug} />}
 
       {/* 하단 네비게이션 — 모바일만 */}
       <BottomNav />

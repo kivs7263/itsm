@@ -27,9 +27,21 @@ class WorkType(str, enum.Enum):
     internal = "internal"
 
 
+class CompletionStatus(str, enum.Enum):
+    completed = "completed"
+    partial = "partial"
+    needs_followup = "needs_followup"
+
+
 _work_type_enum = Enum(
     "remote", "onsite", "phone", "email", "internal",
     name="work_type_enum",
+    create_type=False,
+)
+
+_completion_status_enum = Enum(
+    "completed", "partial", "needs_followup",
+    name="completion_status_enum",
     create_type=False,
 )
 
@@ -60,6 +72,11 @@ class TicketWorkLog(Base):
     work_type = Column(_work_type_enum, nullable=False, default=WorkType.remote)
     hours = Column(Numeric(5, 2), nullable=False)
     billable = Column(Boolean, nullable=False, default=True)
+    description = Column(Text, nullable=True)
+    completion_status = Column(
+        _completion_status_enum, nullable=True, default=CompletionStatus.completed
+    )
+    next_action = Column(Text, nullable=True)
     memo = Column(Text, nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     logged_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
