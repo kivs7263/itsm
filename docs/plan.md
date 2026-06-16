@@ -1064,3 +1064,380 @@ CREATE TABLE ticket_known_issues (
 | R-D3 | TABS 5개로 축소 (info/tickets/infra/contracts/notes), 초기 탭 info로 변경 | S | [ DONE 2026-06-14 ] |
 
 **성공 기준**: 고객 상세 첫 진입 시 기본정보+연락처가 한 화면에 표시, ✏️ 버튼으로 즉시 편집 가능. 인프라 탭에서 HW/SW/자산 필터로 전체 구성 현황 확인 가능.
+
+---
+
+## Phase ESC: 에스컬레이션 + 고객 외부 알림
+> 생성: 2026-06-16 | product + architect 분석 기반
+> 목표: 1차→2차 인수인계 표준화 + 고객에게 처리 진행 상황 실시간 공유
+
+### 배경
+
+현재 시스템의 구조적 공백:
+- `assigned_to` 단일 FK만 존재 → 에스컬레이션 이력 추적 불가
+- 외부 알림(이메일/SMS/카카오) 발송 없음 → 고객이 처리 중 여부를 알 수 없음
+- 인수인계 메모 표준 없음 → 2차 담당자가 맥락 없이 인계받음
+
+### 아키텍처 결정 (ADR-041, 042 예정)
+
+| 결정 | 이유 |
+|---|---|
+| mail-service 재사용 불가 | GW 전용 KC org 인증 구조 — ITSM tenant 모델과 불일치 |
+| ITSM 백엔드 직접 발송 (aiosmtplib + httpx) | 현 트래픽 규모에서 별도 워커 컨테이너 불필요 |
+| Redis ZSET 재시도 큐 | 기존 SLA 워커 루프 패턴 재사용, 신규 컨테이너 없음 |
+| external_notification_logs 신규 테이블 | 기존 notification_logs는 내부(Slack/Teams) 전용, email 없음 |
+| 에스컬레이션 히스토리 별도 테이블 | 단일 컬럼으로는 감사 추적 불가, 이력 전체 보존 필요 |
+| 카카오 알림톡: MVP 제외 | 템플릿 사전 심사 5~10영업일, 이메일 선 출시 후 추가 |
+| 고객 포털: 매직링크 방식 | KC B2C realm 분리 없이 구현 가능, 고객 마찰 최소 |
+
+### 마이그레이션 번호 계획 (현재 최신: 024)
+
+| 번호 | 내용 |
+|---|---|
+| 025 | `ticket_escalations` + `support_teams` 테이블 신규 |
+| 026 | `tickets` 에스컬레이션 컬럼 추가 (escalation_count, last_escalated_at 등) |
+| 027 | `external_notification_logs` 테이블 신규 |
+| 028 | `tenant_notification_configs` SMTP + 카카오 템플릿 컬럼 추가 |
+
+---
+
+### ESC-0: ADR 작성
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `ESC-0a` | ADR-041 — 에스컬레이션 데이터 모델 결정 | S | `[ PENDING ]` |
+| `ESC-0b` | ADR-042 — 외부 알림 채널 추상화 결정 | S | `[ PENDING ]` |
+
+---
+
+### ESC-1: DB 마이그레이션
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `ESC-1a` | **Migration 025** — `support_teams` + `ticket_escalations` | S | `[ PENDING ]` |
+| `ESC-1b` | **Migration 026** — `tickets` 컬럼 추가 | S | `[ PENDING ]` |
+| `ESC-1c` | **Migration 027** — `external_notification_logs` | S | `[ PENDING ]` |
+| `ESC-1d` | **Migration 028** — `tenant_notification_configs` SMTP/카카오 컬럼 | S | `[ PENDING ]` |
+
+**ESC-1a DDL**
+
+```sql
+-- 2차 대응팀 (팀 기반 배정, 개인 직배정 금지)
+CREATE TABLE support_teams (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id   UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    name        VARCHAR(100) NOT NULL,
+    level       SMALLINT NOT NULL DEFAULT 2,  -- 1=1차, 2=2차, 3=3차
+    description TEXT,
+    is_active   BOOLEAN NOT NULL DEFAULT true,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX ix_support_teams_tenant ON support_teams(tenant_id, level);
+
+-- 팀 멤버 매핑
+CREATE TABLE support_team_members (
+    team_id UUID NOT NULL REFERENCES support_teams(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (team_id, user_id)
+);
+
+CREATE TYPE escalation_reason_enum AS ENUM (
+    'technical_complexity',  -- 기술적 난이도 초과
+    'permission_lack',       -- 권한/접근 부족
+    'sla_breach',            -- SLA 위반
+    'sla_warning',           -- SLA 위반 임박 (80%)
+    'customer_request',      -- 고객 직접 요청
+    'manual',                -- 담당자 판단
+    'other'
+);
+
+CREATE TABLE ticket_escalations (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    ticket_id       UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    from_level      SMALLINT NOT NULL DEFAULT 1,
+    to_level        SMALLINT NOT NULL DEFAULT 2,
+    from_assigned   UUID REFERENCES users(id) ON DELETE SET NULL,
+    to_team_id      UUID NOT NULL REFERENCES support_teams(id),
+    to_assigned     UUID REFERENCES users(id) ON DELETE SET NULL,  -- 팀 내 수동 배정 후
+    reason          escalation_reason_enum NOT NULL,
+    handover_memo   TEXT NOT NULL,           -- 필수 (인수인계 내용)
+    customer_summary TEXT,                   -- 고객 공유용 요약 (내부 메모와 분리)
+    triggered_by    UUID REFERENCES users(id) ON DELETE SET NULL,  -- NULL=자동
+    acknowledged_at TIMESTAMPTZ,             -- 2차 담당자 인지 시각
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX ix_ticket_escalations_ticket ON ticket_escalations(tenant_id, ticket_id);
+CREATE INDEX ix_ticket_escalations_team   ON ticket_escalations(to_team_id, created_at DESC);
+```
+
+**ESC-1b DDL**
+
+```sql
+ALTER TABLE tickets
+    ADD COLUMN escalation_level       SMALLINT NOT NULL DEFAULT 1,
+    ADD COLUMN escalation_count       SMALLINT NOT NULL DEFAULT 0,
+    ADD COLUMN last_escalated_at      TIMESTAMPTZ,
+    ADD COLUMN sla_breach_notified_at TIMESTAMPTZ;  -- 중복 SLA 알림 방지
+```
+
+**ESC-1c DDL**
+
+```sql
+CREATE TYPE ext_notif_channel_enum AS ENUM ('email', 'sms', 'kakao');
+CREATE TYPE ext_notif_status_enum  AS ENUM ('pending', 'sent', 'failed', 'retrying');
+
+CREATE TABLE external_notification_logs (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id      UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    ticket_id      UUID,           -- soft ref (티켓 삭제 후에도 이력 보존)
+    escalation_id  UUID,           -- soft ref → ticket_escalations.id
+    channel        ext_notif_channel_enum NOT NULL,
+    event_type     VARCHAR(100) NOT NULL,
+    -- ticket_created / assigned / escalated / comment_added / resolved / closed / sla_warning
+    recipient      VARCHAR(200) NOT NULL,   -- 이메일 or 전화번호
+    status         ext_notif_status_enum NOT NULL DEFAULT 'pending',
+    payload        JSONB,          -- 발송 요청 원문 (감사용)
+    provider_ref   VARCHAR(200),   -- 외부 API 메시지 ID
+    error_msg      TEXT,
+    retry_count    SMALLINT NOT NULL DEFAULT 0,
+    next_retry_at  TIMESTAMPTZ,
+    sent_at        TIMESTAMPTZ,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX ix_ext_notif_tenant    ON external_notification_logs(tenant_id, created_at DESC);
+CREATE INDEX ix_ext_notif_retry     ON external_notification_logs(status, next_retry_at)
+    WHERE status IN ('pending', 'retrying');
+```
+
+**ESC-1d DDL**
+
+```sql
+ALTER TABLE tenant_notification_configs
+    ADD COLUMN smtp_host          VARCHAR(200),
+    ADD COLUMN smtp_port          SMALLINT DEFAULT 587,
+    ADD COLUMN smtp_user          VARCHAR(200),
+    ADD COLUMN smtp_password_enc  TEXT,  -- AES-256 암호화 저장
+    ADD COLUMN smtp_from_email    VARCHAR(200),
+    ADD COLUMN smtp_from_name     VARCHAR(100),
+    ADD COLUMN kakao_sender_key   VARCHAR(200),
+    ADD COLUMN kakao_template_ticket_created    VARCHAR(100),
+    ADD COLUMN kakao_template_escalated         VARCHAR(100),
+    ADD COLUMN kakao_template_resolved          VARCHAR(100);
+```
+
+**성공 기준**: `alembic upgrade head` 성공, `ticket_escalations`/`external_notification_logs` 테이블 존재 확인
+
+---
+
+### ESC-2: Backend — 에스컬레이션 API
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `ESC-2a` | SQLAlchemy 모델 — `SupportTeam`, `TicketEscalation`, `ExternalNotificationLog` | S | `[ PENDING ]` |
+| `ESC-2b` | 에스컬레이션 라우터 (`/tickets/{id}/escalations`) — CRUD | M | `[ PENDING ]` |
+| `ESC-2c` | 지원팀 라우터 (`/support-teams`) — CRUD (admin만) | S | `[ PENDING ]` |
+| `ESC-2d` | tickets 라우터 — `escalation_level`, 이력 포함 응답 확장 | S | `[ PENDING ]` |
+
+**ESC-2b 엔드포인트 목록**
+
+```
+POST   /{tenant}/tickets/{id}/escalations          — 수동 에스컬레이션 (admin, team_lead)
+GET    /{tenant}/tickets/{id}/escalations          — 이력 목록
+PATCH  /{tenant}/tickets/{id}/escalations/{esc_id}/acknowledge — 인지 처리 (2차 담당자)
+GET    /{tenant}/support-teams                     — 팀 목록 (escalation 모달용)
+POST   /{tenant}/support-teams                     — 팀 생성 (admin)
+POST   /{tenant}/support-teams/{id}/members        — 팀원 추가
+DELETE /{tenant}/support-teams/{id}/members/{uid}  — 팀원 제거
+```
+
+**POST /escalations Request**
+
+```python
+class EscalateRequest(BaseModel):
+    to_team_id:      UUID
+    to_assigned:     UUID | None = None      # 팀 내 특정 담당자 (없으면 팀 round-robin)
+    reason:          EscalationReason
+    handover_memo:   str = Field(..., min_length=20)   # 필수 — 최소 20자
+    customer_summary: str | None = Field(None, max_length=300)  # 고객 공유 요약
+    notify_channels: list[Literal["email", "kakao"]] = ["email"]
+```
+
+**성공 기준**: 에스컬레이션 POST → `ticket_escalations` 행 생성, `tickets.escalation_level` +1, `tickets.assigned_to` 변경, 알림 대기열 생성
+
+---
+
+### ESC-3: Backend — 외부 알림 서비스
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `ESC-3a` | `app/services/external_notif_service.py` — 채널 추상화 + 발송 로직 | M | `[ PENDING ]` |
+| `ESC-3b` | 이메일 어댑터 (aiosmtplib) + Jinja2 템플릿 6종 | M | `[ PENDING ]` |
+| `ESC-3c` | Redis ZSET 재시도 큐 — 기존 SLA 워커 루프에 통합 | S | `[ PENDING ]` |
+| `ESC-3d` | SLA 위반 자동 트리거 — 80%/100% 도달 시 `ext_notif` 생성 | S | `[ PENDING ]` |
+| `ESC-3e` | 알림 발송 이력 API (`GET /{tenant}/notifications/external`) | S | `[ PENDING ]` |
+
+**이메일 템플릿 6종 (Jinja2)**
+
+| event_type | 발송 시점 |
+|---|---|
+| `ticket_created` | 티켓 생성 직후 |
+| `ticket_assigned` | 담당자 배정 시 |
+| `ticket_escalated` | 에스컬레이션 확정 시 |
+| `comment_added` | 엔지니어 외부 댓글 작성 시 (is_internal=False) |
+| `ticket_resolved` | 상태 → resolved |
+| `sla_warning` | SLA 80% 도달 시 (고객에게 "처리 중" 리마인더) |
+
+**재시도 전략**
+
+```
+1회차: 즉시
+2회차: 실패 후 2분
+3회차: 실패 후 10분
+이후:  status='failed', 내부 Slack 알림 (기존 채널 활용)
+```
+
+멱등성 키: `(ticket_id, event_type, channel)` → 동일 이벤트 중복 발송 방지
+
+**성공 기준**: 티켓 생성 → 고객 이메일 수신, 에스컬레이션 → 2차 담당자 이메일 수신, 발송 이력 API에서 status='sent' 확인
+
+---
+
+### ESC-4: Backend — 고객 매직링크 포털 API
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `ESC-4a` | 매직링크 JWT 발급 + 검증 미들웨어 | S | `[ PENDING ]` |
+| `ESC-4b` | 포털 전용 API — 티켓 상태 조회 + 타임라인 + 코멘트 작성 | M | `[ PENDING ]` |
+
+**매직링크 스펙**
+
+```
+URL: GET /portal/{token}
+JWT payload: { ticket_id, customer_id, tenant_id, exp: now+7d }
+서명: HS256, 시크릿 = ITSM_PORTAL_SECRET (환경변수)
+1회용 옵션: Redis에 token_used 플래그 저장
+```
+
+**포털 API**
+
+```
+GET  /portal/verify/{token}                  — 토큰 검증 + 티켓 기본정보 반환
+GET  /portal/{token}/timeline                — 공개 타임라인 (내부 메모 제외)
+POST /portal/{token}/comments                — 고객 코멘트 추가
+```
+
+**노출 정보 규칙**
+
+| 항목 | 표시 여부 |
+|---|---|
+| 티켓 번호/제목/상태 | O |
+| 현재 담당팀 이름 | O |
+| 에스컬레이션 발생 여부 | O (customer_summary만) |
+| handover_memo (내부) | X |
+| 담당자 개인 이름/연락처 | X |
+
+**성공 기준**: 매직링크 URL 접속 → 티켓 상태 확인 가능, 코멘트 작성 → 티켓 활동 탭에 반영
+
+---
+
+### ESC-5: Frontend — 에스컬레이션 UI
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `ESC-5a` | 티켓 상세 우측 패널 — 에스컬레이션 배지 + "2차 이관" 버튼 | S | `[ PENDING ]` |
+| `ESC-5b` | 에스컬레이션 모달 — 팀 선택, 사유, 인수인계 메모, 고객 알림 미리보기 | M | `[ PENDING ]` |
+| `ESC-5c` | 활동 타임라인에 에스컬레이션 이벤트 카드 추가 | S | `[ PENDING ]` |
+| `ESC-5d` | 인지(acknowledge) 버튼 — 2차 담당자용 | S | `[ PENDING ]` |
+
+**에스컬레이션 모달 구성**
+
+```
+[2차 대응팀으로 이관]
+├── 이관 대상 팀 (드롭다운, support_teams level=2)
+├── 팀 내 담당자 (선택, 없으면 round-robin)
+├── 사유 (라디오: 기술적 난이도/권한 부족/SLA 위반/고객 요청/기타)
+├── 인수인계 내용 (textarea, 필수, 20자 이상)
+│   ∟ 예: "방화벽 정책 변경 불가, DB 접근 권한 없음, 로그 첨부"
+├── 고객 공유 요약 (textarea, 200자, 선택 — 알림 본문 미리보기)
+├── 알림 채널 (체크박스: 이메일)
+│   ∟ [고객 알림 미리보기] 토글
+└── [이관 확정] / [취소]
+```
+
+**성공 기준**: 이관 확정 → 티켓 `assigned_to` 변경, 활동 탭에 에스컬레이션 카드 표시, 고객 이메일 발송
+
+---
+
+### ESC-6: Frontend — 고객 포털 페이지
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `ESC-6a` | `/portal/[token]/page.tsx` — 퍼블릭 라우트 (인증 없음) | M | `[ PENDING ]` |
+| `ESC-6b` | 포털 레이아웃 — Alvio 브랜딩, 상태 타임라인, 코멘트 입력 | M | `[ PENDING ]` |
+
+**포털 화면 구성**
+
+```
+[Alvio 로고] [티켓 번호: TKT-DBL-003]
+──────────────────────────────────────────
+상태: 🔄 처리 중 (2차 전문팀 대응 중)
+담당팀: 데이터베이스 엔지니어링팀
+
+타임라인
+● 2026-06-16 09:00  접수 완료
+● 2026-06-16 09:15  1차 담당자 배정 (홍길동)
+● 2026-06-16 11:00  전문팀으로 이관 — "DB 접근 권한 이슈로 전문팀이 대응합니다"
+○ (예상) 처리 완료 → 결과 이메일 발송 예정
+
+──────────────────────────────────────────
+추가 전달 사항이 있으신가요?
+[textarea]          [전송]
+```
+
+**성공 기준**: 매직링크 URL 접속 → 포털 정상 렌더링, 코멘트 제출 → 서버 반영
+
+---
+
+### ESC-7: 설정 — 알림 채널 구성 UI
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `ESC-7a` | 설정 > 알림 탭 — SMTP 서버 설정 폼 (admin) | S | `[ PENDING ]` |
+| `ESC-7b` | 설정 > 지원팀 탭 — 팀 생성/수정/팀원 관리 (admin) | M | `[ PENDING ]` |
+| `ESC-7c` | 발송 이력 테이블 — 채널별 성공/실패 통계 | S | `[ PENDING ]` |
+
+**성공 기준**: SMTP 설정 저장 후 테스트 발송 버튼으로 확인 가능
+
+---
+
+### Phase ESC 완료 기준 (Definition of Done)
+
+| 항목 | 기준 |
+|---|---|
+| 에스컬레이션 | 수동 이관 → 이력 기록 + 담당자 변경 + 2차 팀 인지 처리 가능 |
+| 이메일 알림 | 티켓 생성/이관/해결 시 고객 이메일 수신 (6개 이벤트) |
+| SLA 자동 트리거 | P1 티켓 30분 초과 시 `sla_warning` 알림 자동 발송 |
+| 매직링크 포털 | URL 접속 → 타임라인 조회 + 코멘트 작성 작동 |
+| 설정 UI | admin이 SMTP + 지원팀 설정 가능 |
+| 발송 이력 | 외부 알림 성공/실패 이력 조회 가능 |
+
+### Phase ESC 의존성 및 리스크
+
+| 리스크 | 대응 |
+|---|---|
+| 카카오 알림톡 심사 지연 (5~10영업일) | MVP 이메일만 출시, 카카오는 Phase ESC-2에서 추가 |
+| SLA 자동 에스컬레이션 오발생 | 즉시 escalate 아닌 "매니저 알림 + 30분 후 자동" 2단계 |
+| 매직링크 유출 | TTL 7일, IP 변경 감지 시 로그, 코멘트 작성 시 토큰 재발급 |
+| SMTP 발송 실패 누적 | retry 3회 후 failed → Prometheus alert 추가 (`ExternalNotifyFailRate`) |
+
+### Phase ESC-2 (카카오 + 심화, Backlog)
+
+| ID | 작업 |
+|---|---|
+| `ESC-B1` | 카카오 알림톡 어댑터 (NHN Cloud 또는 BizM) + 템플릿 심사 |
+| `ESC-B2` | SMS fallback (알림톡 실패 시 자동 전환) |
+| `ESC-B3` | 고객 포털 — 첨부파일 업로드 (MinIO 연동) |
+| `ESC-B4` | SSO Portal — 알림 템플릿 관리 페이지 |
+| `ESC-B5` | 3차 에스컬레이션 UI |
+| `ESC-B6` | 고객 포털 계정 로그인 (KC B2C realm 분리) |

@@ -12,6 +12,8 @@ import {
   ExternalLink,
   RefreshCw,
   AlertCircle,
+  X,
+  FileText,
 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { api, getErrorMessage } from '@/lib/api';
@@ -140,6 +142,166 @@ const COMPLETION_LABELS: Record<string, { label: string; cls: string }> = {
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
+// WorkLogDetailModal
+// ──────────────────────────────────────────────────────────────────────────────
+
+function WorkLogDetailModal({
+  log,
+  isManager,
+  tenantSlug,
+  router,
+  onClose,
+  onDelete,
+}: {
+  log: WorkLogItem;
+  isManager: boolean;
+  tenantSlug: string;
+  router: ReturnType<typeof useRouter>;
+  onClose: () => void;
+  onDelete: (log: WorkLogItem) => void;
+}) {
+  // ESC key close
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  const completion = log.completion_status ? COMPLETION_LABELS[log.completion_status] : null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="공수 상세"
+    >
+      <div className="bg-surface w-full max-w-lg rounded-xl shadow-xl border border-border-default overflow-hidden">
+        {/* 모달 헤더 */}
+        <div className="flex items-start justify-between px-5 py-4 border-b border-border-default">
+          <div className="flex items-center gap-2.5">
+            <FileText size={16} className="text-brand shrink-0 mt-0.5" />
+            <div>
+              {log.ticket_number ? (
+                <button
+                  onClick={() => { router.push(`/${tenantSlug}/tickets?focus=${log.ticket_id}`); onClose(); }}
+                  className="text-sm font-semibold text-brand hover:underline flex items-center gap-1"
+                >
+                  {log.ticket_number}
+                  <ExternalLink size={11} />
+                </button>
+              ) : null}
+              {log.ticket_title && (
+                <p className="text-xs text-text-secondary mt-0.5 max-w-sm" title={log.ticket_title}>
+                  {log.ticket_title}
+                </p>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-text-disabled hover:text-text-primary transition-colors p-1 -mt-0.5 -mr-1"
+            aria-label="닫기"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* 본문 */}
+        <div className="px-5 py-4 space-y-4">
+          {/* 수행 내용 */}
+          <div>
+            <p className="text-xs font-medium text-text-secondary mb-1.5 uppercase tracking-wide">수행 내용</p>
+            <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
+              {log.description || <span className="text-text-disabled">기록 없음</span>}
+            </p>
+          </div>
+
+          {/* 다음 액션 */}
+          {log.next_action && (
+            <div>
+              <p className="text-xs font-medium text-text-secondary mb-1.5 uppercase tracking-wide">다음 조치</p>
+              <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">{log.next_action}</p>
+            </div>
+          )}
+
+          {/* 메타 그리드 */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3 pt-1 border-t border-border-subtle">
+            {isManager && (
+              <div>
+                <p className="text-xs text-text-secondary mb-0.5">담당자</p>
+                <p className="text-sm font-medium text-text-primary">{log.user_name ?? '—'}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-xs text-text-secondary mb-0.5">작업 유형</p>
+              <p className="text-sm font-medium text-text-primary">
+                {WORK_TYPE_LABELS[log.work_type] ?? log.work_type}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-text-secondary mb-0.5">공수</p>
+              <p className="text-sm font-semibold text-text-primary tabular-nums">
+                {formatWorkHours(log.hours)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-text-secondary mb-0.5">유상 여부</p>
+              <span className={cn(
+                'inline-block text-xs rounded-full px-2 py-0.5 font-medium',
+                log.billable
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                  : 'bg-surface-hover text-text-secondary',
+              )}>
+                {log.billable ? '유상' : '무상'}
+              </span>
+            </div>
+            <div>
+              <p className="text-xs text-text-secondary mb-0.5">완료 여부</p>
+              {completion ? (
+                <span className={cn('inline-block text-xs rounded-full px-2 py-0.5 font-medium', completion.cls)}>
+                  {completion.label}
+                </span>
+              ) : <span className="text-sm text-text-disabled">—</span>}
+            </div>
+            <div>
+              <p className="text-xs text-text-secondary mb-0.5">기록 일시</p>
+              <p className="text-xs text-text-primary">{new Date(log.logged_at).toLocaleString('ko-KR', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit',
+              })}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 푸터 */}
+        <div className="flex items-center justify-between px-5 py-3 border-t border-border-default bg-surface-elevated">
+          <button
+            onClick={() => {
+              if (confirm('이 공수 기록을 삭제하시겠습니까?')) {
+                onDelete(log);
+                onClose();
+              }
+            }}
+            className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-600 font-medium transition-colors"
+          >
+            <Trash2 size={12} />
+            삭제
+          </button>
+          <button
+            onClick={onClose}
+            className="h-8 px-4 rounded-md border border-border-default text-sm text-text-primary hover:bg-surface-hover transition-colors"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Page
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -158,6 +320,7 @@ export default function WorkLogsPage() {
   const [filterBillable, setFilterBillable] = React.useState('');
   const [filterStatus, setFilterStatus] = React.useState('');
   const [page, setPage] = React.useState(1);
+  const [detailLog, setDetailLog] = React.useState<WorkLogItem | null>(null);
   const PAGE_SIZE = 50;
 
   // ── Queries ────────────────────────────────────────────────────────────────
@@ -225,6 +388,17 @@ export default function WorkLogsPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
+    <>
+    {detailLog && (
+      <WorkLogDetailModal
+        log={detailLog}
+        isManager={isManager}
+        tenantSlug={tenantSlug}
+        router={router}
+        onClose={() => setDetailLog(null)}
+        onDelete={(log) => deleteMutation.mutate({ logId: log.id, ticketId: log.ticket_id })}
+      />
+    )}
     <div className="flex flex-col h-full gap-0">
       {/* 헤더 */}
       <div className="shrink-0 border-b border-border-default px-6 py-4">
@@ -393,13 +567,14 @@ export default function WorkLogsPage() {
                 return (
                   <tr
                     key={log.id}
-                    className="hover:bg-surface-hover group transition-colors"
+                    onClick={() => setDetailLog(log)}
+                    className="hover:bg-surface-hover group transition-colors cursor-pointer"
                   >
                     {/* 티켓 */}
                     <td className="px-4 py-2.5">
                       {log.ticket_number ? (
                         <button
-                          onClick={() => router.push(`/${tenantSlug}/tickets?focus=${log.ticket_id}`)}
+                          onClick={(e) => { e.stopPropagation(); router.push(`/${tenantSlug}/tickets?focus=${log.ticket_id}`); }}
                           className="flex items-center gap-1 text-brand hover:underline text-xs font-medium"
                         >
                           {log.ticket_number}
@@ -473,7 +648,8 @@ export default function WorkLogsPage() {
                     {/* 삭제 */}
                     <td className="px-2 py-2.5">
                       <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           if (confirm('이 공수 기록을 삭제하시겠습니까?')) {
                             deleteMutation.mutate({ logId: log.id, ticketId: log.ticket_id });
                           }
@@ -518,5 +694,6 @@ export default function WorkLogsPage() {
         </div>
       )}
     </div>
+    </>
   );
 }
