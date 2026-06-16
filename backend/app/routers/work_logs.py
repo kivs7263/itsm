@@ -42,7 +42,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["work-logs"])
 
-TIMER_KEY = "itsm:work_timer:{tenant_id}:{user_id}"
+TIMER_KEY = "itsm:work_timer:{tenant_id}:{user_id}:{ticket_id}"
+TIMER_USER_SCAN = "itsm:work_timer:{tenant_id}:{user_id}:*"
+TIMER_TENANT_SCAN = "itsm:work_timer:{tenant_id}:*"
 _DIRTY_KEY_PREFIX = "itsm:kpi:dirty:"  # bridge_worker가 소비
 
 
@@ -84,6 +86,7 @@ class WorkLogCreate(BaseModel):
 
 class WorkLogStopBody(BaseModel):
     """타이머 중지 전용 — hours=0 이면 경과 시간 자동 계산."""
+    ticket_id: uuid.UUID  # 어느 티켓 타이머를 중지할지
     work_type: WorkType = WorkType.remote
     hours: float = Field(0.0, ge=0, le=999.99)
     billable: bool = True
@@ -119,13 +122,30 @@ class WorkLogSummaryOut(BaseModel):
     log_count: int
 
 
-class TimerActiveOut(BaseModel):
-    active: bool
-    ticket_id: uuid.UUID | None = None
+class TimerActiveItem(BaseModel):
+    """실행 중인 타이머 1건 — /timer/active 리스트 아이템."""
+    ticket_id: uuid.UUID
     ticket_number: str | None = None
     ticket_title: str | None = None
-    started_at: datetime | None = None
-    elapsed_seconds: int | None = None
+    started_at: datetime
+    elapsed_seconds: int
+
+
+# backward-compat alias
+TimerActiveOut = TimerActiveItem
+
+
+class WorkLogWithTicketOut(WorkLogOut):
+    ticket_number: str | None = None
+    ticket_title: str | None = None
+
+
+class WorkLogPageOut(BaseModel):
+    items: list[WorkLogWithTicketOut]
+    total: int
+    page: int
+    page_size: int
+    summary: WorkLogSummaryOut
 
 
 class ActiveTimerItem(BaseModel):
@@ -257,18 +277,18 @@ async def timer_start(
 
     redis = get_redis()
     key = TIMER_KEY.format(
-        tenant_id=current_user.tenant_id, user_id=current_user.id
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        ticket_id=ticket_id,
     )
+    # 이미 같은 티켓 타이머가 있으면 기존 started_at 반환 (멱등)
     existing = await redis.get(key)
     if existing:
-        raise HTTPException(
-            status_code=409,
-            detail="이미 실행 중인 타이머가 있습니다. 먼저 중지하세요.",
-        )
+        started_at_iso = existing
+        return {"started_at": started_at_iso, "ticket_id": str(ticket_id)}
 
     now_iso = datetime.now(timezone.utc).isoformat()
-    # 24h TTL — 자정 자동 만료 방지
-    await redis.setex(key, 86400, f"{ticket_id}|{now_iso}")
+    await redis.setex(key, 86400, now_iso)
     return {"started_at": now_iso, "ticket_id": str(ticket_id)}
 
 
@@ -280,15 +300,17 @@ async def timer_stop(
     db: AsyncSession = Depends(get_db),
 ):
     redis = get_redis()
+    ticket_id = body.ticket_id
     key = TIMER_KEY.format(
-        tenant_id=current_user.tenant_id, user_id=current_user.id
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        ticket_id=ticket_id,
     )
     raw = await redis.get(key)
     if not raw:
-        raise HTTPException(status_code=404, detail="실행 중인 타이머가 없습니다.")
+        raise HTTPException(status_code=404, detail="해당 티켓의 실행 중인 타이머가 없습니다.")
 
-    ticket_id_str, started_at_iso = raw.decode().split("|", 1)
-    ticket_id = uuid.UUID(ticket_id_str)
+    started_at_iso = raw
     started_at = datetime.fromisoformat(started_at_iso)
 
     await redis.delete(key)
@@ -319,38 +341,51 @@ async def timer_stop(
     return _serialize(log, current_user)
 
 
-@router.get("/{tenant_slug}/work-logs/timer/active", response_model=TimerActiveOut)
+@router.get("/{tenant_slug}/work-logs/timer/active", response_model=list[TimerActiveItem])
 async def timer_active(
     tenant_slug: str,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-):
+) -> list[TimerActiveItem]:
     redis = get_redis()
-    key = TIMER_KEY.format(
+    pattern = TIMER_USER_SCAN.format(
         tenant_id=current_user.tenant_id, user_id=current_user.id
     )
-    raw = await redis.get(key)
-    if not raw:
-        return TimerActiveOut(active=False)
+    keys = await redis.keys(pattern)
+    if not keys:
+        return []
 
-    ticket_id_str, started_at_iso = raw.decode().split("|", 1)
-    ticket_id = uuid.UUID(ticket_id_str)
-    started_at = datetime.fromisoformat(started_at_iso)
-    elapsed = int((datetime.now(timezone.utc) - started_at).total_seconds())
+    now = datetime.now(timezone.utc)
+    results: list[TimerActiveItem] = []
 
-    row = (await db.execute(
-        select(Ticket.title, Ticket.ticket_number)
-        .where(Ticket.id == ticket_id, Ticket.tenant_id == current_user.tenant_id)
-    )).one_or_none()
+    for key in keys:
+        raw = await redis.get(key)
+        if not raw:
+            continue
+        try:
+            # key: itsm:work_timer:{tenant_id}:{user_id}:{ticket_id}
+            parts = key.split(":")
+            ticket_id = uuid.UUID(parts[-1])
+            started_at = datetime.fromisoformat(raw)
+        except Exception:
+            continue
 
-    return TimerActiveOut(
-        active=True,
-        ticket_id=ticket_id,
-        ticket_number=row.ticket_number if row else None,
-        ticket_title=row.title if row else None,
-        started_at=started_at,
-        elapsed_seconds=elapsed,
-    )
+        row = (await db.execute(
+            select(Ticket.title, Ticket.ticket_number)
+            .where(Ticket.id == ticket_id, Ticket.tenant_id == current_user.tenant_id)
+        )).one_or_none()
+
+        elapsed = int((now - started_at).total_seconds())
+        results.append(TimerActiveItem(
+            ticket_id=ticket_id,
+            ticket_number=row.ticket_number if row else None,
+            ticket_title=row.title if row else None,
+            started_at=started_at,
+            elapsed_seconds=max(0, elapsed),
+        ))
+
+    results.sort(key=lambda x: x.started_at)
+    return results
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -409,7 +444,7 @@ async def list_active_timers(
     db: AsyncSession = Depends(get_db),
 ) -> list[ActiveTimerItem]:
     redis = get_redis()
-    pattern = TIMER_KEY.format(tenant_id=current_user.tenant_id, user_id="*")
+    pattern = TIMER_TENANT_SCAN.format(tenant_id=current_user.tenant_id)
     keys = await redis.keys(pattern)
     if not keys:
         return []
@@ -422,15 +457,13 @@ async def list_active_timers(
         if not raw:
             continue
         try:
-            ticket_id_str, started_at_iso = raw.decode().split("|", 1)
-            ticket_id = uuid.UUID(ticket_id_str)
-            started_at = datetime.fromisoformat(started_at_iso)
-        except Exception:
-            continue
-
-        user_id_str = key.decode().split(":")[-1]
-        try:
-            user_id = uuid.UUID(user_id_str)
+            # key: itsm:work_timer:{tenant_id}:{user_id}:{ticket_id}
+            parts = key.split(":")
+            if len(parts) < 5:
+                continue  # 구형 키 무시
+            user_id = uuid.UUID(parts[-2])
+            ticket_id = uuid.UUID(parts[-1])
+            started_at = datetime.fromisoformat(raw)
         except Exception:
             continue
 
@@ -528,6 +561,115 @@ async def weekly_hours_by_user(
         )
         for r in rows
     ]
+
+
+@router.get(
+    "/{tenant_slug}/work-logs",
+    response_model=WorkLogPageOut,
+    summary="전체 공수 목록 (관리 페이지용)",
+)
+async def list_all_work_logs(
+    tenant_slug: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    user_id: uuid.UUID | None = Query(None),
+    ticket_id: uuid.UUID | None = Query(None),
+    since: datetime | None = Query(None),
+    until: datetime | None = Query(None),
+    billable: bool | None = Query(None),
+    completion_status: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+) -> WorkLogPageOut:
+    filters = [TicketWorkLog.tenant_id == current_user.tenant_id]
+
+    # 엔지니어는 본인 공수만 조회
+    if current_user.role == UserRole.engineer:
+        filters.append(TicketWorkLog.user_id == current_user.id)
+    elif user_id:
+        filters.append(TicketWorkLog.user_id == user_id)
+
+    if ticket_id:
+        filters.append(TicketWorkLog.ticket_id == ticket_id)
+    if since:
+        filters.append(TicketWorkLog.logged_at >= since)
+    if until:
+        filters.append(TicketWorkLog.logged_at <= until)
+    if billable is not None:
+        filters.append(TicketWorkLog.billable.is_(billable))
+    if completion_status:
+        filters.append(TicketWorkLog.completion_status == completion_status)
+
+    where = and_(*filters)
+
+    total_row = (await db.execute(select(func.count()).select_from(TicketWorkLog).where(where))).scalar_one()
+
+    summary_row = (await db.execute(
+        select(
+            func.coalesce(func.sum(TicketWorkLog.hours), 0).label("total"),
+            func.coalesce(
+                func.sum(TicketWorkLog.hours).filter(TicketWorkLog.billable.is_(True)), 0
+            ).label("billable"),
+            func.count().label("cnt"),
+        ).where(where)
+    )).one()
+
+    logs = (await db.execute(
+        select(TicketWorkLog)
+        .where(where)
+        .order_by(TicketWorkLog.logged_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )).scalars().all()
+
+    # ticket info 일괄 조회
+    ticket_ids = list({l.ticket_id for l in logs})
+    ticket_map: dict[uuid.UUID, tuple[str | None, str | None]] = {}
+    if ticket_ids:
+        ticket_rows = (await db.execute(
+            select(Ticket.id, Ticket.ticket_number, Ticket.title).where(
+                Ticket.id.in_(ticket_ids),
+                Ticket.tenant_id == current_user.tenant_id,
+            )
+        )).all()
+        ticket_map = {r.id: (r.ticket_number, r.title) for r in ticket_rows}
+
+    # user info 일괄 조회
+    u_ids = list({l.user_id for l in logs if l.user_id})
+    user_map: dict[uuid.UUID, str | None] = {}
+    if u_ids:
+        user_rows = (await db.execute(
+            select(User.id, User.name).where(User.id.in_(u_ids))
+        )).all()
+        user_map = {r.id: r.name for r in user_rows}
+
+    total_h = float(summary_row.total)
+    billable_h = float(summary_row.billable)
+
+    items = []
+    for log in logs:
+        tnum, ttitle = ticket_map.get(log.ticket_id, (None, None))
+        base = _serialize(log, None)
+        items.append(WorkLogWithTicketOut(
+            **base.model_dump(),
+            user_name=user_map.get(log.user_id) if log.user_id else None,
+            ticket_number=tnum,
+            ticket_title=ttitle,
+        ))
+
+    return WorkLogPageOut(
+        items=items,
+        total=total_row,
+        page=page,
+        page_size=page_size,
+        summary=WorkLogSummaryOut(
+            total_hours=round(total_h, 2),
+            billable_hours=round(billable_h, 2),
+            unbillable_hours=round(total_h - billable_h, 2),
+            billable_ratio=round(billable_h / total_h, 4) if total_h > 0 else 0.0,
+            log_count=summary_row.cnt,
+        ),
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────

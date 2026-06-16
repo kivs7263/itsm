@@ -191,6 +191,7 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
       open={showStopModal}
       onClose={() => setShowStopModal(false)}
       tenantSlug={tenantSlug}
+      ticketId={ticketId}
       elapsed={elapsed}
       onStopped={() => {
         queryClient.invalidateQueries({ queryKey: ['work-logs', tenantSlug, ticketId] });
@@ -201,6 +202,7 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
       open={showOtherTimerModal}
       onClose={() => setShowOtherTimerModal(false)}
       tenantSlug={tenantSlug}
+      ticketId={timer?.ticket_id ?? ticketId}
       elapsed={elapsed}
       title={timer?.ticket_title
         ? `${timer.ticket_number ?? ''} ${timer.ticket_title} 작업 일지 기록`

@@ -34,6 +34,7 @@ interface WorkLogStopModalProps {
   open: boolean;
   onClose: () => void;
   tenantSlug: string;
+  ticketId: string;
   elapsed: string;
   title?: string;
   onStopped?: () => void;
@@ -43,6 +44,7 @@ export function WorkLogStopModal({
   open,
   onClose,
   tenantSlug,
+  ticketId,
   elapsed,
   title,
   onStopped,
@@ -66,6 +68,7 @@ export function WorkLogStopModal({
   const stopMutation = useMutation({
     mutationFn: () =>
       api.post(`/${tenantSlug}/work-logs/timer/stop`, {
+        ticket_id: ticketId,
         work_type: workType,
         hours: 0,
         billable,

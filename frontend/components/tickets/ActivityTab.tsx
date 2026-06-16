@@ -33,13 +33,12 @@ interface WorkLog {
   logged_at: string;
 }
 
-interface TimerActive {
-  active: boolean;
-  ticket_id: string | null;
+interface TimerActiveItem {
+  ticket_id: string;
   ticket_number: string | null;
   ticket_title: string | null;
-  started_at: string | null;
-  elapsed_seconds: number | null;
+  started_at: string;
+  elapsed_seconds: number;
 }
 
 type ActivityItem =
@@ -225,15 +224,21 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
     refetchInterval: 30000,
   });
 
-  const { data: timer } = useQuery<TimerActive>({
+  const { data: timers = [] } = useQuery<TimerActiveItem[]>({
     queryKey: ['work-timer', tenantSlug],
     queryFn: () =>
       api.get(`/${tenantSlug}/work-logs/timer/active`).then((r) => r.data),
     refetchInterval: 10000,
   });
 
-  const elapsed = useElapsed(timer?.started_at ?? null, timer?.active ?? false);
-  const isThisTicketTimer = !!(timer?.active && timer.ticket_id === ticketId);
+  const myTimer = timers.find((t) => t.ticket_id === ticketId);
+  const otherTimers = timers.filter((t) => t.ticket_id !== ticketId);
+  const isThisTicketTimer = !!myTimer;
+  const elapsed = useElapsed(myTimer?.started_at ?? null, !!myTimer);
+  const otherElapsed = useElapsed(
+    otherTimers[0]?.started_at ?? null,
+    otherTimers.length > 0,
+  );
 
   // ── Merged timeline ────────────────────────────────────────────────────────
 
@@ -280,7 +285,7 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
   });
 
   function handleStartTimer() {
-    if (timer?.active && timer.ticket_id !== ticketId) {
+    if (otherTimers.length > 0) {
       setShowOtherTimerModal(true);
       return;
     }
@@ -328,6 +333,7 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
         open={showStopModal}
         onClose={() => setShowStopModal(false)}
         tenantSlug={tenantSlug}
+        ticketId={ticketId}
         elapsed={elapsed}
         onStopped={() => {
           queryClient.invalidateQueries({ queryKey: ['work-logs', tenantSlug, ticketId] });
@@ -335,18 +341,21 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
         }}
       />
       {/* 다른 티켓 타이머 먼저 중지 → 이 티켓 시작 */}
-      <WorkLogStopModal
-        open={showOtherTimerModal}
-        onClose={() => setShowOtherTimerModal(false)}
-        tenantSlug={tenantSlug}
-        elapsed={elapsed}
-        title={
-          timer?.ticket_title
-            ? `${timer.ticket_number ?? ''} ${timer.ticket_title} 작업 일지 기록`
-            : '이전 작업 일지 기록'
-        }
-        onStopped={() => startMutation.mutate()}
-      />
+      {otherTimers[0] && (
+        <WorkLogStopModal
+          open={showOtherTimerModal}
+          onClose={() => setShowOtherTimerModal(false)}
+          tenantSlug={tenantSlug}
+          ticketId={otherTimers[0].ticket_id}
+          elapsed={otherElapsed}
+          title={
+            otherTimers[0].ticket_title
+              ? `${otherTimers[0].ticket_number ?? ''} ${otherTimers[0].ticket_title} 작업 일지 기록`.trim()
+              : '이전 작업 일지 기록'
+          }
+          onStopped={() => startMutation.mutate()}
+        />
+      )}
 
       <div className="flex flex-col h-full">
         {/* 타이머 스트립 */}
@@ -366,13 +375,14 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
                 중지 및 기록
               </Button>
             </div>
-          ) : timer?.active ? (
+          ) : otherTimers.length > 0 ? (
             <div className="flex items-center gap-2 rounded-lg bg-surface-elevated border border-border-default px-3 py-2 text-xs text-text-secondary">
               <Clock size={12} className="text-amber-500 shrink-0" />
               <span className="flex-1">
-                {timer.ticket_title
-                  ? `"${timer.ticket_title}" 타이머 실행 중`
+                {otherTimers[0].ticket_title
+                  ? `"${otherTimers[0].ticket_title}" 타이머 실행 중`
                   : '다른 티켓 타이머 실행 중'}
+                {otherTimers.length > 1 && ` (외 ${otherTimers.length - 1}개)`}
               </span>
               <button
                 onClick={() => setShowOtherTimerModal(true)}
