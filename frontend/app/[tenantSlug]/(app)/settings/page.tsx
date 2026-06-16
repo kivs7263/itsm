@@ -20,6 +20,8 @@ import {
   Trash2,
   ChevronRight,
   ShieldOff,
+  PhoneForwarded,
+  History,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
@@ -33,6 +35,8 @@ import type {
   NotificationConfig,
   SlaPolicy,
   SymptomCategoryItem,
+  SupportTeam,
+  ExtNotifLog,
 } from '@/lib/types';
 
 // -----------------------------------------------------------------------
@@ -65,13 +69,15 @@ const TIER_COLORS: Record<string, string> = {
 // -----------------------------------------------------------------------
 // 탭 정의
 // -----------------------------------------------------------------------
-type TabId = 'users' | 'notifications' | 'sla' | 'categories';
+type TabId = 'users' | 'notifications' | 'sla' | 'categories' | 'support-teams' | 'ext-notif-history';
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: 'users',         label: '사용자 관리',  icon: Users },
-  { id: 'notifications', label: '알림 채널',    icon: Bell  },
-  { id: 'sla',           label: 'SLA 정책',     icon: Clock },
-  { id: 'categories',    label: '분류 체계',    icon: Tag   },
+  { id: 'users',             label: '사용자 관리',    icon: Users          },
+  { id: 'notifications',     label: '알림 채널',      icon: Bell           },
+  { id: 'sla',               label: 'SLA 정책',       icon: Clock          },
+  { id: 'categories',        label: '분류 체계',      icon: Tag            },
+  { id: 'support-teams',     label: '지원팀 관리',    icon: PhoneForwarded },
+  { id: 'ext-notif-history', label: '외부 알림 이력', icon: History        },
 ];
 
 // -----------------------------------------------------------------------
@@ -329,6 +335,7 @@ function ChannelSection({ title, fields, values, onChange, onSave, isSaving }: C
 function NotificationsTab({ tenantSlug }: { tenantSlug: string }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<Partial<NotificationConfig>>({});
+  const [smtpPassword, setSmtpPassword] = useState('');
 
   const { data: configData } = useQuery<NotificationConfig>({
     queryKey: ['notif-config', tenantSlug],
@@ -343,10 +350,11 @@ function NotificationsTab({ tenantSlug }: { tenantSlug: string }) {
   }, [configData]);
 
   const saveMutation = useMutation({
-    mutationFn: (body: Partial<NotificationConfig>) =>
+    mutationFn: (body: Partial<NotificationConfig> & { smtp_password?: string }) =>
       api.put(`/${tenantSlug}/notifications/config`, body).then((r) => r.data),
     onSuccess: () => {
       toast.success('채널 설정이 저장되었습니다.');
+      setSmtpPassword('');
       queryClient.invalidateQueries({ queryKey: ['notif-config', tenantSlug] });
     },
     onError: (err) => toast.error(getErrorMessage(err)),
@@ -357,7 +365,11 @@ function NotificationsTab({ tenantSlug }: { tenantSlug: string }) {
   };
 
   const handleSave = () => {
-    saveMutation.mutate(draft);
+    const body: Partial<NotificationConfig> & { smtp_password?: string } = { ...draft };
+    if (smtpPassword) {
+      body.smtp_password = smtpPassword;
+    }
+    saveMutation.mutate(body);
   };
 
   return (
@@ -397,6 +409,19 @@ function NotificationsTab({ tenantSlug }: { tenantSlug: string }) {
       />
 
       <ChannelSection
+        title="카카오 알림톡 템플릿"
+        fields={[
+          { key: 'kakao_template_ticket_created', label: '티켓 생성 템플릿 코드', placeholder: 'TICKET_CREATED' },
+          { key: 'kakao_template_escalated',      label: '에스컬레이션 템플릿 코드', placeholder: 'TICKET_ESCALATED' },
+          { key: 'kakao_template_resolved',       label: '해결 완료 템플릿 코드', placeholder: 'TICKET_RESOLVED' },
+        ]}
+        values={draft}
+        onChange={handleChange}
+        onSave={handleSave}
+        isSaving={saveMutation.isPending}
+      />
+
+      <ChannelSection
         title="SMS"
         fields={[
           { key: 'sms_api_key', label: 'API Key', placeholder: 'sms api key' },
@@ -408,6 +433,102 @@ function NotificationsTab({ tenantSlug }: { tenantSlug: string }) {
         onSave={handleSave}
         isSaving={saveMutation.isPending}
       />
+
+      {/* SMTP 섹션 — 비밀번호는 별도 state 관리 */}
+      <div className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-3">
+        <p className="text-sm font-semibold text-text-primary">SMTP (이메일)</p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-text-secondary">SMTP 서버</label>
+            <input
+              type="text"
+              value={typeof draft.smtp_host === 'string' ? draft.smtp_host : ''}
+              onChange={(e) => handleChange('smtp_host', e.target.value)}
+              className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+              placeholder="smtp.gmail.com"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-text-secondary">포트</label>
+            <input
+              type="number"
+              value={draft.smtp_port ?? ''}
+              onChange={(e) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  smtp_port: e.target.value ? Number(e.target.value) : null,
+                }))
+              }
+              className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+              placeholder="587"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-text-secondary">계정</label>
+            <input
+              type="text"
+              value={typeof draft.smtp_user === 'string' ? draft.smtp_user : ''}
+              onChange={(e) => handleChange('smtp_user', e.target.value)}
+              className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+              placeholder="user@example.com"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-text-secondary">
+              비밀번호
+              {configData?.smtp_password_configured && (
+                <span className="ml-2 text-xs text-green-600">✓ 비밀번호 설정됨</span>
+              )}
+            </label>
+            <input
+              type="password"
+              value={smtpPassword}
+              onChange={(e) => setSmtpPassword(e.target.value)}
+              className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+              placeholder="비밀번호 (저장 시에만 전송)"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-text-secondary">발신 이메일</label>
+            <input
+              type="text"
+              value={typeof draft.smtp_from_email === 'string' ? draft.smtp_from_email : ''}
+              onChange={(e) => handleChange('smtp_from_email', e.target.value)}
+              className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+              placeholder="noreply@company.com"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-text-secondary">발신자 이름</label>
+            <input
+              type="text"
+              value={typeof draft.smtp_from_name === 'string' ? draft.smtp_from_name : ''}
+              onChange={(e) => handleChange('smtp_from_name', e.target.value)}
+              className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+              placeholder="ITSM 고객지원"
+            />
+          </div>
+        </div>
+
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={draft.smtp_use_tls ?? false}
+            onChange={(e) =>
+              setDraft((prev) => ({ ...prev, smtp_use_tls: e.target.checked }))
+            }
+            className="rounded border-border-default accent-accent"
+          />
+          <span className="text-xs text-text-secondary">TLS 사용</span>
+        </label>
+
+        <div className="flex justify-end">
+          <Button size="sm" isLoading={saveMutation.isPending} onClick={handleSave}>
+            저장
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -770,6 +891,402 @@ function CategoriesTab({ tenantSlug }: { tenantSlug: string }) {
 }
 
 // -----------------------------------------------------------------------
+// 탭 5: 지원팀 관리
+// -----------------------------------------------------------------------
+function SupportTeamsTab({ tenantSlug }: { tenantSlug: string }) {
+  const queryClient = useQueryClient();
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState({ name: '', level: 1, description: '' });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', level: 1, description: '' });
+
+  const { data, isLoading } = useQuery<SupportTeam[]>({
+    queryKey: ['support-teams', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/support-teams`).then((r) => r.data),
+    enabled: !!tenantSlug,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (body: { name: string; level: number; description?: string }) =>
+      api.post(`/${tenantSlug}/support-teams`, body).then((r) => r.data),
+    onSuccess: () => {
+      toast.success('지원팀이 생성되었습니다.');
+      setShowAddForm(false);
+      setAddForm({ name: '', level: 1, description: '' });
+      queryClient.invalidateQueries({ queryKey: ['support-teams', tenantSlug] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: { name: string; level: number; description?: string } }) =>
+      api.patch(`/${tenantSlug}/support-teams/${id}`, body).then((r) => r.data),
+    onSuccess: () => {
+      toast.success('지원팀이 수정되었습니다.');
+      setEditId(null);
+      queryClient.invalidateQueries({ queryKey: ['support-teams', tenantSlug] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
+      api.patch(`/${tenantSlug}/support-teams/${id}`, { is_active: !is_active }).then((r) => r.data),
+    onSuccess: () => {
+      toast.success('팀 상태가 변경되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['support-teams', tenantSlug] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const teams = data ?? [];
+
+  const LEVEL_LABELS: Record<number, string> = { 1: 'L1', 2: 'L2', 3: 'L3' };
+  const LEVEL_COLORS: Record<number, string> = {
+    1: 'bg-blue-100 text-blue-700',
+    2: 'bg-purple-100 text-purple-700',
+    3: 'bg-red-100 text-red-700',
+  };
+
+  const handleEditOpen = (team: SupportTeam) => {
+    setEditId(team.id);
+    setEditForm({ name: team.name, level: team.level, description: team.description ?? '' });
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-text-secondary">에스컬레이션 레벨별 지원팀을 관리합니다.</p>
+        <Button size="sm" leftIcon={<Plus size={14} />} onClick={() => setShowAddForm((v) => !v)}>
+          팀 추가
+        </Button>
+      </div>
+
+      {/* 추가 폼 */}
+      {showAddForm && (
+        <div className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-3">
+          <p className="text-sm font-medium text-text-primary">새 지원팀</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary">팀 이름 *</label>
+              <input
+                type="text"
+                value={addForm.name}
+                onChange={(e) => setAddForm((v) => ({ ...v, name: e.target.value }))}
+                className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                placeholder="1차 지원팀"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary">레벨</label>
+              <div className="flex gap-3 items-center h-[38px]">
+                {([1, 2, 3] as const).map((lv) => (
+                  <label key={lv} className="flex items-center gap-1 cursor-pointer text-sm text-text-primary">
+                    <input
+                      type="radio"
+                      name="add-level"
+                      value={lv}
+                      checked={addForm.level === lv}
+                      onChange={() => setAddForm((v) => ({ ...v, level: lv }))}
+                      className="accent-accent"
+                    />
+                    {LEVEL_LABELS[lv]}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-text-secondary">설명 (선택)</label>
+            <input
+              type="text"
+              value={addForm.description}
+              onChange={(e) => setAddForm((v) => ({ ...v, description: e.target.value }))}
+              className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+              placeholder="팀 역할 간단 설명"
+            />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" size="sm" onClick={() => setShowAddForm(false)}>
+              취소
+            </Button>
+            <Button
+              size="sm"
+              isLoading={createMutation.isPending}
+              onClick={() =>
+                createMutation.mutate({
+                  name: addForm.name,
+                  level: addForm.level,
+                  ...(addForm.description ? { description: addForm.description } : {}),
+                })
+              }
+              disabled={!addForm.name.trim()}
+            >
+              생성
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 팀 목록 */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-lg" />
+          ))}
+        </div>
+      ) : teams.length === 0 ? (
+        <div className="rounded-lg border border-border-default bg-surface py-12 text-center text-sm text-text-secondary">
+          지원팀이 없습니다.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {teams.map((team) => (
+            <div
+              key={team.id}
+              className={cn(
+                'rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-2',
+                !team.is_active && 'opacity-60',
+              )}
+            >
+              {editId === team.id ? (
+                /* 인라인 편집 폼 */
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="text"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm((v) => ({ ...v, name: e.target.value }))}
+                    className="rounded-md border border-border-default bg-bg px-3 py-1.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                  <div className="flex gap-3">
+                    {([1, 2, 3] as const).map((lv) => (
+                      <label key={lv} className="flex items-center gap-1 cursor-pointer text-xs text-text-primary">
+                        <input
+                          type="radio"
+                          name={`edit-level-${team.id}`}
+                          value={lv}
+                          checked={editForm.level === lv}
+                          onChange={() => setEditForm((v) => ({ ...v, level: lv }))}
+                          className="accent-accent"
+                        />
+                        {LEVEL_LABELS[lv]}
+                      </label>
+                    ))}
+                  </div>
+                  <input
+                    type="text"
+                    value={editForm.description}
+                    onChange={(e) => setEditForm((v) => ({ ...v, description: e.target.value }))}
+                    className="rounded-md border border-border-default bg-bg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                    placeholder="설명"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="ghost" size="sm" onClick={() => setEditId(null)}>
+                      취소
+                    </Button>
+                    <Button
+                      size="sm"
+                      isLoading={updateMutation.isPending}
+                      onClick={() =>
+                        updateMutation.mutate({
+                          id: team.id,
+                          body: {
+                            name: editForm.name,
+                            level: editForm.level,
+                            ...(editForm.description ? { description: editForm.description } : {}),
+                          },
+                        })
+                      }
+                      disabled={!editForm.name.trim()}
+                    >
+                      저장
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                /* 카드 뷰 */
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold',
+                          LEVEL_COLORS[team.level] ?? 'bg-gray-100 text-gray-600',
+                        )}
+                      >
+                        {LEVEL_LABELS[team.level] ?? `L${team.level}`}
+                      </span>
+                      <span className="text-sm font-medium text-text-primary">{team.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleEditOpen(team)}
+                        className="p-1 rounded text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+                        title="수정"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleActiveMutation.mutate({ id: team.id, is_active: team.is_active })}
+                        className={cn(
+                          'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-colors ml-1',
+                          team.is_active
+                            ? 'bg-success-bg text-success-text hover:bg-error-bg hover:text-error-text'
+                            : 'bg-error-bg text-error-text hover:bg-success-bg hover:text-success-text',
+                        )}
+                      >
+                        {team.is_active ? '활성' : '비활성'}
+                      </button>
+                    </div>
+                  </div>
+                  {team.description && (
+                    <p className="text-xs text-text-secondary">{team.description}</p>
+                  )}
+                  <p className="text-xs text-text-secondary">멤버 {team.member_count}명</p>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
+// 탭 6: 외부 알림 이력
+// -----------------------------------------------------------------------
+const STATUS_COLORS: Record<string, string> = {
+  sent:      'bg-success-bg text-success-text',
+  pending:   'bg-amber-100 text-amber-700',
+  retrying:  'bg-blue-100 text-blue-700',
+  failed:    'bg-error-bg text-error-text',
+};
+
+function ExtNotifHistoryTab({ tenantSlug }: { tenantSlug: string }) {
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+
+  const { data, isLoading } = useQuery<{ items: ExtNotifLog[]; total: number }>({
+    queryKey: ['ext-notif-history', tenantSlug, page],
+    queryFn: () =>
+      api
+        .get(`/${tenantSlug}/notifications/external`, { params: { page, page_size: pageSize } })
+        .then((r) => r.data),
+    enabled: !!tenantSlug,
+  });
+
+  const logs = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.ceil(total / pageSize);
+
+  const formatDate = (val: string | null) => {
+    if (!val) return '-';
+    return new Date(val).toLocaleString('ko-KR', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-text-secondary">
+        고객에게 발송된 외부 알림(이메일·SMS·카카오 등) 이력을 확인합니다.
+      </p>
+
+      <div className="overflow-auto rounded-lg border border-border-default">
+        <table className="w-full text-sm min-w-[700px]">
+          <thead className="bg-surface border-b border-border-default">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">티켓</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">채널</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">이벤트</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">수신자</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">상태</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">발송일시</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">재시도</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">오류</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <RowSkeletons cols={8} />
+            ) : logs.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="px-4 py-12 text-center text-sm text-text-secondary">
+                  알림 이력이 없습니다.
+                </td>
+              </tr>
+            ) : (
+              logs.map((log) => (
+                <tr key={log.id} className="border-b border-border-subtle hover:bg-surface-hover transition-colors">
+                  <td className="px-4 py-3 text-xs text-text-secondary font-mono">
+                    {log.ticket_id ? log.ticket_id.slice(0, 8) : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-text-primary font-medium">{log.channel}</td>
+                  <td className="px-4 py-3 text-xs text-text-secondary">{log.event_type}</td>
+                  <td className="px-4 py-3 text-xs text-text-secondary truncate max-w-[140px]">{log.recipient}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={cn(
+                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                        STATUS_COLORS[log.status] ?? 'bg-surface text-text-secondary',
+                      )}
+                    >
+                      {log.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-text-secondary">{formatDate(log.sent_at)}</td>
+                  <td className="px-4 py-3 text-xs text-text-secondary text-center">{log.retry_count}</td>
+                  <td className="px-4 py-3 text-xs text-error-text max-w-[160px]">
+                    {log.error_msg ? (
+                      <span title={log.error_msg} className="truncate block cursor-help">
+                        {log.error_msg}
+                      </span>
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 페이지네이션 */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+          >
+            이전
+          </Button>
+          <span className="text-xs text-text-secondary">
+            {page} / {totalPages}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+          >
+            다음
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
 // Settings 메인 페이지
 // -----------------------------------------------------------------------
 export default function SettingsPage() {
@@ -831,6 +1348,8 @@ export default function SettingsPage() {
         {activeTab === 'notifications' && <NotificationsTab tenantSlug={tenantSlug} />}
         {activeTab === 'sla' && <SlaTab tenantSlug={tenantSlug} />}
         {activeTab === 'categories' && <CategoriesTab tenantSlug={tenantSlug} />}
+        {activeTab === 'support-teams' && <SupportTeamsTab tenantSlug={tenantSlug} />}
+        {activeTab === 'ext-notif-history' && <ExtNotifHistoryTab tenantSlug={tenantSlug} />}
       </div>
     </div>
   );

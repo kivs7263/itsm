@@ -1373,8 +1373,8 @@ POST /portal/{token}/comments                — 고객 코멘트 추가
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `ESC-6a` | `/portal/[token]/page.tsx` — 퍼블릭 라우트 (인증 없음) | M | `[ PENDING ]` |
-| `ESC-6b` | 포털 레이아웃 — Alvio 브랜딩, 상태 타임라인, 코멘트 입력 | M | `[ PENDING ]` |
+| `ESC-6a` | `/portal/[token]/page.tsx` — 퍼블릭 라우트 (인증 없음) | M | `[ DONE 2026-06-16 ]` |
+| `ESC-6b` | 포털 레이아웃 — Alvio 브랜딩, 상태 타임라인, 코멘트 입력 | M | `[ DONE 2026-06-16 ]` |
 
 **포털 화면 구성**
 
@@ -1403,9 +1403,9 @@ POST /portal/{token}/comments                — 고객 코멘트 추가
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `ESC-7a` | 설정 > 알림 탭 — SMTP 서버 설정 폼 (admin) | S | `[ PENDING ]` |
-| `ESC-7b` | 설정 > 지원팀 탭 — 팀 생성/수정/팀원 관리 (admin) | M | `[ PENDING ]` |
-| `ESC-7c` | 발송 이력 테이블 — 채널별 성공/실패 통계 | S | `[ PENDING ]` |
+| `ESC-7a` | 설정 > 알림 탭 — SMTP 서버 설정 폼 (admin) | S | `[ DONE 2026-06-16 ]` |
+| `ESC-7b` | 설정 > 지원팀 탭 — 팀 생성/수정/팀원 관리 (admin) | M | `[ DONE 2026-06-16 ]` |
+| `ESC-7c` | 발송 이력 테이블 — 채널별 성공/실패 통계 | S | `[ DONE 2026-06-16 ]` |
 
 **성공 기준**: SMTP 설정 저장 후 테스트 발송 버튼으로 확인 가능
 

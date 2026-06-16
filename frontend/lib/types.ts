@@ -529,6 +529,43 @@ export interface NotificationConfig {
   sms_api_key: string | null;
   sms_api_secret: string | null;
   sms_from_number: string | null;
+  // SMTP (고객 외부 알림 ESC-3)
+  smtp_host: string | null;
+  smtp_port: number | null;
+  smtp_user: string | null;
+  smtp_password_configured: boolean;
+  smtp_use_tls: boolean;
+  smtp_from_email: string | null;
+  smtp_from_name: string | null;
+  // 카카오 템플릿
+  kakao_template_ticket_created: string | null;
+  kakao_template_escalated: string | null;
+  kakao_template_resolved: string | null;
+}
+
+export interface SupportTeam {
+  id: string;
+  name: string;
+  level: number;
+  description: string | null;
+  is_active: boolean;
+  member_count: number;
+  created_at: string;
+}
+
+export interface ExtNotifLog {
+  id: string;
+  ticket_id: string | null;
+  escalation_id: string | null;
+  channel: string;
+  event_type: string;
+  recipient: string;
+  status: string;
+  error_msg: string | null;
+  retry_count: number;
+  next_retry_at: string | null;
+  sent_at: string | null;
+  created_at: string;
 }
 
 export interface SymptomCategoryItem {
