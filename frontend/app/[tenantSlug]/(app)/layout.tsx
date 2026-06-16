@@ -178,9 +178,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         {/* 사업카드 컨텍스트 바 (SA_BACKEND_URL 미설정 시 숨김) */}
         {tenantSlug && <BusinessContextBar tenantSlug={tenantSlug} />}
 
-        {/* 미니 헤더 — 알림 벨 (데스크탑, md 이상) */}
+        {/* 미니 헤더 — 타이머 + 알림 벨 (데스크탑, md 이상) */}
         {tenantSlug && (
-          <div className="hidden md:flex items-center justify-end px-4 py-1.5 border-b border-border-subtle bg-surface shrink-0">
+          <div className="hidden md:flex items-center justify-end gap-3 px-4 py-1.5 border-b border-border-subtle bg-surface shrink-0">
+            <GlobalTimerBar tenantSlug={tenantSlug} />
             <NotificationBell tenantSlug={tenantSlug} />
           </div>
         )}
@@ -190,9 +191,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           {children}
         </div>
       </main>
-
-      {/* 글로벌 타이머 바 — 타이머 실행 중일 때만 표시 */}
-      {tenantSlug && <GlobalTimerBar tenantSlug={tenantSlug} />}
 
       {/* 하단 네비게이션 — 모바일만 */}
       <BottomNav />

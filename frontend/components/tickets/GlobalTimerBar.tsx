@@ -52,18 +52,16 @@ export function GlobalTimerBar({ tenantSlug }: GlobalTimerBarProps) {
 
   return (
     <>
-      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-2 bg-amber-500 text-[#1A1A1A] shadow-lg md:left-[240px]">
-        <div className="flex items-center gap-2">
-          <Clock size={14} className="shrink-0 animate-pulse" />
-          <span className="text-xs font-medium">타이머 실행 중</span>
-          <span className="font-mono text-sm font-semibold tabular-nums">{elapsed}</span>
-        </div>
+      <div className="flex items-center gap-3 rounded-md bg-amber-500 text-[#1A1A1A] px-3 py-1.5">
+        <Clock size={13} className="shrink-0 animate-pulse" />
+        <span className="text-xs font-medium whitespace-nowrap">타이머 실행 중</span>
+        <span className="font-mono text-sm font-semibold tabular-nums">{elapsed}</span>
         <button
           onClick={() => setShowStopModal(true)}
-          className="flex items-center gap-1.5 rounded-md bg-[#1A1A1A]/20 hover:bg-[#1A1A1A]/30 px-2.5 py-1 text-xs font-medium transition-colors"
+          className="flex items-center gap-1 rounded bg-[#1A1A1A]/20 hover:bg-[#1A1A1A]/30 px-2 py-0.5 text-xs font-medium transition-colors whitespace-nowrap"
         >
-          <Square size={11} />
-          중지 및 기록
+          <Square size={10} />
+          중지
         </button>
       </div>
 
