@@ -374,6 +374,7 @@ class PortalKbResult(BaseModel):
     title: str
     content: str
     tags: list[str]
+    view_count: int
     created_at: datetime
 
 
@@ -384,11 +385,13 @@ class PortalKbResult(BaseModel):
 )
 async def portal_kb_search(
     tenant_slug: str,
-    q: str = Query(..., min_length=1, max_length=200),
-    limit: int = Query(10, ge=1, le=50),
+    q: str | None = Query(default=None, max_length=200),
+    limit: int = Query(20, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
 ) -> list[PortalKbResult]:
-    """고객 포털 비인증 KB 검색 — 게시된 문서만, tenant_slug 기준 격리."""
+    """고객 포털 비인증 KB 검색 — 게시된 문서만, tenant_slug 기준 격리.
+    q 미전달 시 전체 게시 문서 반환 (view_count 내림차순).
+    """
     from sqlalchemy import select as sa_select
     from app.models.tenant import Tenant
 
@@ -400,20 +403,23 @@ async def portal_kb_search(
     if not tenant:
         raise HTTPException(status_code=404, detail="테넌트를 찾을 수 없습니다.")
 
-    q_lower = q.lower()
+    where_conds = [
+        KbArticle.tenant_id == tenant.id,
+        KbArticle.is_published.is_(True),
+    ]
+    if q and q.strip():
+        q_lower = q.strip().lower()
+        where_conds.append(
+            or_(
+                func.lower(KbArticle.title).contains(q_lower),
+                func.lower(KbArticle.content).contains(q_lower),
+            )
+        )
+
     rows = (
         await db.execute(
             sa_select(KbArticle)
-            .where(
-                and_(
-                    KbArticle.tenant_id == tenant.id,
-                    KbArticle.is_published.is_(True),
-                    or_(
-                        func.lower(KbArticle.title).contains(q_lower),
-                        func.lower(KbArticle.content).contains(q_lower),
-                    ),
-                )
-            )
+            .where(and_(*where_conds))
             .order_by(KbArticle.view_count.desc())
             .limit(limit)
         )
@@ -425,6 +431,7 @@ async def portal_kb_search(
             title=r.title,
             content=r.content[:300] + "..." if len(r.content) > 300 else r.content,
             tags=r.tags or [],
+            view_count=r.view_count or 0,
             created_at=r.created_at,
         )
         for r in rows

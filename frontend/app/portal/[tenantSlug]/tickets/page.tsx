@@ -27,10 +27,13 @@ import type { TicketStatus, TicketPriority } from '@/lib/types';
 // -----------------------------------------------------------------------
 interface PortalTicket {
   id: string;
+  ticket_number: string | null;
   title: string;
   status: TicketStatus;
   priority: TicketPriority;
+  contract_name: string | null;
   created_at: string;
+  updated_at: string;
 }
 
 type StatusFilter = 'all' | 'active' | 'resolved';
@@ -225,9 +228,16 @@ export default function PortalTicketsPage() {
               className="bg-surface rounded-xl border border-border-default p-4 text-left hover:border-border-strong hover:shadow-sm transition-all duration-fast w-full"
             >
               <div className="flex flex-col gap-2">
-                <p className="text-sm font-medium text-text-primary line-clamp-2">
-                  {ticket.title}
-                </p>
+                <div className="flex items-center gap-2 min-w-0">
+                  {ticket.ticket_number && (
+                    <span className="shrink-0 text-xs text-text-secondary font-mono">
+                      {ticket.ticket_number}
+                    </span>
+                  )}
+                  <p className="text-sm font-medium text-text-primary line-clamp-1 flex-1">
+                    {ticket.title}
+                  </p>
+                </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge variant={PRIORITY_VARIANT[ticket.priority]}>
                     {PRIORITY_LABEL[ticket.priority]}
@@ -235,8 +245,11 @@ export default function PortalTicketsPage() {
                   <Badge variant={STATUS_VARIANT[ticket.status]}>
                     {STATUS_LABEL[ticket.status]}
                   </Badge>
+                  {ticket.contract_name && (
+                    <span className="text-xs text-text-secondary">{ticket.contract_name}</span>
+                  )}
                   <span className="ml-auto text-xs text-text-secondary">
-                    {formatRelativeTime(ticket.created_at)}
+                    {formatRelativeTime(ticket.updated_at ?? ticket.created_at)}
                   </span>
                 </div>
               </div>

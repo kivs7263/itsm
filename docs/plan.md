@@ -63,6 +63,44 @@
 
 ---
 
+## Phase P1: 외부 판매 준비 (2026-06-16)
+> UX 통일 + KB 완성 + 고객 포털 세션 인증
+
+### P1-UX: UX 네이밍 통일 + 기본 정보 완성 [ DONE 2026-06-16 ]
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `UX-1` | 공수 → 작업 시간 전면 교체 (사이드바·티켓·큐) | S | `[ DONE 2026-06-16 ]` |
+| `UX-2` | 반복 장애 → 반복 이슈 사이드바 메뉴 교체 | S | `[ DONE 2026-06-16 ]` |
+| `UX-3` | 공유 큐 → 티켓 풀 전면 교체 | S | `[ DONE 2026-06-16 ]` |
+| `UX-4` | 티켓 번호(ticket_number) 포털 목록·홈에 표시 | S | `[ DONE 2026-06-16 ]` |
+| `UX-5` | 계약명(contract_name) 포털 목록·홈에 표시 | S | `[ DONE 2026-06-16 ]` |
+| `UX-6` | 티켓 상세 작업 시간 섹션 — 누적/청구가능/일지 수 3행 표시 | S | `[ DONE 2026-06-16 ]` |
+
+### P1-KB: KB 완성 [ DONE 2026-06-16 ]
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `KB-1` | migration 033 — view_count, helpful_votes, not_helpful_votes, author_name 컬럼 추가 | S | `[ DONE 2026-06-16 ]` |
+| `KB-2` | backend kb.py — 작성 UI, 투표 엔드포인트, 조회수 증가, 포털 검색 API | M | `[ DONE 2026-06-16 ]` |
+| `KB-3` | frontend KB 목록 — 새 문서 버튼(engineer+), 카드 클릭 → 상세 이동 | M | `[ DONE 2026-06-16 ]` |
+| `KB-4` | frontend KB 상세 페이지 `/kb/[articleId]` — 조회수·투표·수정 버튼 | M | `[ DONE 2026-06-16 ]` |
+| `KB-5` | frontend 티켓 상세 "KB로 저장" 버튼 — resolved/closed 상태에서 표시 | S | `[ DONE 2026-06-16 ]` |
+| `KB-6` | 비게시 문서 접근 제어 — 작성자·admin만 열람 | S | `[ DONE 2026-06-16 ]` |
+
+### P1-PORTAL: 고객 포털 세션 인증 + 홈 [ DONE 2026-06-16 ]
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `PORTAL-1` | backend portal_customer.py — 매직링크 이메일, 세션 쿠키, /me, /tickets | M | `[ DONE 2026-06-16 ]` |
+| `PORTAL-2` | backend kb.py portal — q optional, view_count 포함 응답 | S | `[ DONE 2026-06-16 ]` |
+| `PORTAL-3` | frontend 포털 홈 `/portal/[slug]` — 환영 헤더, 요약 카드, 진행 티켓, 빠른 액션 | M | `[ DONE 2026-06-16 ]` |
+| `PORTAL-4` | frontend 포털 지식 `/portal/[slug]/knowledge` — FAQ 검색·상세 인라인 뷰 | M | `[ DONE 2026-06-16 ]` |
+| `PORTAL-5` | frontend PortalNav 홈·자주묻는질문 메뉴 추가, 로그인 페이지 실제 API 연동 | S | `[ DONE 2026-06-16 ]` |
+| `PORTAL-6` | frontend 포털 티켓 목록 — ticket_number·contract_name·updated_at 표시 | S | `[ DONE 2026-06-16 ]` |
+
+---
+
 ## Phase STRUCT: ITSM 구조 개선
 > 2026-06-16 | 구조 진단 기반 — 계층 구조·이력·상세 뷰 3가지 결함 수정
 > 문제: 티켓 생성 시 고객 미연결 / 고객 지원 이력 뷰 없음 / 티켓 전용 페이지 없음

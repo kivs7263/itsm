@@ -226,3 +226,5 @@ app.include_router(ext_notif_router.router, prefix="/api")         # /api/{slug}
 from app.routers import portal as portal_router  # noqa: E402
 app.include_router(portal_router.router_staff, prefix="/api")      # /api/{slug}/tickets/{id}/portal-link
 app.include_router(portal_router.router_portal)                    # /portal/* (인증 없음)
+from app.routers import portal_customer as portal_customer_router  # noqa: E402
+app.include_router(portal_customer_router.router)                   # /portal/{slug}/auth/*, /portal/{slug}/me, /portal/{slug}/tickets

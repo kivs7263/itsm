@@ -8,6 +8,8 @@
  */
 
 import React, { useState } from 'react';
+import { useParams } from 'next/navigation';
+import api from '@/lib/api';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -24,6 +26,8 @@ const magicLinkSchema = z.object({
 type MagicLinkFormValues = z.infer<typeof magicLinkSchema>;
 
 export default function PortalLoginPage() {
+  const params = useParams();
+  const tenantSlug = params?.tenantSlug as string;
   const [sent, setSent] = useState(false);
   const [sentEmail, setSentEmail] = useState('');
 
@@ -37,9 +41,7 @@ export default function PortalLoginPage() {
   });
 
   const onSubmit = async (values: MagicLinkFormValues) => {
-    // Phase 2: POST /api/portal/auth/magic-link 연동 예정
-    // 현재는 UI만 — 0.5초 딜레이 후 발송 완료 화면 표시
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await api.post(`/portal/${tenantSlug}/auth/login`, { email: values.email });
     setSentEmail(values.email);
     setSent(true);
   };

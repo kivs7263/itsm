@@ -10,7 +10,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut } from 'lucide-react';
+import { Home, LogOut, BookOpen } from 'lucide-react';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -19,9 +19,11 @@ interface PortalNavProps {
 }
 
 const NAV_ITEMS = [
-  { href: (slug: string) => `/portal/${slug}/tickets`, label: '티켓' },
-  { href: (slug: string) => `/portal/${slug}/assets`, label: '자산' },
-  { href: (slug: string) => `/portal/${slug}/contracts`, label: '계약' },
+  { href: (slug: string) => `/portal/${slug}`, label: '홈', exact: true },
+  { href: (slug: string) => `/portal/${slug}/tickets`, label: '티켓', exact: false },
+  { href: (slug: string) => `/portal/${slug}/knowledge`, label: '자주 묻는 질문', exact: false },
+  { href: (slug: string) => `/portal/${slug}/assets`, label: '자산', exact: false },
+  { href: (slug: string) => `/portal/${slug}/contracts`, label: '계약', exact: false },
 ];
 
 export function PortalNav({ tenantSlug }: PortalNavProps) {
@@ -44,7 +46,7 @@ export function PortalNav({ tenantSlug }: PortalNavProps) {
     <nav className="flex items-center gap-1">
       {NAV_ITEMS.map((item) => {
         const href = item.href(tenantSlug);
-        const isActive = pathname?.startsWith(href);
+        const isActive = item.exact ? pathname === href : pathname?.startsWith(href);
         return (
           <Link
             key={item.label}

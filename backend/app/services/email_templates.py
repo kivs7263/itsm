@@ -83,6 +83,21 @@ _TEMPLATES: dict[str, dict[str, str]] = {
             "빠른 시일 내 답변 드리겠습니다."
         ),
     },
+    # payload: customer_name, verify_url, expires_minutes
+    "portal_magic_link": {
+        "subject": "[IT 지원 포털] 로그인 링크",
+        "heading": "로그인 링크가 도착했습니다",
+        "body": (
+            "{{ customer_name }}님, 안녕하세요.<br>"
+            "아래 버튼을 클릭하면 IT 지원 포털에 로그인됩니다.<br><br>"
+            "<a href='{{ verify_url }}' style='display:inline-block;padding:10px 20px;"
+            "background:#F5C000;color:#1A1A1A;text-decoration:none;border-radius:6px;"
+            "font-weight:600;'>포털 로그인</a><br><br>"
+            "<span style='color:#999;font-size:12px;'>"
+            "이 링크는 {{ expires_minutes }}분 후 만료됩니다. "
+            "본인이 요청하지 않은 경우 무시해 주세요.</span>"
+        ),
+    },
     # payload: customer_name, ticket_title, survey_url
     "csat_survey": {
         "subject": "[만족도 조사] {{ ticket_title }} 처리 결과 평가",
