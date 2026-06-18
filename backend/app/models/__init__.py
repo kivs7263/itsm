@@ -76,6 +76,7 @@ from app.models.external_notification_log import (  # noqa: F401
     ExtNotifChannel,
     ExtNotifStatus,
 )
+from app.models.email_inbound_config import EmailInboundConfig  # noqa: F401
 
 __all__ = [
     "Base",

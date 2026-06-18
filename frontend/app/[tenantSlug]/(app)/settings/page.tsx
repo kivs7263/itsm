@@ -22,6 +22,7 @@ import {
   ShieldOff,
   PhoneForwarded,
   History,
+  Mail,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
@@ -69,11 +70,12 @@ const TIER_COLORS: Record<string, string> = {
 // -----------------------------------------------------------------------
 // 탭 정의
 // -----------------------------------------------------------------------
-type TabId = 'users' | 'notifications' | 'sla' | 'categories' | 'support-teams' | 'ext-notif-history';
+type TabId = 'users' | 'notifications' | 'sla' | 'categories' | 'support-teams' | 'ext-notif-history' | 'email-inbound';
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'users',             label: '사용자 관리',    icon: Users          },
   { id: 'notifications',     label: '알림 채널',      icon: Bell           },
+  { id: 'email-inbound',     label: '이메일 수신',    icon: Mail           },
   { id: 'sla',               label: 'SLA 정책',       icon: Clock          },
   { id: 'categories',        label: '분류 체계',      icon: Tag            },
   { id: 'support-teams',     label: '지원팀 관리',    icon: PhoneForwarded },
@@ -1287,6 +1289,248 @@ function ExtNotifHistoryTab({ tenantSlug }: { tenantSlug: string }) {
 }
 
 // -----------------------------------------------------------------------
+// EmailInboundTab — IMAP 수신 설정 (ONB-3)
+// -----------------------------------------------------------------------
+interface EmailInboundConfig {
+  imap_host: string;
+  imap_port: number;
+  imap_user: string;
+  imap_password: string;
+  imap_folder: string;
+  is_active: boolean;
+  last_checked_at: string | null;
+  last_error: string | null;
+}
+
+function EmailInboundTab({ tenantSlug }: { tenantSlug: string }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({
+    imap_host: '',
+    imap_port: 993,
+    imap_user: '',
+    imap_password: '',
+    imap_folder: 'INBOX',
+    is_active: true,
+  });
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+
+  const { data: config, isLoading } = useQuery<EmailInboundConfig | null>({
+    queryKey: ['email-inbound-config', tenantSlug],
+    queryFn: async () => {
+      try {
+        const res = await api.get<EmailInboundConfig>(`/${tenantSlug}/settings/email-inbound`);
+        return res.data ?? null;
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!tenantSlug,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (config) {
+      setForm({
+        imap_host: config.imap_host,
+        imap_port: config.imap_port,
+        imap_user: config.imap_user,
+        imap_password: config.imap_password, // "***" 마스크
+        imap_folder: config.imap_folder,
+        is_active: config.is_active,
+      });
+    }
+  }, [config]);
+
+  const saveMutation = useMutation({
+    mutationFn: () => api.put(`/${tenantSlug}/settings/email-inbound`, form).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['email-inbound-config', tenantSlug] });
+      toast.success('IMAP 설정이 저장되었습니다.');
+      setTestResult(null);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const handleTest = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const res = await api.post<{ ok: boolean; message: string }>(
+        `/${tenantSlug}/settings/email-inbound/test`,
+        form,
+      );
+      setTestResult(res.data);
+      if (res.data.ok) {
+        toast.success(res.data.message);
+      } else {
+        toast.error(res.data.message);
+      }
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="max-w-lg flex flex-col gap-4">
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-10 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  const inputCls = 'h-9 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-accent-500';
+
+  return (
+    <div className="max-w-lg flex flex-col gap-6">
+      <div>
+        <h2 className="text-base font-semibold text-text-primary">이메일 수신 (IMAP)</h2>
+        <p className="mt-1 text-sm text-text-secondary">
+          IMAP 메일함을 연결하면 수신된 이메일이 자동으로 티켓으로 생성됩니다.
+        </p>
+      </div>
+
+      {/* 상태 표시 */}
+      {config?.last_checked_at && (
+        <div className={cn(
+          'rounded-lg border px-4 py-3 text-sm',
+          config.last_error
+            ? 'border-error/30 bg-error/5 text-error-text'
+            : 'border-success/30 bg-success/5 text-success',
+        )}>
+          <p className="font-medium">
+            {config.last_error ? '마지막 수신 오류' : '정상 동작 중'}
+          </p>
+          {config.last_error && (
+            <p className="mt-0.5 text-xs opacity-80">{config.last_error}</p>
+          )}
+          <p className="mt-0.5 text-xs opacity-70">
+            마지막 확인: {new Date(config.last_checked_at).toLocaleString('ko-KR')}
+          </p>
+        </div>
+      )}
+
+      {/* 폼 */}
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="col-span-2 flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-text-primary">IMAP 서버 *</label>
+            <input
+              type="text"
+              value={form.imap_host}
+              onChange={(e) => setForm((f) => ({ ...f, imap_host: e.target.value }))}
+              placeholder="imap.gmail.com"
+              className={inputCls}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-text-primary">포트</label>
+            <input
+              type="number"
+              value={form.imap_port}
+              onChange={(e) => setForm((f) => ({ ...f, imap_port: Number(e.target.value) }))}
+              className={inputCls}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-text-primary">이메일 계정 *</label>
+          <input
+            type="email"
+            value={form.imap_user}
+            onChange={(e) => setForm((f) => ({ ...f, imap_user: e.target.value }))}
+            placeholder="support@yourcompany.com"
+            className={inputCls}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-text-primary">비밀번호 *</label>
+          <input
+            type="password"
+            value={form.imap_password}
+            onChange={(e) => setForm((f) => ({ ...f, imap_password: e.target.value }))}
+            placeholder={config ? '변경 시에만 입력' : '앱 비밀번호 입력'}
+            className={inputCls}
+          />
+          {config && (
+            <p className="text-xs text-text-secondary">변경하지 않으면 기존 비밀번호가 유지됩니다.</p>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-text-primary">폴더</label>
+          <input
+            type="text"
+            value={form.imap_folder}
+            onChange={(e) => setForm((f) => ({ ...f, imap_folder: e.target.value }))}
+            placeholder="INBOX"
+            className={inputCls}
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.is_active}
+            onClick={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
+            className={cn(
+              'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
+              form.is_active ? 'bg-[#F5C000]' : 'bg-border-default',
+            )}
+          >
+            <span
+              className={cn(
+                'pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200',
+                form.is_active ? 'translate-x-4' : 'translate-x-0',
+              )}
+            />
+          </button>
+          <span className="text-sm text-text-primary">수신 활성화</span>
+        </div>
+      </div>
+
+      {/* 연결 테스트 결과 */}
+      {testResult && (
+        <div className={cn(
+          'rounded-lg border px-4 py-3 text-sm',
+          testResult.ok
+            ? 'border-success/30 bg-success/5 text-success'
+            : 'border-error/30 bg-error/5 text-error-text',
+        )}>
+          {testResult.message}
+        </div>
+      )}
+
+      {/* 버튼 */}
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          onClick={handleTest}
+          isLoading={isTesting}
+          disabled={!form.imap_host || !form.imap_user}
+        >
+          연결 테스트
+        </Button>
+        <Button
+          onClick={() => saveMutation.mutate()}
+          isLoading={saveMutation.isPending}
+          disabled={!form.imap_host || !form.imap_user}
+        >
+          저장
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
 // Settings 메인 페이지
 // -----------------------------------------------------------------------
 export default function SettingsPage() {
@@ -1346,6 +1590,7 @@ export default function SettingsPage() {
       <div className="flex-1 overflow-y-auto min-h-0 px-6 py-6">
         {activeTab === 'users' && <UsersTab tenantSlug={tenantSlug} />}
         {activeTab === 'notifications' && <NotificationsTab tenantSlug={tenantSlug} />}
+        {activeTab === 'email-inbound' && <EmailInboundTab tenantSlug={tenantSlug} />}
         {activeTab === 'sla' && <SlaTab tenantSlug={tenantSlug} />}
         {activeTab === 'categories' && <CategoriesTab tenantSlug={tenantSlug} />}
         {activeTab === 'support-teams' && <SupportTeamsTab tenantSlug={tenantSlug} />}

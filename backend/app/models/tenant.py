@@ -16,3 +16,4 @@ class Tenant(Base):
     name = Column(String(100), nullable=False)
     settings = Column(JSONB, nullable=False, default=dict, server_default="{}")
     created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    onboarding_completed_at = Column(DateTime(timezone=True), nullable=True)
