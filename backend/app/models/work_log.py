@@ -89,5 +89,5 @@ class TicketWorkLog(Base):
     approved_at = Column(DateTime(timezone=True), nullable=True)
 
     ticket = relationship("Ticket", lazy="select")
-    user = relationship("User", lazy="select")
+    user = relationship("User", foreign_keys=[user_id], lazy="select")
     approver = relationship("User", foreign_keys=[approved_by], lazy="select")
