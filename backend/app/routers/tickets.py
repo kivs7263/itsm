@@ -524,6 +524,14 @@ async def update_ticket(
     for field, value in update_fields.items():
         if field == "status" and value is not None:
             _apply_resolved_closed(ticket, value)
+            # resolved/closed → open/in_progress 재개 시 reopen_count 증가
+            prev_status = ticket.status if isinstance(ticket.status, str) else ticket.status.value
+            is_reopened = (
+                prev_status in ("resolved", "closed")
+                and value in (TicketStatus.open, TicketStatus.in_progress)
+            )
+            if is_reopened:
+                ticket.reopen_count = (ticket.reopen_count or 0) + 1
             # resolved/closed → CSAT 설문 자동 생성 + 이메일 발송
             if value in (TicketStatus.resolved, TicketStatus.closed):
                 from app.services.csat_service import maybe_create_survey
@@ -535,6 +543,9 @@ async def update_ticket(
                     await notify_ticket_resolved(db, ticket, customer_phone=None)
                 except Exception:
                     pass
+        # 최초 담당자 배정 시 first_responded_at 기록 (KPI-1 MTTA)
+        if field == "assigned_to" and value is not None and ticket.first_responded_at is None:
+            ticket.first_responded_at = datetime.now(timezone.utc)
         setattr(ticket, field, value)
 
     # contract_id 변경 시 SLA deadline 재계산
@@ -591,8 +602,11 @@ async def add_comment(
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db),
 ) -> CommentOut:
-    # 티켓 존재 + 테넌트 격리 확인
-    await _get_ticket_or_404(db, current_user.tenant_id, ticket_id)
+    ticket = await _get_ticket_or_404(db, current_user.tenant_id, ticket_id)
+
+    # 최초 직원 댓글 시 first_responded_at 기록 (KPI-1 MTTA)
+    if ticket.first_responded_at is None and not data.is_internal:
+        ticket.first_responded_at = datetime.now(timezone.utc)
 
     comment = TicketComment(
         id=uuid.uuid4(),

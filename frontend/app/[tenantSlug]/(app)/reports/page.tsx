@@ -786,17 +786,22 @@ export default function ReportsPage() {
     enabled: !!tenantSlug,
   });
 
-  const monthlyTickets  = report?.monthly_tickets ?? [];
-  const byStatus        = report?.by_status ?? [];
-  const complianceRate  = report?.sla_compliance_rate ?? 0;
-  const byPriority      = report?.by_priority ?? [];
-  const mttrMinutes     = report?.mttr_minutes;
-  const fcrRate         = report?.fcr_rate;
-  const kbTotalViews    = report?.kb_total_views ?? 0;
-  const kbArticleCount  = report?.kb_article_count ?? 0;
-  const kbTopArticles   = report?.kb_top_articles ?? [];
-  const totalHours      = report?.total_hours ?? 0;
-  const billableHours   = report?.billable_hours ?? 0;
+  const monthlyTickets    = report?.monthly_tickets ?? [];
+  const byStatus          = report?.by_status ?? [];
+  const complianceRate    = report?.sla_compliance_rate ?? 0;
+  const byPriority        = report?.by_priority ?? [];
+  const mttrMinutes       = report?.mttr_minutes;
+  const mttaMinutes       = report?.mtta_minutes;
+  const fcrRate           = report?.fcr_rate;
+  const kbTotalViews      = report?.kb_total_views ?? 0;
+  const kbArticleCount    = report?.kb_article_count ?? 0;
+  const kbTopArticles     = report?.kb_top_articles ?? [];
+  const totalHours        = report?.total_hours ?? 0;
+  const billableHours     = report?.billable_hours ?? 0;
+  const ageBuckets        = report?.age_buckets;
+  const channelBreakdown  = report?.channel_breakdown ?? [];
+  const escalationRate    = report?.escalation_rate;
+  const recurringRate     = report?.recurring_rate;
 
   const maxMonthlyCount = Math.max(...monthlyTickets.map((m) => m.count), 1);
 
@@ -816,7 +821,7 @@ export default function ReportsPage() {
       {/* 본문 */}
       <div className="flex-1 overflow-auto p-6 flex flex-col gap-6">
 
-        {/* ── KPI 핵심 지표 6종 ── */}
+        {/* ── KPI 핵심 지표 ── */}
         <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
           <KpiCard
             label="평균 해결 시간 (MTTR)"
@@ -827,6 +832,16 @@ export default function ReportsPage() {
             iconBg="rgba(245,192,0,0.12)"
             isLoading={isLoading}
             tooltip="Mean Time To Resolve — 해결/종료된 티켓 기준"
+          />
+          <KpiCard
+            label="평균 응답 시간 (MTTA)"
+            value={formatMttr(mttaMinutes)}
+            sub="티켓 생성→최초 응답"
+            icon={<Zap size={16} />}
+            iconColor="#f97316"
+            iconBg="rgba(249,115,22,0.12)"
+            isLoading={isLoading}
+            tooltip="Mean Time To Acknowledge — 최초 담당자 배정 또는 댓글 기준"
           />
           <KpiCard
             label="일회 해결률 (FCR)"
@@ -848,10 +863,32 @@ export default function ReportsPage() {
             isLoading={isLoading}
           />
           <KpiCard
+            label="에스컬레이션율"
+            value={escalationRate != null ? `${escalationRate}%` : '-'}
+            sub="전체 대비 에스컬레이션"
+            icon={<AlertTriangle size={16} />}
+            iconColor="#ef4444"
+            iconBg="rgba(239,68,68,0.12)"
+            isLoading={isLoading}
+            tooltip="에스컬레이션된 티켓 / 전체 티켓 비율"
+          />
+          <KpiCard
+            label="반복 장애율"
+            value={recurringRate != null ? `${recurringRate}%` : '-'}
+            sub="반복 장애 감지 티켓"
+            icon={<Layers size={16} />}
+            iconColor="#8b5cf6"
+            iconBg="rgba(139,92,246,0.12)"
+            isLoading={isLoading}
+            tooltip="동일 증상 반복 감지된 티켓 비율"
+          />
+        </div>
+        <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
+          <KpiCard
             label="이번 달 해결"
             value={String(report?.monthly_resolved ?? 0)}
             sub="resolved + closed"
-            icon={<Zap size={16} />}
+            icon={<CheckSquare size={16} />}
             iconColor="#a855f7"
             iconBg="rgba(168,85,247,0.12)"
             isLoading={isLoading}
@@ -1037,6 +1074,80 @@ export default function ReportsPage() {
           </div>
         </div>
 
+        {/* ── 채널별 분포 + 티켓 연령 구간 ── */}
+        <div className="grid grid-cols-2 gap-6">
+          {/* 채널별 분포 */}
+          <div className="rounded-lg border border-border-default bg-surface">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-border-subtle">
+              <MessageSquare size={16} className="text-text-secondary" />
+              <h2 className="text-sm font-semibold text-text-primary">채널별 분포</h2>
+            </div>
+            <div className="p-5">
+              {isLoading ? (
+                <div className="flex flex-col gap-3">
+                  {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-8 w-full" />)}
+                </div>
+              ) : channelBreakdown.length === 0 ? (
+                <p className="text-sm text-text-secondary text-center py-8">데이터가 없습니다.</p>
+              ) : (() => {
+                const maxCh = Math.max(...channelBreakdown.map((c) => c.count), 1);
+                const CHANNEL_LABELS: Record<string, string> = {
+                  email: '이메일', phone: '전화', portal: '포털', internal: '내부',
+                };
+                return (
+                  <div className="flex flex-col gap-3">
+                    {channelBreakdown.map((ch) => (
+                      <div key={ch.channel} className="flex items-center gap-3">
+                        <span className="text-xs text-text-secondary w-14 shrink-0">
+                          {CHANNEL_LABELS[ch.channel] ?? ch.channel}
+                        </span>
+                        <MonthlyBar count={ch.count} max={maxCh} />
+                        <span className="text-xs font-medium text-text-primary w-8 text-right tabular-nums">
+                          {ch.count}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* 티켓 연령 구간 (미해결) */}
+          <div className="rounded-lg border border-border-default bg-surface">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-border-subtle">
+              <Clock size={16} className="text-text-secondary" />
+              <h2 className="text-sm font-semibold text-text-primary">티켓 연령 구간</h2>
+              <span className="text-xs text-text-tertiary ml-auto">미해결 티켓 기준</span>
+            </div>
+            <div className="p-5">
+              {isLoading ? (
+                <div className="grid grid-cols-3 gap-3">
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}
+                </div>
+              ) : !ageBuckets ? (
+                <p className="text-sm text-text-secondary text-center py-8">데이터가 없습니다.</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { key: '0-7d', label: '7일 이내', color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-950/30' },
+                    { key: '7-30d', label: '7~30일', color: 'text-yellow-600', bg: 'bg-yellow-50 dark:bg-yellow-950/30' },
+                    { key: '30d+', label: '30일 초과', color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-950/30' },
+                  ].map(({ key, label, color, bg }) => (
+                    <div key={key} className={`rounded-lg border border-border-subtle p-3 flex flex-col gap-1 ${bg}`}>
+                      <span className={`text-[10px] font-medium ${color}`}>{label}</span>
+                      <span className="text-2xl font-bold text-text-primary tabular-nums">
+                        {ageBuckets[key as keyof typeof ageBuckets] ?? 0}
+                      </span>
+                      <span className="text-[10px] text-text-tertiary">건</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* CSAT 섹션 */}
         <div className="rounded-lg border border-border-default bg-surface">
           <div className="flex items-center gap-2 px-5 py-4 border-b border-border-subtle">
@@ -1084,27 +1195,69 @@ export default function ReportsPage() {
               />
             </div>
 
-            {/* 점수 분포 */}
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-medium text-text-secondary">점수 분포</p>
-              {csatLoading ? (
-                <div className="flex flex-col gap-2">
-                  {[5, 4, 3, 2, 1].map((s) => (
-                    <Skeleton key={s} className="h-4 w-full" />
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {[5, 4, 3, 2, 1].map((s) => (
-                    <ScoreBar
-                      key={s}
-                      star={s}
-                      count={scoreDistribution[String(s)] ?? 0}
-                      max={maxScoreCount}
-                    />
-                  ))}
-                </div>
-              )}
+            {/* 점수 분포 + 월별 추이 2컬럼 */}
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              {/* 점수 분포 */}
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-medium text-text-secondary">점수 분포</p>
+                {csatLoading ? (
+                  <div className="flex flex-col gap-2">
+                    {[5, 4, 3, 2, 1].map((s) => (
+                      <Skeleton key={s} className="h-4 w-full" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {[5, 4, 3, 2, 1].map((s) => (
+                      <ScoreBar
+                        key={s}
+                        star={s}
+                        count={scoreDistribution[String(s)] ?? 0}
+                        max={maxScoreCount}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 월별 CSAT 추이 */}
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-medium text-text-secondary">월별 평균 점수 추이</p>
+                {csatLoading ? (
+                  <div className="flex flex-col gap-2">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <Skeleton key={i} className="h-4 w-full" />
+                    ))}
+                  </div>
+                ) : !csat?.monthly_trend || csat.monthly_trend.length === 0 ? (
+                  <p className="text-sm text-text-secondary text-center py-4">데이터가 없습니다.</p>
+                ) : (() => {
+                  const trend = csat.monthly_trend!;
+                  const maxScore = 5;
+                  return (
+                    <div className="flex flex-col gap-2">
+                      {trend.map((t) => (
+                        <div key={t.month} className="flex items-center gap-3">
+                          <span className="text-xs text-text-secondary w-14 shrink-0">{t.month}</span>
+                          <div className="flex-1 bg-border-subtle rounded-sm overflow-hidden" style={{ height: 6 }}>
+                            <div
+                              className="h-full rounded-sm"
+                              style={{
+                                width: `${(t.avg_score / maxScore) * 100}%`,
+                                background: 'linear-gradient(90deg, #F5C000, #f59e0b)',
+                                transition: 'width 0.4s ease',
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs font-medium text-text-primary w-12 text-right tabular-nums">
+                            {t.avg_score.toFixed(1)} <span className="text-text-tertiary">({t.count})</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           </div>
         </div>

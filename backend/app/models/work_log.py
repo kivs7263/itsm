@@ -80,6 +80,14 @@ class TicketWorkLog(Base):
     memo = Column(Text, nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     logged_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    # KPI-6: 공수 승인
+    approved_by = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    approved_at = Column(DateTime(timezone=True), nullable=True)
 
     ticket = relationship("Ticket", lazy="select")
     user = relationship("User", lazy="select")
+    approver = relationship("User", foreign_keys=[approved_by], lazy="select")

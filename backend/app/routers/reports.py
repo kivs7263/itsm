@@ -42,9 +42,10 @@ from app.models.escalation import TicketEscalation
 from app.models.kb_article import KbArticle
 from app.models.report import Report, ReportStatus
 from app.models.sla import SLAEvent, SLAEventType
-from app.models.ticket import Ticket, TicketStatus
+from app.models.ticket import Ticket, TicketChannel, TicketStatus
 from app.models.user import User, UserRole
 from app.models.work_log import TicketWorkLog
+from app.models.recurring_alert import RecurringAlert
 from app.services import csat_service
 
 logger = logging.getLogger(__name__)
@@ -333,6 +334,97 @@ async def _build_summary_data(
     total_hours = float(work_row.total_hours or 0)
     billable_hours = float(work_row.billable_hours or 0)
 
+    # ------------------------------------------------------------------
+    # KPI-4: 티켓 연령 구간 (age_buckets)
+    # ------------------------------------------------------------------
+    now_ts = func.now()
+    age_rows = (
+        await db.execute(
+            select(
+                case(
+                    (func.extract("epoch", now_ts - Ticket.created_at) / 86400 <= 7, "0-7d"),
+                    (func.extract("epoch", now_ts - Ticket.created_at) / 86400 <= 30, "7-30d"),
+                    else_="30d+",
+                ).label("bucket"),
+                func.count().label("cnt"),
+            )
+            .where(
+                and_(
+                    *base_where,
+                    Ticket.status.not_in([TicketStatus.resolved, TicketStatus.closed]),
+                )
+            )
+            .group_by("bucket")
+        )
+    ).all()
+    age_buckets = {r.bucket: r.cnt for r in age_rows}
+    age_buckets.setdefault("0-7d", 0)
+    age_buckets.setdefault("7-30d", 0)
+    age_buckets.setdefault("30d+", 0)
+
+    # ------------------------------------------------------------------
+    # KPI-4: 채널별 분포 (channel_breakdown)
+    # ------------------------------------------------------------------
+    channel_rows = (
+        await db.execute(
+            select(Ticket.channel, func.count().label("cnt"))
+            .where(and_(*base_where))
+            .group_by(Ticket.channel)
+        )
+    ).all()
+    channel_breakdown = [
+        {
+            "channel": str(r.channel.value if hasattr(r.channel, "value") else r.channel),
+            "count": r.cnt,
+        }
+        for r in channel_rows
+    ]
+
+    # ------------------------------------------------------------------
+    # KPI-4: 에스컬레이션 비율 (escalation_rate)
+    # ------------------------------------------------------------------
+    if total > 0:
+        esc_count = await db.scalar(
+            select(func.count(TicketEscalation.ticket_id.distinct()))
+            .where(TicketEscalation.tenant_id == tenant_id)
+        ) or 0
+        escalation_rate = round(esc_count / total * 100, 1)
+    else:
+        escalation_rate = 0.0
+
+    # ------------------------------------------------------------------
+    # KPI-4: 반복 장애 비율 (recurring_rate)
+    # ------------------------------------------------------------------
+    recurring_count = await db.scalar(
+        select(func.count())
+        .select_from(Ticket)
+        .where(
+            and_(
+                Ticket.tenant_id == tenant_id,
+                Ticket.is_recurring_flag.is_(True),
+            )
+        )
+    ) or 0
+    recurring_rate = round(recurring_count / total * 100, 1) if total > 0 else 0.0
+
+    # ------------------------------------------------------------------
+    # KPI-1: MTTA (Mean Time To Acknowledge) — 분 단위
+    # ------------------------------------------------------------------
+    mtta_result = await db.scalar(
+        select(
+            func.avg(
+                extract("epoch", Ticket.first_responded_at - Ticket.created_at) / 60
+            )
+        )
+        .where(
+            and_(
+                Ticket.tenant_id == tenant_id,
+                Ticket.first_responded_at.isnot(None),
+            )
+        )
+    )
+    mtta_minutes = round(float(mtta_result), 1) if mtta_result is not None else None
+
     return {
         "monthly_tickets": monthly_tickets,
         "by_status": by_status,
@@ -340,6 +432,7 @@ async def _build_summary_data(
         "sla_breach_count": breach_count,
         "monthly_resolved": monthly_resolved,
         "mttr_minutes": mttr_minutes,
+        "mtta_minutes": mtta_minutes,
         "fcr_rate": fcr_rate,
         "by_priority": by_priority,
         "kb_total_views": int(kb_total_views),
@@ -347,6 +440,10 @@ async def _build_summary_data(
         "kb_top_articles": kb_top_articles,
         "total_hours": round(total_hours, 1),
         "billable_hours": round(billable_hours, 1),
+        "age_buckets": age_buckets,
+        "channel_breakdown": channel_breakdown,
+        "escalation_rate": escalation_rate,
+        "recurring_rate": recurring_rate,
     }
 
 

@@ -326,8 +326,8 @@ export interface ReportSummary {
   sla_breach_count?: number;
   monthly_resolved?: number;
   csat_summary?: CSATSummary;
-  // KPI-1 추가 지표
   mttr_minutes?: number | null;
+  mtta_minutes?: number | null;
   fcr_rate?: number | null;
   by_priority?: { priority: TicketPriority; count: number }[];
   kb_total_views?: number;
@@ -335,6 +335,11 @@ export interface ReportSummary {
   kb_top_articles?: { id: string; title: string; view_count: number }[];
   total_hours?: number;
   billable_hours?: number;
+  // KPI-4 신규
+  age_buckets?: { '0-7d': number; '7-30d': number; '30d+': number };
+  channel_breakdown?: { channel: string; count: number }[];
+  escalation_rate?: number;
+  recurring_rate?: number;
 }
 
 // -----------------------------------------------------------------------
@@ -348,6 +353,7 @@ export interface CSATSummary {
   avg_score: number | null;
   response_rate: number;
   score_distribution: Record<string, number>; // "1" ~ "5" 키
+  monthly_trend?: { month: string; avg_score: number; count: number }[];
 }
 
 // -----------------------------------------------------------------------

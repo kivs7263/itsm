@@ -110,6 +110,8 @@ class WorkLogOut(BaseModel):
     memo: str | None
     started_at: datetime | None
     logged_at: datetime
+    approved_by: uuid.UUID | None = None
+    approved_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -261,6 +263,42 @@ async def delete_work_log(
     await db.delete(log)
     await db.commit()
     await _mark_kpi_dirty(db, ticket_id, current_user.tenant_id)
+
+
+@router.post(
+    "/{tenant_slug}/tickets/{ticket_id}/work-logs/{log_id}/approve",
+    response_model=WorkLogOut,
+    summary="공수 승인 (team_lead+)",
+)
+async def approve_work_log(
+    tenant_slug: str,
+    ticket_id: uuid.UUID,
+    log_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_roles(UserRole.team_lead, UserRole.admin))],
+    db: AsyncSession = Depends(get_db),
+) -> WorkLogOut:
+    log = (
+        await db.execute(
+            select(TicketWorkLog).where(
+                TicketWorkLog.id == log_id,
+                TicketWorkLog.ticket_id == ticket_id,
+                TicketWorkLog.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if log is None:
+        raise HTTPException(status_code=404, detail="공수 기록을 찾을 수 없습니다.")
+    if log.approved_at is not None:
+        raise HTTPException(status_code=400, detail="이미 승인된 공수 기록입니다.")
+
+    log.approved_by = current_user.id
+    log.approved_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(log)
+
+    user = (await db.execute(select(User).where(User.id == log.user_id))).scalar_one_or_none() if log.user_id else None
+    return _serialize(log, user)
+
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -704,4 +742,6 @@ def _serialize(log: TicketWorkLog, user: User | None) -> WorkLogOut:
         memo=log.memo,
         started_at=log.started_at,
         logged_at=log.logged_at,
+        approved_by=log.approved_by,
+        approved_at=log.approved_at,
     )

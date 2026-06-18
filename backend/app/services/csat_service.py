@@ -160,6 +160,35 @@ async def get_summary(
     # 응답률
     response_rate = round(submitted / total, 4) if total > 0 else 0.0
 
+    # 월별 CSAT 추이 (최근 6개월)
+    trend_rows = (
+        await db.execute(
+            select(
+                func.to_char(CSATSurvey.sent_at, "YYYY-MM").label("month"),
+                func.avg(CSATSurvey.score).label("avg_score"),
+                func.count().label("cnt"),
+            )
+            .where(
+                and_(
+                    where_tenant,
+                    CSATSurvey.status == CSATStatus.submitted,
+                    CSATSurvey.score.isnot(None),
+                )
+            )
+            .group_by(func.to_char(CSATSurvey.sent_at, "YYYY-MM"))
+            .order_by(func.to_char(CSATSurvey.sent_at, "YYYY-MM").desc())
+            .limit(6)
+        )
+    ).all()
+    monthly_trend = [
+        {
+            "month": r.month,
+            "avg_score": round(float(r.avg_score), 2),
+            "count": r.cnt,
+        }
+        for r in reversed(trend_rows)
+    ]
+
     return {
         "total": total,
         "submitted": submitted,
@@ -168,4 +197,5 @@ async def get_summary(
         "avg_score": avg_score,
         "score_distribution": score_distribution,
         "response_rate": response_rate,
+        "monthly_trend": monthly_trend,
     }

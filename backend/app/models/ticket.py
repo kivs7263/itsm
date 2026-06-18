@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import enum
 
-from sqlalchemy import BigInteger, Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, SmallInteger, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.models.base import Base, gen_uuid, utcnow
@@ -100,6 +100,9 @@ class Ticket(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
     closed_at = Column(DateTime(timezone=True), nullable=True)
+    # KPI-1
+    first_responded_at = Column(DateTime(timezone=True), nullable=True)
+    reopen_count = Column(SmallInteger, nullable=False, default=0)
 
 
 class TicketComment(Base):
