@@ -147,6 +147,28 @@
 
 ---
 
+## Phase ACT-1: 티켓 활동 감사 추적 + KB 자동 누적 [ DONE 2026-06-18 ]
+> 2026-06-18 | 모든 티켓 이벤트를 ticket_activities 테이블에 기록, 단일 타임라인으로 조회
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `ACT-1a` | Migration 041 — tickets.symptom_category_id 컬럼 추가 | S | `[ DONE 2026-06-18 ]` |
+| `ACT-1b` | Migration 042 — ticket_activities 테이블 (event_type/from_value/to_value/meta/actor_id) | S | `[ DONE 2026-06-18 ]` |
+| `ACT-1c` | Backend activity_service.py — record() 헬퍼 (호출부에서 commit) | S | `[ DONE 2026-06-18 ]` |
+| `ACT-1d` | tickets.py: create/update/comment에 created/status_changed/assigned/priority_changed/comment_added 이벤트 | M | `[ DONE 2026-06-18 ]` |
+| `ACT-1e` | work_logs.py: create_work_log에 work_log_added 이벤트 | S | `[ DONE 2026-06-18 ]` |
+| `ACT-1f` | escalations.py: escalate_ticket에 escalated 이벤트 | S | `[ DONE 2026-06-18 ]` |
+| `ACT-1g` | Backend: GET /{ticket_id}/activities 엔드포인트 (actor_name join, created_at asc) | S | `[ DONE 2026-06-18 ]` |
+| `ACT-1h` | Frontend: 티켓 상세 활동 타임라인 — 시스템 이벤트(SystemEventRow) + 댓글 + 에스컬레이션 3종 통합 | M | `[ DONE 2026-06-18 ]` |
+| `ACT-1i` | Frontend: 티켓 resolved 전환 시 KB 모달 자동 오픈 (KB 누적 자동화) | S | `[ DONE 2026-06-18 ]` |
+
+**성공 기준**:
+- 티켓 생성/수정/댓글/공수/에스컬레이션 모든 이벤트가 activities API에서 조회됨
+- 티켓 상세 타임라인에 시스템 이벤트(상태변경·담당자배정·공수기록 등)가 댓글·에스컬레이션과 함께 시간순 표시
+- resolved 상태 전환 즉시 KB 모달 자동 팝업 → 엔지니어가 KB 초안 저장 가능
+
+---
+
 ## Phase WL: 공수/작업 UX 전면 개선
 > 2026-06-16 | 리서치 기반 — 업계 표준 대비 구조적 결함 수정
 > Freshdesk/Linear/Jira SM 패턴 적용

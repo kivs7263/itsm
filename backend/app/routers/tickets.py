@@ -46,6 +46,8 @@ from app.models import (
     UserRole,
 )
 from app.services import search_service
+from app.services import activity_service
+from app.models.ticket_activity import TicketActivity
 
 logger = logging.getLogger(__name__)
 _SENTINEL = object()  # update_ticket에서 "필드 미전달" vs None 구분용
@@ -442,6 +444,15 @@ async def create_ticket(
         sla_resolution_deadline=sla_resolution_deadline,
     )
     db.add(ticket)
+    await activity_service.record(
+        db,
+        tenant_id=current_user.tenant_id,
+        ticket_id=ticket.id,
+        actor_id=current_user.id,
+        event_type="created",
+        to_value=ticket.title,
+        meta={"priority": str(ticket.priority), "channel": str(ticket.channel)},
+    )
     await db.commit()
     await db.refresh(ticket)
 
@@ -542,6 +553,11 @@ async def update_ticket(
     update_fields = data.model_dump(exclude_unset=True)
     new_contract_id = update_fields.get("contract_id", _SENTINEL)
 
+    # 변경 전 값 스냅샷 (활동 기록용)
+    _prev_status   = str(ticket.status.value if hasattr(ticket.status, "value") else ticket.status)
+    _prev_priority = str(ticket.priority.value if hasattr(ticket.priority, "value") else ticket.priority)
+    _prev_assigned = str(ticket.assigned_to) if ticket.assigned_to else None
+
     for field, value in update_fields.items():
         if field == "status" and value is not None:
             _apply_resolved_closed(ticket, value)
@@ -576,6 +592,30 @@ async def update_ticket(
         )
         ticket.sla_response_deadline = r_dl
         ticket.sla_resolution_deadline = res_dl
+
+    # 활동 이벤트 기록
+    _new_status   = str(ticket.status.value if hasattr(ticket.status, "value") else ticket.status)
+    _new_priority = str(ticket.priority.value if hasattr(ticket.priority, "value") else ticket.priority)
+    _new_assigned = str(ticket.assigned_to) if ticket.assigned_to else None
+
+    if "status" in update_fields and _prev_status != _new_status:
+        await activity_service.record(
+            db, tenant_id=current_user.tenant_id, ticket_id=ticket.id,
+            actor_id=current_user.id, event_type="status_changed",
+            from_value=_prev_status, to_value=_new_status,
+        )
+    if "priority" in update_fields and _prev_priority != _new_priority:
+        await activity_service.record(
+            db, tenant_id=current_user.tenant_id, ticket_id=ticket.id,
+            actor_id=current_user.id, event_type="priority_changed",
+            from_value=_prev_priority, to_value=_new_priority,
+        )
+    if "assigned_to" in update_fields and _prev_assigned != _new_assigned:
+        await activity_service.record(
+            db, tenant_id=current_user.tenant_id, ticket_id=ticket.id,
+            actor_id=current_user.id, event_type="assigned",
+            from_value=_prev_assigned, to_value=_new_assigned,
+        )
 
     await db.commit()
     await db.refresh(ticket)
@@ -711,6 +751,11 @@ async def add_comment(
         is_internal=data.is_internal,
     )
     db.add(comment)
+    await activity_service.record(
+        db, tenant_id=current_user.tenant_id, ticket_id=ticket_id,
+        actor_id=current_user.id, event_type="comment_added",
+        meta={"is_internal": data.is_internal, "preview": data.body[:100]},
+    )
     await db.commit()
     await db.refresh(comment)
     return CommentOut.model_validate(comment)
@@ -1133,3 +1178,65 @@ async def delete_cause_category(
 
     await db.delete(cat)
     await db.commit()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 티켓 활동 감사 로그
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ActivityOut(BaseModel):
+    id: uuid.UUID
+    event_type: str
+    from_value: str | None
+    to_value: str | None
+    meta: dict | None
+    actor_id: uuid.UUID | None
+    actor_name: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+@router.get(
+    "/{ticket_id}/activities",
+    response_model=list[ActivityOut],
+)
+async def list_ticket_activities(
+    tenant_slug: str,
+    ticket_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    # 티켓 접근 권한 확인
+    result = await db.execute(
+        select(Ticket).where(
+            Ticket.id == ticket_id,
+            Ticket.tenant_id == current_user.tenant_id,
+        )
+    )
+    ticket = result.scalar_one_or_none()
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="티켓을 찾을 수 없습니다.")
+
+    rows = await db.execute(
+        select(TicketActivity, User)
+        .outerjoin(User, TicketActivity.actor_id == User.id)
+        .where(
+            TicketActivity.ticket_id == ticket_id,
+            TicketActivity.tenant_id == current_user.tenant_id,
+        )
+        .order_by(TicketActivity.created_at.asc())
+    )
+    return [
+        ActivityOut(
+            id=act.id,
+            event_type=act.event_type,
+            from_value=act.from_value,
+            to_value=act.to_value,
+            meta=act.meta,
+            actor_id=act.actor_id,
+            actor_name=user.name if user else None,
+            created_at=act.created_at,
+        )
+        for act, user in rows.all()
+    ]

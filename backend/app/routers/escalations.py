@@ -41,6 +41,7 @@ from app.models.escalation import (
     TicketEscalation,
 )
 from app.services.external_notif_service import queue_notification, resolve_customer_email
+from app.services import activity_service
 
 esc_router = APIRouter(
     prefix="/{tenant_slug}/tickets/{ticket_id}/escalations",
@@ -207,6 +208,16 @@ async def escalate_ticket(
     if body.to_assigned:
         ticket.assigned_to = body.to_assigned
 
+    await activity_service.record(
+        db,
+        tenant_id=current_user.tenant_id,
+        ticket_id=ticket_id,
+        actor_id=current_user.id,
+        event_type="escalated",
+        from_value=str(from_level),
+        to_value=str(to_level),
+        meta={"reason": body.reason.value, "to_team_id": str(body.to_team_id)},
+    )
     await db.commit()
     await db.refresh(esc)
 

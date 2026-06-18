@@ -5,7 +5,12 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Send, BookOpen } from 'lucide-react';
+import {
+  ArrowLeft, Send, BookOpen,
+  CirclePlus, RefreshCw, UserCheck, AlertTriangle,
+  MessageSquare, Clock, TrendingUp, CheckCircle2, XCircle,
+  RotateCcw, FileText,
+} from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
 import type { Ticket, TicketComment, EscalationOut, TicketPriority, TicketStatus } from '@/lib/types';
 import { cn, formatRelativeTime } from '@/lib/utils';
@@ -161,11 +166,62 @@ function SideSection({
 }
 
 // -----------------------------------------------------------------------
+// 활동 감사 이벤트 타입
+// -----------------------------------------------------------------------
+interface ActivityEvent {
+  id: string;
+  event_type: string;
+  from_value: string | null;
+  to_value: string | null;
+  meta: Record<string, unknown> | null;
+  actor_id: string | null;
+  actor_name: string | null;
+  created_at: string;
+}
+
+const EVENT_CONFIG: Record<string, { label: (e: ActivityEvent) => string; icon: React.ReactNode; color: string }> = {
+  created:                { label: () => '티켓이 생성되었습니다', icon: <CirclePlus size={13} />, color: 'text-info-text bg-info-bg' },
+  status_changed:         { label: (e) => `상태: ${e.from_value ?? '-'} → ${e.to_value ?? '-'}`, icon: <RefreshCw size={13} />, color: 'text-warning-text bg-warning-bg' },
+  priority_changed:       { label: (e) => `우선순위: ${e.from_value ?? '-'} → ${e.to_value ?? '-'}`, icon: <TrendingUp size={13} />, color: 'text-warning-text bg-warning-bg' },
+  assigned:               { label: (e) => e.to_value ? `담당자가 배정되었습니다` : '담당자가 해제되었습니다', icon: <UserCheck size={13} />, color: 'text-success-text bg-success-bg' },
+  comment_added:          { label: () => '댓글이 추가되었습니다', icon: <MessageSquare size={13} />, color: 'text-text-secondary bg-surface-elevated' },
+  work_log_added:         { label: (e) => `공수 ${(e.meta?.hours as number | undefined)?.toFixed(1) ?? '?'}h 기록됨`, icon: <Clock size={13} />, color: 'text-info-text bg-info-bg' },
+  escalated:              { label: (e) => `${e.from_value ?? '?'}차 → ${e.to_value ?? '?'}차 에스컬레이션`, icon: <AlertTriangle size={13} />, color: 'text-error-text bg-error-bg' },
+  sla_response_breached:  { label: () => 'SLA 응답 기한 초과', icon: <AlertTriangle size={13} />, color: 'text-error-text bg-error-bg' },
+  sla_resolution_breached:{ label: () => 'SLA 해결 기한 초과', icon: <AlertTriangle size={13} />, color: 'text-error-text bg-error-bg' },
+  resolved:               { label: () => '티켓이 해결 처리되었습니다', icon: <CheckCircle2 size={13} />, color: 'text-success-text bg-success-bg' },
+  closed:                 { label: () => '티켓이 종료되었습니다', icon: <XCircle size={13} />, color: 'text-text-secondary bg-surface-elevated' },
+  reopened:               { label: () => '티켓이 재오픈되었습니다', icon: <RotateCcw size={13} />, color: 'text-warning-text bg-warning-bg' },
+  kb_draft_created:       { label: () => 'KB 초안이 생성되었습니다', icon: <FileText size={13} />, color: 'text-success-text bg-success-bg' },
+};
+
+function SystemEventRow({ event }: { event: ActivityEvent }) {
+  const cfg = EVENT_CONFIG[event.event_type] ?? {
+    label: (e: ActivityEvent) => e.event_type,
+    icon: <RefreshCw size={13} />,
+    color: 'text-text-secondary bg-surface-elevated',
+  };
+  return (
+    <div className="flex items-center gap-2.5 py-1">
+      <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium shrink-0', cfg.color)}>
+        {cfg.icon}
+        <span>{cfg.label(event)}</span>
+      </span>
+      {event.actor_name && (
+        <span className="text-xs text-text-secondary shrink-0">by {event.actor_name}</span>
+      )}
+      <span className="text-xs text-text-disabled ml-auto shrink-0">{formatRelativeTime(event.created_at)}</span>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
 // 활동 타임라인 아이템
 // -----------------------------------------------------------------------
 type ActivityItem =
   | { kind: 'comment'; timestamp: string; data: TicketComment }
-  | { kind: 'escalation'; timestamp: string; data: EscalationOut };
+  | { kind: 'escalation'; timestamp: string; data: EscalationOut }
+  | { kind: 'system'; timestamp: string; data: ActivityEvent };
 
 // -----------------------------------------------------------------------
 // 페이지 스켈레톤
@@ -205,6 +261,7 @@ export default function TicketDetailPage() {
   const [commentBody, setCommentBody] = React.useState('');
   const [kbModalOpen, setKbModalOpen] = React.useState(false);
   const [isInternal, setIsInternal] = React.useState(false);
+  const prevStatusRef = React.useRef<string | null>(null);
 
   // 티켓 상세 조회
   const { data: ticketDetail, isLoading: ticketLoading } = useQuery<{
@@ -238,6 +295,18 @@ export default function TicketDetailPage() {
     staleTime: 30 * 1000,
   });
 
+  // 활동 감사 로그
+  const { data: activities = [] } = useQuery<ActivityEvent[]>({
+    queryKey: ['ticket-activities', tenantSlug, ticketId],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/tickets/${ticketId}/activities`).then((r) => {
+        const d = r.data;
+        return Array.isArray(d) ? d : [];
+      }),
+    enabled: !!ticketId,
+    staleTime: 30 * 1000,
+  });
+
   // 에스컬레이션 이벤트
   const { data: escalations = [] } = useQuery<EscalationOut[]>({
     queryKey: ['escalations', tenantSlug, ticketId],
@@ -263,6 +332,16 @@ export default function TicketDetailPage() {
 
   const ticket = ticketDetail?.ticket;
 
+  // 상태가 resolved로 바뀌면 KB 모달 자동 오픈 (한 번만)
+  React.useEffect(() => {
+    if (ticket?.status === 'resolved' && prevStatusRef.current !== null && prevStatusRef.current !== 'resolved') {
+      setKbModalOpen(true);
+    }
+    if (ticket?.status) {
+      prevStatusRef.current = ticket.status;
+    }
+  }, [ticket?.status]);
+
   // 댓글: API 응답 우선, 없으면 ticketDetail.comments 폴백
   const comments: TicketComment[] =
     commentsData ??
@@ -278,7 +357,12 @@ export default function TicketDetailPage() {
   const totalHours = workLogs.reduce((acc, l) => acc + l.hours, 0);
   const billableHours = workLogs.reduce((acc, l) => acc + (l.billable ? l.hours : 0), 0);
 
-  // 활동 타임라인 병합 (댓글 + 에스컬레이션)
+  // 활동 타임라인 병합 (시스템 이벤트 + 댓글 + 에스컬레이션)
+  // comment_added는 댓글 버블로 표시하므로 activities에서 제외
+  // escalated는 EscalationEventCard로 표시하므로 activities에서 제외
+  const SYSTEM_ONLY = new Set(['created', 'status_changed', 'priority_changed', 'assigned', 'work_log_added',
+    'sla_response_breached', 'sla_resolution_breached', 'resolved', 'closed', 'reopened', 'kb_draft_created']);
+
   const activityItems: ActivityItem[] = React.useMemo(() => {
     const items: ActivityItem[] = [
       ...comments.map((c) => ({
@@ -291,9 +375,17 @@ export default function TicketDetailPage() {
         timestamp: e.created_at,
         data: e,
       })),
+      ...activities
+        .filter((a) => SYSTEM_ONLY.has(a.event_type))
+        .map((a) => ({
+          kind: 'system' as const,
+          timestamp: a.created_at,
+          data: a,
+        })),
     ];
     return items.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  }, [comments, escalations]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comments, escalations, activities]);
 
   // 댓글 작성 mutation
   const commentMutation = useMutation({
@@ -305,6 +397,7 @@ export default function TicketDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ticket-comments', tenantSlug, ticketId] });
       queryClient.invalidateQueries({ queryKey: ['ticket-detail-full', tenantSlug, ticketId] });
+      queryClient.invalidateQueries({ queryKey: ['ticket-activities', tenantSlug, ticketId] });
       setCommentBody('');
       setIsInternal(false);
       toast.success('댓글이 등록되었습니다.');
@@ -415,7 +508,7 @@ export default function TicketDetailPage() {
                   activityItems.map((item) =>
                     item.kind === 'comment' ? (
                       <CommentBubble key={`c-${item.data.id}`} comment={item.data} />
-                    ) : (
+                    ) : item.kind === 'escalation' ? (
                       <EscalationEventCard
                         key={`e-${item.data.id}`}
                         esc={item.data}
@@ -427,6 +520,8 @@ export default function TicketDetailPage() {
                           });
                         }}
                       />
+                    ) : (
+                      <SystemEventRow key={`s-${item.data.id}`} event={item.data} />
                     ),
                   )
                 )}

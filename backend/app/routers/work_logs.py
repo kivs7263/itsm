@@ -37,6 +37,7 @@ from app.core.redis import get_redis
 from app.models import Ticket, TicketWorkLog, User, UserRole, WorkType
 from app.models.work_log import CompletionStatus
 from app.models.contract import Contract
+from app.services import activity_service
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +202,14 @@ async def create_work_log(
         logged_at=datetime.now(timezone.utc),
     )
     db.add(log)
+    await activity_service.record(
+        db,
+        tenant_id=current_user.tenant_id,
+        ticket_id=ticket_id,
+        actor_id=current_user.id,
+        event_type="work_log_added",
+        meta={"hours": float(body.hours), "work_type": body.work_type.value, "billable": body.billable},
+    )
     await db.commit()
     await db.refresh(log)
     await _mark_kpi_dirty(db, ticket_id, current_user.tenant_id)
