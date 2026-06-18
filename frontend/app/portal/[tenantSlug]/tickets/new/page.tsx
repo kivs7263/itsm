@@ -145,7 +145,7 @@ export default function PortalNewTicketPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold text-text-primary">새 티켓 접수</h1>
 
-      <div className="bg-surface rounded-xl border border-border-default p-6">
+      <div className="bg-surface rounded-xl border border-border-default p-4 sm:p-6">
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
           {/* 제목 */}
           <div className="flex flex-col gap-1.5">

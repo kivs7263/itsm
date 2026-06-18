@@ -43,7 +43,7 @@ export function PortalNav({ tenantSlug }: PortalNavProps) {
   };
 
   return (
-    <nav className="flex items-center gap-1">
+    <nav className="flex items-center gap-0.5 overflow-x-auto scrollbar-none shrink-0 max-w-[calc(100vw-180px)] sm:max-w-none">
       {NAV_ITEMS.map((item) => {
         const href = item.href(tenantSlug);
         const isActive = item.exact ? pathname === href : pathname?.startsWith(href);
@@ -52,7 +52,7 @@ export function PortalNav({ tenantSlug }: PortalNavProps) {
             key={item.label}
             href={href}
             className={cn(
-              'px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-fast',
+              'shrink-0 px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors duration-fast whitespace-nowrap',
               isActive
                 ? 'bg-surface-hover text-text-primary'
                 : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover',
@@ -64,7 +64,7 @@ export function PortalNav({ tenantSlug }: PortalNavProps) {
       })}
 
       {/* 구분선 */}
-      <div className="mx-1 h-4 w-px bg-border-default" />
+      <div className="mx-1 h-4 w-px shrink-0 bg-border-default" />
 
       {/* 로그아웃 */}
       <button
@@ -72,7 +72,7 @@ export function PortalNav({ tenantSlug }: PortalNavProps) {
         onClick={handleLogout}
         disabled={isLoggingOut}
         className={cn(
-          'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm',
+          'shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm min-w-[44px] min-h-[44px]',
           'text-text-secondary hover:text-text-primary hover:bg-surface-hover',
           'transition-colors duration-fast',
           'disabled:opacity-50 disabled:cursor-not-allowed',

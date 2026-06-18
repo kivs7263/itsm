@@ -3,7 +3,7 @@
 import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Ticket, BookOpen, ChevronRight } from 'lucide-react';
+import { Plus, Ticket, BookOpen, ChevronRight, Search } from 'lucide-react';
 import api from '@/lib/api';
 import { usePortalAuth } from '@/hooks/usePortalAuth';
 import { Button } from '@/components/ui/button';
@@ -110,7 +110,7 @@ export default function PortalHomePage() {
       </div>
 
       {/* 요약 카드 */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-3">
         <div className="rounded-xl border border-border-default bg-surface p-4 flex flex-col gap-1">
           <p className="text-xs text-text-secondary">처리 중인 티켓</p>
           {ticketsLoading ? (
@@ -210,10 +210,24 @@ export default function PortalHomePage() {
         )}
       </div>
 
+      {/* KB 검색 */}
+      <div className="flex flex-col gap-3">
+        <h2 className="text-base font-semibold text-text-primary">먼저 검색해보세요</h2>
+        <button
+          type="button"
+          onClick={() => router.push(`/portal/${tenantSlug}/knowledge`)}
+          className="flex items-center gap-3 h-11 w-full rounded-xl border border-border-default bg-surface px-4 text-left hover:border-border-strong transition-colors duration-fast"
+        >
+          <Search size={16} className="shrink-0 text-text-disabled" />
+          <span className="text-sm text-text-disabled">자주 묻는 질문 검색...</span>
+          <ChevronRight size={14} className="ml-auto shrink-0 text-text-disabled" />
+        </button>
+      </div>
+
       {/* 빠른 액션 */}
       <div className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-text-primary">빠른 액션</h2>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <button
             type="button"
             onClick={() => router.push(`/portal/${tenantSlug}/tickets/new`)}

@@ -28,8 +28,8 @@ export default function PortalLayout({ children, params }: PortalLayoutProps) {
   return (
     <div className="min-h-screen bg-bg flex flex-col">
       {/* 포털 헤더 */}
-      <header className="border-b border-border-default bg-surface px-6 py-4">
-        <div className="mx-auto max-w-4xl flex items-center justify-between">
+      <header className="border-b border-border-default bg-surface px-4 py-3 sm:px-6 sm:py-4">
+        <div className="mx-auto max-w-4xl flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div
               className="flex h-8 w-8 items-center justify-center rounded-lg"
@@ -63,7 +63,7 @@ export default function PortalLayout({ children, params }: PortalLayoutProps) {
       </header>
 
       {/* 포털 콘텐츠 */}
-      <main className="flex-1 mx-auto w-full max-w-4xl px-6 py-8">
+      <main className="flex-1 mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
         {children}
       </main>
 
