@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   XCircle,
   Zap,
+  Globe,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
@@ -79,7 +80,7 @@ const TIER_COLORS: Record<string, string> = {
 // -----------------------------------------------------------------------
 // 탭 정의
 // -----------------------------------------------------------------------
-type TabId = 'users' | 'notifications' | 'sla' | 'categories' | 'support-teams' | 'ext-notif-history' | 'email-inbound' | 'api-keys' | 'webhooks' | 'billing';
+type TabId = 'users' | 'notifications' | 'sla' | 'categories' | 'support-teams' | 'ext-notif-history' | 'email-inbound' | 'api-keys' | 'webhooks' | 'billing' | 'general';
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'users',             label: '사용자 관리',    icon: Users          },
@@ -92,6 +93,7 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'api-keys',          label: 'API 키',         icon: Key            },
   { id: 'webhooks',          label: 'Webhook',        icon: Webhook        },
   { id: 'billing',           label: '구독',           icon: Zap            },
+  { id: 'general',           label: '일반',           icon: Globe          },
 ];
 
 // -----------------------------------------------------------------------
@@ -2244,6 +2246,88 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
 }
 
 // -----------------------------------------------------------------------
+// 탭 11: 일반 (시간대 설정 — I18N-5)
+// -----------------------------------------------------------------------
+const COMMON_TIMEZONES = [
+  { value: 'Asia/Seoul',      label: '한국 표준시 (KST, UTC+9)' },
+  { value: 'Asia/Tokyo',      label: '일본 표준시 (JST, UTC+9)' },
+  { value: 'Asia/Shanghai',   label: '중국 표준시 (CST, UTC+8)' },
+  { value: 'Asia/Singapore',  label: '싱가포르 표준시 (SGT, UTC+8)' },
+  { value: 'UTC',             label: 'UTC' },
+  { value: 'America/New_York',label: '동부 표준시 (ET, UTC-5/−4)' },
+  { value: 'America/Chicago', label: '중부 표준시 (CT, UTC-6/−5)' },
+  { value: 'America/Los_Angeles', label: '태평양 표준시 (PT, UTC-8/−7)' },
+  { value: 'Europe/London',   label: '영국 표준시 (GMT/BST)' },
+  { value: 'Europe/Berlin',   label: '중부 유럽시 (CET/CEST)' },
+];
+
+const TZ_STORAGE_KEY = 'itsm.tenant.timezone';
+
+function GeneralTab({ tenantSlug }: { tenantSlug: string }) {
+  const [tz, setTz] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'Asia/Seoul';
+    return localStorage.getItem(`${TZ_STORAGE_KEY}.${tenantSlug}`) ?? 'Asia/Seoul';
+  });
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    localStorage.setItem(`${TZ_STORAGE_KEY}.${tenantSlug}`, tz);
+    setSaved(true);
+    toast.success('시간대가 저장되었습니다');
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const nowInTz = new Intl.DateTimeFormat('ko-KR', {
+    timeZone: tz,
+    dateStyle: 'short',
+    timeStyle: 'medium',
+  }).format(new Date());
+
+  return (
+    <div className="flex flex-col gap-6 max-w-lg">
+      <div className="rounded-xl border border-border-default bg-surface p-5 flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-text-primary flex items-center gap-2">
+            <Globe size={15} className="text-text-secondary" />
+            시간대
+          </label>
+          <p className="text-xs text-text-secondary">
+            티켓 생성 시각·SLA 마감·공수 타이머가 이 시간대로 표시됩니다. DB는 UTC로 저장됩니다.
+          </p>
+        </div>
+
+        <select
+          value={tz}
+          onChange={(e) => { setTz(e.target.value); setSaved(false); }}
+          className="h-10 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-500"
+        >
+          {COMMON_TIMEZONES.map((t) => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
+
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-text-tertiary">
+            현재 시각: <span className="font-mono">{nowInTz}</span>
+          </span>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            leftIcon={saved ? <CheckCircle2 size={13} className="text-success" /> : undefined}
+          >
+            {saved ? '저장됨' : '저장'}
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-xs text-text-tertiary">
+        * 시간대는 이 브라우저에만 적용됩니다. 팀원마다 독립적으로 설정합니다.
+      </p>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
 // Settings 메인 페이지
 // -----------------------------------------------------------------------
 export default function SettingsPage() {
@@ -2311,6 +2395,7 @@ export default function SettingsPage() {
         {activeTab === 'api-keys' && <ApiKeysTab tenantSlug={tenantSlug} />}
         {activeTab === 'webhooks' && <WebhooksTab tenantSlug={tenantSlug} />}
         {activeTab === 'billing' && <BillingTab tenantSlug={tenantSlug} />}
+        {activeTab === 'general' && <GeneralTab tenantSlug={tenantSlug} />}
       </div>
     </div>
   );

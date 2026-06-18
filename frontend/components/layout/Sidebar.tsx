@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Settings,
   Clock,
+  Languages,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSlug } from '@/lib/slug';
@@ -22,10 +23,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { isTeamLeadOrAbove, isSales, isCLevel, isAdminRole, type UserRole } from '@/lib/auth';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { getInitials } from '@/lib/utils';
+import { useLocale, type Locale } from '@/lib/locale';
 
-// -----------------------------------------------------------------------
-// localStorage — collapsed 상태 초기값
-// -----------------------------------------------------------------------
 const STORAGE_KEY = 'itsm.sidebar.collapsed';
 
 function getInitialCollapsed(): boolean {
@@ -34,41 +33,37 @@ function getInitialCollapsed(): boolean {
   return stored === null ? false : stored === 'true';
 }
 
-// -----------------------------------------------------------------------
-// 역할별 NAV_ITEMS 정의
-// -----------------------------------------------------------------------
-type NavItem = { label: string; href: string; icon: React.ElementType };
+type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'recurringIssues' | 'reports' | 'settings';
+type NavItem = { key: NavKey; href: string; icon: React.ElementType };
 
-// 역할별 nav 항목 (사이드바 15개 → 역할별 5~7개로 정리)
-// 자산·CMDB·계약은 고객 상세 탭에서 관리. 알림은 헤더 벨. 캘린더는 미구현 제거.
 const ENGINEER_ITEMS: NavItem[] = [
-  { label: '대시보드',   href: '/home',             icon: Home      },
-  { label: '티켓',       href: '/tickets',          icon: LifeBuoy  },
-  { label: '작업 시간',  href: '/work-logs',        icon: Clock     },
-  { label: '고객',       href: '/customers',        icon: Users     },
-  { label: '지식베이스', href: '/kb',               icon: BookOpen  },
-  { label: '반복 이슈',  href: '/recurring-alerts', icon: RefreshCw },
+  { key: 'dashboard',       href: '/home',             icon: Home      },
+  { key: 'tickets',         href: '/tickets',          icon: LifeBuoy  },
+  { key: 'workLogs',        href: '/work-logs',        icon: Clock     },
+  { key: 'customers',       href: '/customers',        icon: Users     },
+  { key: 'kb',              href: '/kb',               icon: BookOpen  },
+  { key: 'recurringIssues', href: '/recurring-alerts', icon: RefreshCw },
 ];
 
 const TEAM_LEAD_ITEMS: NavItem[] = [
   ...ENGINEER_ITEMS,
-  { label: '리포트', href: '/reports', icon: BarChart2 },
+  { key: 'reports', href: '/reports', icon: BarChart2 },
 ];
 
 const ADMIN_ITEMS: NavItem[] = [
   ...TEAM_LEAD_ITEMS,
-  { label: '설정', href: '/settings', icon: Settings },
+  { key: 'settings', href: '/settings', icon: Settings },
 ];
 
 const SALES_ITEMS: NavItem[] = [
-  { label: '대시보드', href: '/home',      icon: Home      },
-  { label: '고객',     href: '/customers', icon: Users     },
-  { label: '리포트',   href: '/reports',   icon: BarChart2 },
+  { key: 'dashboard', href: '/home',      icon: Home      },
+  { key: 'customers', href: '/customers', icon: Users     },
+  { key: 'reports',   href: '/reports',   icon: BarChart2 },
 ];
 
 const C_LEVEL_ITEMS: NavItem[] = [
-  { label: '대시보드', href: '/home',    icon: Home      },
-  { label: '리포트',   href: '/reports', icon: BarChart2 },
+  { key: 'dashboard', href: '/home',    icon: Home      },
+  { key: 'reports',   href: '/reports', icon: BarChart2 },
 ];
 
 function getNavItems(role: UserRole | undefined): NavItem[] {
@@ -79,35 +74,24 @@ function getNavItems(role: UserRole | undefined): NavItem[] {
   return ENGINEER_ITEMS;
 }
 
-const ROLE_LABELS: Record<UserRole, string> = {
-  engineer:   '엔지니어',
-  team_lead:  '팀장',
-  admin:      '관리자',
-  customer:   '고객',
-  sales:      '영업',
-  c_level:    'C-Level',
-};
-
-// -----------------------------------------------------------------------
-// Sidebar 컴포넌트
-// -----------------------------------------------------------------------
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
   const pathname = usePathname();
   const slug = useSlug();
   const { user, logout } = useAuth();
+  const { locale, setLocale, t } = useLocale();
 
   const navItems = useMemo(() => getNavItems(user?.role as UserRole), [user?.role]);
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
       const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(STORAGE_KEY, String(next));
-      }
+      if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEY, String(next));
       return next;
     });
   };
+
+  const toggleLocale = () => setLocale(locale === 'ko' ? 'en' : 'ko');
 
   return (
     <aside
@@ -119,12 +103,11 @@ export function Sidebar() {
         collapsed ? 'w-14' : 'w-56',
       )}
     >
-      {/* 상단: WorkspaceSwitcher */}
       <WorkspaceSwitcher collapsed={collapsed} />
 
-      {/* 네비게이션 */}
-      <nav className="flex-1 overflow-y-auto py-2 px-1.5" aria-label="메인 네비게이션">
-        {navItems.map(({ label, href, icon: Icon }) => {
+      <nav className="flex-1 overflow-y-auto py-2 px-1.5" aria-label={t.nav.dashboard}>
+        {navItems.map(({ key, href, icon: Icon }) => {
+          const label = t.nav[key];
           const fullHref = slug(href);
           const isActive = pathname?.startsWith(fullHref);
 
@@ -143,37 +126,55 @@ export function Sidebar() {
               style={isActive ? { background: 'var(--sidebar-active-bg)' } : undefined}
               title={collapsed ? label : undefined}
             >
-              <Icon
-                size={16}
-                className={cn(
-                  'shrink-0',
-                  isActive ? 'text-[#F5C000]' : 'text-white/40',
-                )}
-              />
+              <Icon size={16} className={cn('shrink-0', isActive ? 'text-[#F5C000]' : 'text-white/40')} />
               {!collapsed && <span className="truncate">{label}</span>}
             </Link>
           );
         })}
       </nav>
 
-      {/* 하단: 사용자 + 역할 배지 + 로그아웃 */}
+      {/* 하단: 언어 토글 + 로그아웃 + 사용자 */}
       <div className="border-t border-white/10 p-2 flex flex-col gap-1">
+        {/* 언어 선택 */}
+        <button
+          type="button"
+          onClick={toggleLocale}
+          className={cn(
+            'flex items-center gap-3 rounded-md px-2.5 py-2 text-sm w-full',
+            'text-white/60 hover:text-white hover:bg-white/[0.06]',
+            'transition-colors duration-fast focus-visible:outline-none focus-visible:shadow-brand',
+            collapsed && 'justify-center',
+          )}
+          title={collapsed ? t.sidebar.language : undefined}
+        >
+          <Languages size={16} className="shrink-0 text-white/40" />
+          {!collapsed && (
+            <span className="flex items-center gap-2 flex-1">
+              <span className="flex-1">{t.sidebar.language}</span>
+              <span className="text-[11px] font-medium text-[#F5C000]">
+                {locale === 'ko' ? 'KO' : 'EN'}
+              </span>
+            </span>
+          )}
+        </button>
+
+        {/* 로그아웃 */}
         <button
           type="button"
           onClick={logout}
           className={cn(
             'flex items-center gap-3 rounded-md px-2.5 py-2 text-sm w-full',
             'text-white/60 hover:text-white hover:bg-white/[0.06]',
-            'transition-colors duration-fast',
-            'focus-visible:outline-none focus-visible:shadow-brand',
+            'transition-colors duration-fast focus-visible:outline-none focus-visible:shadow-brand',
             collapsed && 'justify-center',
           )}
-          title={collapsed ? '로그아웃' : undefined}
+          title={collapsed ? t.auth.logout : undefined}
         >
           <LogOut size={16} className="shrink-0 text-white/40" />
-          {!collapsed && <span>로그아웃</span>}
+          {!collapsed && <span>{t.auth.logout}</span>}
         </button>
 
+        {/* 사용자 */}
         {user && (
           <div
             className={cn(
@@ -195,7 +196,7 @@ export function Sidebar() {
                   <span className="text-[10px] text-white/40 truncate">{user.email}</span>
                   {user.role && (
                     <span className="shrink-0 rounded px-1 py-px text-[9px] font-medium bg-white/10 text-white/60">
-                      {ROLE_LABELS[user.role as UserRole] ?? user.role}
+                      {t.auth.role[user.role as UserRole] ?? user.role}
                     </span>
                   )}
                 </div>
@@ -217,7 +218,7 @@ export function Sidebar() {
           'focus-visible:outline-none focus-visible:shadow-brand',
           'z-10',
         )}
-        aria-label={collapsed ? '사이드바 열기' : '사이드바 닫기'}
+        aria-label={collapsed ? t.sidebar.open : t.sidebar.close}
       >
         {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
       </button>
