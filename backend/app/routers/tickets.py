@@ -454,10 +454,21 @@ async def create_ticket(
     if ticket.assigned_to:
         try:
             from app.services.notification_service import notify_ticket_created
-            # assigned user phone은 현재 컨텍스트에서 조회 불필요 — phone 없으면 dispatch가 skip
             await notify_ticket_created(db, ticket, assigned_user_phone=None)
         except Exception:
             pass
+
+    # Webhook: ticket.created
+    try:
+        from app.services import webhook_service
+        await webhook_service.fire(
+            "ticket.created",
+            {"ticket_id": str(ticket.id), "number": ticket.ticket_number, "title": ticket.title, "status": str(ticket.status), "priority": str(ticket.priority)},
+            current_user.tenant_id,
+            db,
+        )
+    except Exception:
+        pass
 
     return TicketOut.model_validate(ticket)
 
@@ -558,6 +569,26 @@ async def update_ticket(
 
     await db.commit()
     await db.refresh(ticket)
+
+    # Webhook: status_changed / assigned (graceful)
+    try:
+        from app.services import webhook_service as _wh
+        _fields = data.model_dump(exclude_unset=True)
+        if "status" in _fields:
+            await _wh.fire(
+                "ticket.status_changed",
+                {"ticket_id": str(ticket.id), "status": str(ticket.status)},
+                current_user.tenant_id, db,
+            )
+        if "assigned_to" in _fields and _fields["assigned_to"]:
+            await _wh.fire(
+                "ticket.assigned",
+                {"ticket_id": str(ticket.id), "assigned_to": str(ticket.assigned_to)},
+                current_user.tenant_id, db,
+            )
+    except Exception:
+        pass
+
     return TicketOut.model_validate(ticket)
 
 

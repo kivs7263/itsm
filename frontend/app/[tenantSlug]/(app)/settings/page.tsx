@@ -23,6 +23,13 @@ import {
   PhoneForwarded,
   History,
   Mail,
+  Key,
+  Webhook,
+  Copy,
+  Check,
+  CheckCircle2,
+  XCircle,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
@@ -70,7 +77,7 @@ const TIER_COLORS: Record<string, string> = {
 // -----------------------------------------------------------------------
 // 탭 정의
 // -----------------------------------------------------------------------
-type TabId = 'users' | 'notifications' | 'sla' | 'categories' | 'support-teams' | 'ext-notif-history' | 'email-inbound';
+type TabId = 'users' | 'notifications' | 'sla' | 'categories' | 'support-teams' | 'ext-notif-history' | 'email-inbound' | 'api-keys' | 'webhooks';
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'users',             label: '사용자 관리',    icon: Users          },
@@ -80,6 +87,8 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'categories',        label: '분류 체계',      icon: Tag            },
   { id: 'support-teams',     label: '지원팀 관리',    icon: PhoneForwarded },
   { id: 'ext-notif-history', label: '외부 알림 이력', icon: History        },
+  { id: 'api-keys',          label: 'API 키',         icon: Key            },
+  { id: 'webhooks',          label: 'Webhook',        icon: Webhook        },
 ];
 
 // -----------------------------------------------------------------------
@@ -1531,6 +1540,484 @@ function EmailInboundTab({ tenantSlug }: { tenantSlug: string }) {
 }
 
 // -----------------------------------------------------------------------
+// 탭 8: API 키 관리
+// -----------------------------------------------------------------------
+interface ApiKeyItem {
+  id: string;
+  name: string;
+  created_by_name: string | null;
+  is_active: boolean;
+  last_used_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
+function ApiKeysTab({ tenantSlug }: { tenantSlug: string }) {
+  const queryClient = useQueryClient();
+  const [showCreate, setShowCreate] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+
+  const { data: keys = [], isLoading } = useQuery<ApiKeyItem[]>({
+    queryKey: ['api-keys', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/settings/api-keys`).then((r) => r.data),
+    enabled: !!tenantSlug,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (name: string) =>
+      api.post(`/${tenantSlug}/settings/api-keys`, { name }).then((r) => r.data),
+    onSuccess: (data) => {
+      setCreatedKey(data.raw_key);
+      setShowCreate(false);
+      setNewKeyName('');
+      setConfirmed(false);
+      setCopied(false);
+      queryClient.invalidateQueries({ queryKey: ['api-keys', tenantSlug] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: (id: string) =>
+      api.delete(`/${tenantSlug}/settings/api-keys/${id}`).then((r) => r.data),
+    onSuccess: () => {
+      toast.success('API 키가 비활성화되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['api-keys', tenantSlug] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  async function handleCopy() {
+    if (!createdKey) return;
+    await navigator.clipboard.writeText(createdKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="flex flex-col gap-6 max-w-3xl">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-text-primary">API 키</p>
+          <p className="text-xs text-text-secondary mt-0.5">
+            외부 시스템에서 ITSM API를 호출할 때 사용합니다. 키는 생성 시 1회만 표시됩니다.
+          </p>
+        </div>
+        <Button size="sm" leftIcon={<Plus size={14} />} onClick={() => setShowCreate(true)}>
+          새 API 키
+        </Button>
+      </div>
+
+      {/* 생성 폼 */}
+      {showCreate && (
+        <div className="rounded-lg border border-border-default bg-surface p-4 flex items-end gap-3">
+          <div className="flex-1 flex flex-col gap-1">
+            <label className="text-xs text-text-secondary">키 이름</label>
+            <input
+              type="text"
+              value={newKeyName}
+              onChange={(e) => setNewKeyName(e.target.value)}
+              placeholder="예: 모니터링 시스템"
+              className="h-8 rounded-md border border-border-default bg-bg px-3 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          </div>
+          <Button
+            size="sm"
+            disabled={!newKeyName.trim() || createMutation.isPending}
+            onClick={() => createMutation.mutate(newKeyName.trim())}
+          >
+            생성
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setShowCreate(false)}>
+            취소
+          </Button>
+        </div>
+      )}
+
+      {/* 생성된 키 1회 표시 모달 */}
+      {createdKey && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/20 p-4 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Key size={14} className="text-amber-600 dark:text-amber-400" />
+            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+              API 키가 생성되었습니다 — 지금 복사하세요 (이후 다시 볼 수 없습니다)
+            </p>
+          </div>
+          <div className="flex items-center gap-2 rounded-md border border-border-default bg-bg px-3 py-2">
+            <code className="flex-1 text-xs font-mono text-text-primary break-all select-all">{createdKey}</code>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="shrink-0 rounded p-1 text-text-secondary hover:text-text-primary transition-colors"
+            >
+              {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
+            </button>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={(e) => setConfirmed(e.target.checked)}
+              className="h-4 w-4 rounded border-border-default accent-amber-500"
+            />
+            <span className="text-xs text-text-secondary">키를 복사했습니다. 안전한 곳에 저장했습니다.</span>
+          </label>
+          <Button
+            size="sm"
+            disabled={!confirmed}
+            onClick={() => setCreatedKey(null)}
+          >
+            확인
+          </Button>
+        </div>
+      )}
+
+      {/* 키 목록 */}
+      <div className="rounded-lg border border-border-default overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border-default bg-surface-elevated">
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">이름</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">상태</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">마지막 사용</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">만료일</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">생성일</th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <RowSkeletons cols={6} />
+            ) : keys.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-sm text-text-tertiary">
+                  등록된 API 키가 없습니다.
+                </td>
+              </tr>
+            ) : (
+              keys.map((k) => (
+                <tr key={k.id} className={cn('border-b border-border-subtle', !k.is_active && 'opacity-50')}>
+                  <td className="px-4 py-3 font-medium text-text-primary">{k.name}</td>
+                  <td className="px-4 py-3">
+                    <span className={cn('inline-flex items-center gap-1 text-xs font-medium', k.is_active ? 'text-success' : 'text-text-tertiary')}>
+                      {k.is_active ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
+                      {k.is_active ? '활성' : '비활성'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-text-secondary text-xs">
+                    {k.last_used_at ? new Date(k.last_used_at).toLocaleDateString('ko-KR') : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-text-secondary text-xs">
+                    {k.expires_at ? new Date(k.expires_at).toLocaleDateString('ko-KR') : '없음'}
+                  </td>
+                  <td className="px-4 py-3 text-text-secondary text-xs">
+                    {new Date(k.created_at).toLocaleDateString('ko-KR')}
+                  </td>
+                  <td className="px-4 py-3">
+                    {k.is_active && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`"${k.name}" 키를 비활성화하시겠습니까?`)) {
+                            revokeMutation.mutate(k.id);
+                          }
+                        }}
+                        className="text-xs text-error hover:underline"
+                      >
+                        비활성화
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
+// 탭 9: Webhook 관리
+// -----------------------------------------------------------------------
+const WEBHOOK_EVENTS = [
+  { value: 'ticket.created',        label: '티켓 생성' },
+  { value: 'ticket.status_changed', label: '티켓 상태 변경' },
+  { value: 'ticket.assigned',       label: '티켓 담당자 배정' },
+  { value: 'ticket.escalated',      label: '티켓 에스컬레이션' },
+  { value: 'csat.submitted',        label: 'CSAT 제출' },
+];
+
+interface WebhookItem {
+  id: string;
+  url: string;
+  events: string[];
+  secret: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+interface DeliveryLog {
+  id: string;
+  event_type: string;
+  status: string;
+  http_status: number | null;
+  attempt_count: number;
+  delivered_at: string | null;
+  created_at: string;
+}
+
+function WebhooksTab({ tenantSlug }: { tenantSlug: string }) {
+  const queryClient = useQueryClient();
+  const [showCreate, setShowCreate] = useState(false);
+  const [newUrl, setNewUrl] = useState('');
+  const [newEvents, setNewEvents] = useState<string[]>([]);
+  const [expandedLogs, setExpandedLogs] = useState<string | null>(null);
+  const [copiedSecret, setCopiedSecret] = useState<string | null>(null);
+
+  const { data: webhooks = [], isLoading } = useQuery<WebhookItem[]>({
+    queryKey: ['webhooks', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/settings/webhooks`).then((r) => r.data),
+    enabled: !!tenantSlug,
+  });
+
+  const { data: logs = [], isLoading: logsLoading } = useQuery<DeliveryLog[]>({
+    queryKey: ['webhook-logs', tenantSlug, expandedLogs],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/settings/webhooks/${expandedLogs}/logs`).then((r) => r.data),
+    enabled: !!expandedLogs,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => api.post(`/${tenantSlug}/settings/webhooks`, { url: newUrl, events: newEvents }).then((r) => r.data),
+    onSuccess: () => {
+      toast.success('Webhook이 등록되었습니다.');
+      setShowCreate(false);
+      setNewUrl('');
+      setNewEvents([]);
+      queryClient.invalidateQueries({ queryKey: ['webhooks', tenantSlug] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
+      api.patch(`/${tenantSlug}/settings/webhooks/${id}`, { is_active }).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['webhooks', tenantSlug] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/${tenantSlug}/settings/webhooks/${id}`),
+    onSuccess: () => {
+      toast.success('Webhook이 삭제되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['webhooks', tenantSlug] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const testMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/${tenantSlug}/settings/webhooks/${id}/test`),
+    onSuccess: () => toast.success('테스트 요청을 발송했습니다.'),
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  async function copySecret(secret: string) {
+    await navigator.clipboard.writeText(secret);
+    setCopiedSecret(secret);
+    setTimeout(() => setCopiedSecret(null), 2000);
+  }
+
+  function toggleEvent(ev: string) {
+    setNewEvents((prev) =>
+      prev.includes(ev) ? prev.filter((e) => e !== ev) : [...prev, ev]
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6 max-w-3xl">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-text-primary">Webhook</p>
+          <p className="text-xs text-text-secondary mt-0.5">
+            ITSM 이벤트 발생 시 지정한 URL로 HTTP POST 요청을 전송합니다.
+          </p>
+        </div>
+        <Button size="sm" leftIcon={<Plus size={14} />} onClick={() => setShowCreate(true)}>
+          Webhook 추가
+        </Button>
+      </div>
+
+      {/* 등록 폼 */}
+      {showCreate && (
+        <div className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-text-secondary">URL</label>
+            <input
+              type="url"
+              value={newUrl}
+              onChange={(e) => setNewUrl(e.target.value)}
+              placeholder="https://example.com/webhook"
+              className="h-8 rounded-md border border-border-default bg-bg px-3 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-xs text-text-secondary">이벤트 선택</label>
+            <div className="flex flex-wrap gap-2">
+              {WEBHOOK_EVENTS.map((ev) => (
+                <button
+                  key={ev.value}
+                  type="button"
+                  onClick={() => toggleEvent(ev.value)}
+                  className={cn(
+                    'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                    newEvents.includes(ev.value)
+                      ? 'border-brand bg-brand/10 text-amber-700 dark:text-amber-300'
+                      : 'border-border-default text-text-secondary hover:border-brand',
+                  )}
+                >
+                  {ev.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              disabled={!newUrl.trim() || newEvents.length === 0 || createMutation.isPending}
+              onClick={() => createMutation.mutate()}
+            >
+              등록
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => { setShowCreate(false); setNewUrl(''); setNewEvents([]); }}>
+              취소
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Webhook 목록 */}
+      {isLoading ? (
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 w-full rounded-lg" />
+          ))}
+        </div>
+      ) : webhooks.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border-default py-10 gap-2">
+          <Webhook size={24} className="text-text-tertiary" />
+          <p className="text-sm text-text-tertiary">등록된 Webhook이 없습니다.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {webhooks.map((wh) => (
+            <div key={wh.id} className="rounded-lg border border-border-default bg-surface overflow-hidden">
+              <div className="flex items-start gap-3 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={cn('h-2 w-2 rounded-full shrink-0', wh.is_active ? 'bg-success' : 'bg-text-tertiary')} />
+                    <span className="text-sm font-medium text-text-primary break-all">{wh.url}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {wh.events.map((ev) => (
+                      <span key={ev} className="rounded-full bg-border-subtle px-2 py-0.5 text-[11px] text-text-secondary">
+                        {WEBHOOK_EVENTS.find((e) => e.value === ev)?.label ?? ev}
+                      </span>
+                    ))}
+                  </div>
+                  {/* 시크릿 */}
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-[11px] text-text-tertiary">Secret:</span>
+                    <code className="text-[11px] font-mono text-text-secondary">{wh.secret.slice(0, 8)}…</code>
+                    <button
+                      type="button"
+                      onClick={() => copySecret(wh.secret)}
+                      className="text-text-tertiary hover:text-text-primary"
+                    >
+                      {copiedSecret === wh.secret ? <Check size={11} className="text-success" /> : <Copy size={11} />}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => testMutation.mutate(wh.id)}
+                    title="테스트 발송"
+                    className="rounded p-1.5 text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+                  >
+                    <Zap size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleMutation.mutate({ id: wh.id, is_active: !wh.is_active })}
+                    title={wh.is_active ? '비활성화' : '활성화'}
+                    className="rounded p-1.5 text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+                  >
+                    {wh.is_active ? <XCircle size={14} /> : <CheckCircle2 size={14} />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedLogs(expandedLogs === wh.id ? null : wh.id)}
+                    title="발송 이력"
+                    className={cn('rounded p-1.5 transition-colors', expandedLogs === wh.id ? 'text-brand' : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover')}
+                  >
+                    <History size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { if (confirm('이 Webhook을 삭제하시겠습니까?')) deleteMutation.mutate(wh.id); }}
+                    className="rounded p-1.5 text-text-secondary hover:text-error transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {/* 발송 이력 (최근 10건) */}
+              {expandedLogs === wh.id && (
+                <div className="border-t border-border-subtle bg-surface-elevated">
+                  <div className="px-4 py-2 text-xs font-medium text-text-secondary">최근 발송 이력</div>
+                  {logsLoading ? (
+                    <div className="px-4 py-3"><Skeleton className="h-4 w-full" /></div>
+                  ) : logs.length === 0 ? (
+                    <p className="px-4 py-3 text-xs text-text-tertiary">발송 이력이 없습니다.</p>
+                  ) : (
+                    <div className="divide-y divide-border-subtle">
+                      {logs.map((log) => (
+                        <div key={log.id} className="flex items-center gap-3 px-4 py-2.5 text-xs">
+                          {log.status === 'success' ? (
+                            <CheckCircle2 size={12} className="text-success shrink-0" />
+                          ) : (
+                            <XCircle size={12} className="text-error shrink-0" />
+                          )}
+                          <span className="text-text-secondary w-36 shrink-0">{log.event_type}</span>
+                          <span className={cn('font-medium', log.status === 'success' ? 'text-success' : 'text-error')}>
+                            {log.http_status ?? '-'}
+                          </span>
+                          <span className="text-text-tertiary ml-auto">
+                            {new Date(log.created_at).toLocaleString('ko-KR')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
 // Settings 메인 페이지
 // -----------------------------------------------------------------------
 export default function SettingsPage() {
@@ -1595,6 +2082,8 @@ export default function SettingsPage() {
         {activeTab === 'categories' && <CategoriesTab tenantSlug={tenantSlug} />}
         {activeTab === 'support-teams' && <SupportTeamsTab tenantSlug={tenantSlug} />}
         {activeTab === 'ext-notif-history' && <ExtNotifHistoryTab tenantSlug={tenantSlug} />}
+        {activeTab === 'api-keys' && <ApiKeysTab tenantSlug={tenantSlug} />}
+        {activeTab === 'webhooks' && <WebhooksTab tenantSlug={tenantSlug} />}
       </div>
     </div>
   );

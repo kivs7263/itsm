@@ -232,3 +232,11 @@ app.include_router(portal_router.router_staff, prefix="/api")      # /api/{slug}
 app.include_router(portal_router.router_portal)                    # /portal/* (인증 없음)
 from app.routers import portal_customer as portal_customer_router  # noqa: E402
 app.include_router(portal_customer_router.router)                   # /portal/{slug}/auth/*, /portal/{slug}/me, /portal/{slug}/tickets
+
+# API-1 공개 REST API 키 관리
+from app.routers import api_keys as api_keys_router  # noqa: E402
+app.include_router(api_keys_router.router, prefix="/api")           # /api/{slug}/settings/api-keys
+
+# API-4 Webhook 엔드포인트 관리
+from app.routers import webhooks as webhooks_router  # noqa: E402
+app.include_router(webhooks_router.router, prefix="/api")           # /api/{slug}/settings/webhooks

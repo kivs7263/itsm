@@ -191,6 +191,22 @@ async def portal_submit_survey(
     survey.submitted_at = now
 
     await db.commit()
+
+    # Webhook: csat.submitted (graceful)
+    try:
+        from app.models.tenant import Tenant
+        from app.services import webhook_service
+        tenant = await db.scalar(select(Tenant).where(Tenant.slug == tenant_slug))
+        if tenant:
+            await webhook_service.fire(
+                "csat.submitted",
+                {"ticket_id": str(survey.ticket_id), "score": data.score, "comment": data.comment},
+                tenant.id,
+                db,
+            )
+    except Exception:
+        pass
+
     return {"message": "설문이 제출되었습니다. 감사합니다."}
 
 
