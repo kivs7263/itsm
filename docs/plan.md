@@ -1556,8 +1556,8 @@ POST /portal/{token}/comments                — 고객 코멘트 추가
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `AI-1` | 티켓 생성 시 priority·category 자동 분류 (GPT-4o-mini, fire-and-forget) | M | `[ PENDING ]` |
-| `AI-2` | 티켓 상세 "관련 KB" 섹션 — 시맨틱 유사도 Top 3 문서 제안 | M | `[ PENDING ]` |
+| `AI-1` | 티켓 생성 시 priority·category 자동 분류 (Claude haiku, fire-and-forget) | M | `[ DONE 2026-06-18 ]` |
+| `AI-2` | 티켓 상세 "관련 KB" 섹션 — 시맨틱 유사도 Top 3 문서 제안 | M | `[ DONE 2026-06-18 ]` |
 | `AI-3` | 설정 > AI 탭 — 자동 분류 on/off 토글, 신뢰도 임계값 조정 | S | `[ PENDING ]` |
 
 **아키텍처**:
@@ -1572,9 +1572,9 @@ POST /portal/{token}/comments                — 고객 코멘트 추가
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `API-1` | API 키 발급/관리 — `tenant_api_keys` 테이블 + 설정 UI | M | `[ PENDING ]` |
+| `API-1` | API 키 발급/관리 — `tenant_api_keys` 테이블 + 설정 UI | M | `[ DONE 2026-06-18 ]` |
 | `API-2` | 공개 REST API v1 — `/v1/tickets` CRUD + Bearer 인증 | M | `[ PENDING ]` |
-| `API-3` | Outbound Webhook — 티켓 이벤트 시 고객 URL로 POST | M | `[ PENDING ]` |
+| `API-3` | Outbound Webhook — 티켓 이벤트 시 고객 URL로 POST | M | `[ DONE 2026-06-18 ]` |
 | `API-4` | API 사용량 제한 (rate limit) + 사용량 대시보드 | S | `[ PENDING ]` |
 
 **스펙**:
@@ -1590,10 +1590,10 @@ POST /portal/{token}/comments                — 고객 코멘트 추가
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `BILLING-1` | 플랜 정의 — `plans` + `tenant_subscriptions` 테이블 | S | `[ PENDING ]` |
+| `BILLING-1` | 플랜 정의 — `plans` + `tenant_subscriptions` 테이블 | S | `[ DONE 2026-06-18 ]` |
 | `BILLING-2` | Stripe Customer + Subscription 생성 (checkout session) | L | `[ PENDING ]` |
 | `BILLING-3` | Stripe Webhook 처리 — 구독 상태 동기화 | M | `[ PENDING ]` |
-| `BILLING-4` | 플랜 제한 적용 — 티켓/사용자/API 호출 한도 enforcement | M | `[ PENDING ]` |
+| `BILLING-4` | 플랜 제한 적용 — 티켓/사용자/API 호출 한도 enforcement | M | `[ DONE 2026-06-18 ]` |
 | `BILLING-5` | SSO Portal 청구서 탭 — 현재 플랜·결제 이력·업그레이드 | M | `[ PENDING ]` |
 
 **플랜 스펙 (초안)**:
@@ -1611,9 +1611,9 @@ POST /portal/{token}/comments                — 고객 코멘트 추가
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `I18N-1` | i18n 인프라 — next-intl 설치 + 한/영 로케일 파일 분리 | M | `[ PENDING ]` |
+| `I18N-1` | i18n 인프라 — LocaleContext(localStorage) + ko/en 메시지 파일 분리 | M | `[ DONE 2026-06-18 ]` |
 | `I18N-2` | UI 문자열 추출 — 전체 컴포넌트 하드코딩 → `t()` 교체 | L | `[ PENDING ]` |
 | `I18N-3` | 백엔드 에러 메시지 다국어 (Accept-Language 헤더 기반) | M | `[ PENDING ]` |
-| `I18N-4` | 언어 전환 UI — 설정 또는 헤더 드롭다운 | S | `[ PENDING ]` |
+| `I18N-4` | 언어 전환 UI — Sidebar/PortalNav 토글 버튼 | S | `[ DONE 2026-06-18 ]` |
 
 **참고**: 영문 UI 완성 전까지 demo 시 브라우저 자동 번역(Chrome) 안내 가능.

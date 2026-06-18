@@ -1,0 +1,8 @@
+# ITSM Failure Log
+
+| 날짜 | 오류 | 원인 | 수정 | 방지 패턴 |
+|---|---|---|---|---|
+| 2026-06-18 | `AmbiguousForeignKeysError: Could not determine join condition... TicketWorkLog.user` | `TicketWorkLog`에 `user_id`, `approved_by` 두 FK가 모두 `users.id`를 참조하는데 `user = relationship("User")` 에 `foreign_keys` 미지정 | `user = relationship("User", foreign_keys=[user_id], lazy="select")` | [backend.md#SQLAlchemy 동일 테이블 복수 FK] |
+| 2026-06-18 | `UndefinedColumnError: column "symptom_category_id" does not exist` (recurring_worker 크래시) | `recurring_worker.py`가 `tickets.symptom_category_id` SELECT하는데 해당 컬럼 migration이 적용 안 됨 (migration 041 미생성 상태) | migration 041 생성 (`tickets.symptom_category_id` 추가) + alembic upgrade head | [backend.md#Alembic migration 적용 전 worker 배포 금지] |
+| 2026-06-18 | `ValueError: Duplicated param name tenant_slug at path /{tenant_slug}/tickets/{tenant_slug}/tickets/{ticket_id}/activities` | `router`에 `prefix="/{tenant_slug}/tickets"` 있는데 `@router.get("/{tenant_slug}/tickets/{ticket_id}/activities")`로 prefix params 재선언 | `@router.get("/{ticket_id}/activities")` — prefix 파라미터 제외 | [backend.md#FastAPI 라우터 prefix param 재선언 금지] |
+| 2026-06-18 | TypeScript `Type '"Dashboard"' is not assignable to type '"대시보드"'` (en.ts i18n) | `type Messages = typeof ko` 시 Messages 타입이 ko의 리터럴 타입(`'대시보드'`)으로 추론됨 → en 파일이 해당 리터럴 만족 불가 | Messages를 명시적 interface로 선언 + en.ts에서 `: Messages` 대신 `satisfies Messages` 사용 | [frontend.md#TypeScript satisfies] |
