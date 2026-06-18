@@ -195,6 +195,76 @@ async def get_current_tenant_id(
     return tenant_id
 
 
+async def get_api_key_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(_optional_bearer),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """API 키 전용 인증 — /v1/* 공개 REST API에서 사용.
+
+    JWT 쿠키 인증은 허용하지 않음. itsm_ 접두어 Bearer 토큰만 수락.
+    인증 성공 후 rate limit 검사 + 사용량 카운터 증가.
+    """
+    token = credentials.credentials if credentials else None
+    if not token or not token.startswith("itsm_"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API 키가 필요합니다. Authorization: Bearer itsm_xxx",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = await _auth_via_api_key(token, db)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API 키가 유효하지 않거나 만료되었습니다.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Rate limit 검사 + 사용량 카운터
+    await _check_and_increment_api_rate(user, db)
+    return user
+
+
+async def _check_and_increment_api_rate(user: User, db: AsyncSession) -> None:
+    """일일 API 호출 한도 검사 후 Redis 카운터 증가.
+
+    플랜별 한도 (PLAN_LIMITS["api_calls_daily"]):
+      free         → 0    (API 키 자체가 차단되지만 이중 방어)
+      starter      → 1000
+      professional → 10000
+      enterprise   → None (무제한)
+    """
+    from app.models.subscription import PLAN_LIMITS
+    from app.services import billing_service
+    from datetime import date
+
+    redis = get_redis()
+    sub = await billing_service.get_subscription(db, user.tenant_id, redis)
+    plan = billing_service._effective_plan(sub)
+    daily_limit = PLAN_LIMITS[plan].get("api_calls_daily")
+
+    today = date.today().strftime("%Y%m%d")
+    rate_key = f"itsm:api_calls:{user.tenant_id}:{today}"
+
+    try:
+        current = await redis.incr(rate_key)
+        if current == 1:
+            await redis.expire(rate_key, 86400)  # 첫 호출 시 TTL 설정
+    except Exception:
+        return  # Redis 장애 시 fail-open (서비스 중단 방지)
+
+    if daily_limit is not None and current > daily_limit:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "message": f"일일 API 호출 한도({daily_limit:,}회)를 초과했습니다.",
+                "reset_at": "자정(UTC)",
+                "upgrade_url": "/settings?tab=billing",
+            },
+        )
+
+
 def require_roles(*roles: UserRole):
     """역할 기반 접근 제어 dependency factory.
 

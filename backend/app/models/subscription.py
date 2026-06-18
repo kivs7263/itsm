@@ -20,10 +20,10 @@ class BillingPlan(str, enum.Enum):
 
 # 플랜별 제한 설정 (seats_limit, ticket_limit_monthly=None은 무제한)
 PLAN_LIMITS: dict[BillingPlan, dict] = {
-    BillingPlan.free:         {"seats": 3,   "tickets_monthly": 100, "api_keys": False},
-    BillingPlan.starter:      {"seats": 10,  "tickets_monthly": None, "api_keys": False},
-    BillingPlan.professional: {"seats": 30,  "tickets_monthly": None, "api_keys": True},
-    BillingPlan.enterprise:   {"seats": 9999,"tickets_monthly": None, "api_keys": True},
+    BillingPlan.free:         {"seats": 3,    "tickets_monthly": 100, "api_keys": False, "api_calls_daily": 0},
+    BillingPlan.starter:      {"seats": 10,   "tickets_monthly": None, "api_keys": False, "api_calls_daily": 1000},
+    BillingPlan.professional: {"seats": 30,   "tickets_monthly": None, "api_keys": True,  "api_calls_daily": 10000},
+    BillingPlan.enterprise:   {"seats": 9999, "tickets_monthly": None, "api_keys": True,  "api_calls_daily": None},
 }
 
 

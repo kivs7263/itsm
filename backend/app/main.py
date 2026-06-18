@@ -245,3 +245,7 @@ app.include_router(webhooks_router.router, prefix="/api")           # /api/{slug
 from app.routers import billing as billing_router  # noqa: E402
 app.include_router(billing_router.router, prefix="/api")            # /api/{slug}/billing
 app.include_router(billing_router.router_webhook, prefix="/api")    # /api/billing/stripe-webhook
+
+# API-2 공개 REST API v1 (API 키 Bearer 인증)
+from app.routers import public_v1 as public_v1_router  # noqa: E402
+app.include_router(public_v1_router.router)             # /v1/tickets, /v1/usage

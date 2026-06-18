@@ -1573,9 +1573,9 @@ POST /portal/{token}/comments                — 고객 코멘트 추가
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
 | `API-1` | API 키 발급/관리 — `tenant_api_keys` 테이블 + 설정 UI | M | `[ DONE 2026-06-18 ]` |
-| `API-2` | 공개 REST API v1 — `/v1/tickets` CRUD + Bearer 인증 | M | `[ PENDING ]` |
+| `API-2` | 공개 REST API v1 — `/v1/tickets` CRUD + Bearer 인증 | M | `[ DONE 2026-06-18 ]` |
 | `API-3` | Outbound Webhook — 티켓 이벤트 시 고객 URL로 POST | M | `[ DONE 2026-06-18 ]` |
-| `API-4` | API 사용량 제한 (rate limit) + 사용량 대시보드 | S | `[ PENDING ]` |
+| `API-4` | API 사용량 제한 (rate limit) + 사용량 대시보드 | S | `[ DONE 2026-06-18 ]` |
 
 **스펙**:
 - 인증: `Authorization: Bearer <api_key>` (JWT 아님, DB 검증)
@@ -1591,10 +1591,10 @@ POST /portal/{token}/comments                — 고객 코멘트 추가
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
 | `BILLING-1` | 플랜 정의 — `plans` + `tenant_subscriptions` 테이블 | S | `[ DONE 2026-06-18 ]` |
-| `BILLING-2` | Stripe Customer + Subscription 생성 (checkout session) | L | `[ PENDING ]` |
-| `BILLING-3` | Stripe Webhook 처리 — 구독 상태 동기화 | M | `[ PENDING ]` |
+| `BILLING-2` | Stripe Customer + Subscription 생성 (checkout session) | L | `[ DONE 2026-06-18 ]` |
+| `BILLING-3` | Stripe Webhook 처리 — 구독 상태 동기화 | M | `[ DONE 2026-06-18 ]` |
 | `BILLING-4` | 플랜 제한 적용 — 티켓/사용자/API 호출 한도 enforcement | M | `[ DONE 2026-06-18 ]` |
-| `BILLING-5` | SSO Portal 청구서 탭 — 현재 플랜·결제 이력·업그레이드 | M | `[ PENDING ]` |
+| `BILLING-5` | SSO Portal 청구서 탭 — 현재 플랜·결제 이력·업그레이드 | M | `[ DONE 2026-06-18 ]` |
 
 **플랜 스펙 (초안)**:
 | 플랜 | 티켓/월 | 사용자 | API 호출/일 | 가격 |
