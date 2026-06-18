@@ -585,6 +585,59 @@ async def delete_ticket(
 
 
 # ------------------------------------------------------------------
+# AI KB 제안 (AI-3)
+# ------------------------------------------------------------------
+
+
+@router.get(
+    "/{ticket_id}/kb-suggestions",
+    summary="티켓 관련 KB 문서 AI 추천 (Top 3)",
+)
+async def get_kb_suggestions(
+    tenant_slug: str,
+    ticket_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    """OPENAI_API_KEY 미설정 시 빈 리스트 반환 (graceful)."""
+    ticket = await _get_ticket_or_404(db, current_user.tenant_id, ticket_id)
+    from app.services import ai_service
+    return await ai_service.suggest_kb_articles(
+        title=ticket.title,
+        description=ticket.description,
+        tenant_id=current_user.tenant_id,
+        db=db,
+        top_k=3,
+    )
+
+
+# ------------------------------------------------------------------
+# AI 티켓 분류 (AI-2)
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "/ai-classify",
+    summary="AI 티켓 분류 제안 (Claude haiku)",
+)
+async def ai_classify_ticket(
+    tenant_slug: str,
+    body: dict,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """body: {title, description}. ANTHROPIC_API_KEY 미설정 시 빈 dict."""
+    from app.services import ai_service
+    result = await ai_service.classify_ticket(
+        title=body.get("title", ""),
+        description=body.get("description"),
+        tenant_id=current_user.tenant_id,
+        db=db,
+    )
+    return result or {}
+
+
+# ------------------------------------------------------------------
 # 댓글 추가
 # ------------------------------------------------------------------
 

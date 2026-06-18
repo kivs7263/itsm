@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
   ArrowLeft,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
 import type { KnownIssue, SymptomCategory, Customer, Contract, ContractTier } from '@/lib/types';
@@ -290,6 +291,47 @@ function TicketFormStep({
   const channel = watch('channel');
   const source = watch('source');
   const symptomCategoryId = watch('symptom_category_id');
+  const watchedTitle = watch('title');
+  const watchedDescription = watch('description');
+
+  // AI 분류 제안 상태
+  const [aiSuggestion, setAiSuggestion] = React.useState<{
+    priority: string;
+    symptom_category_name: string | null;
+    symptom_category_id: string | null;
+    confidence: number;
+    reason: string;
+  } | null>(null);
+  const [aiLoading, setAiLoading] = React.useState(false);
+  const aiTimerRef = React.useRef<ReturnType<typeof setTimeout>>();
+
+  // 제목·설명 입력 후 1.5초 debounce → AI 분류
+  React.useEffect(() => {
+    clearTimeout(aiTimerRef.current);
+    if (!watchedTitle || watchedTitle.length < 5) {
+      setAiSuggestion(null);
+      return;
+    }
+    aiTimerRef.current = setTimeout(async () => {
+      setAiLoading(true);
+      try {
+        const res = await api.post(`/${tenantSlug}/tickets/ai-classify`, {
+          title: watchedTitle,
+          description: watchedDescription || '',
+        });
+        if (res.data && res.data.priority) {
+          setAiSuggestion(res.data);
+        } else {
+          setAiSuggestion(null);
+        }
+      } catch {
+        setAiSuggestion(null);
+      } finally {
+        setAiLoading(false);
+      }
+    }, 1500);
+    return () => clearTimeout(aiTimerRef.current);
+  }, [watchedTitle, watchedDescription, tenantSlug]);
 
   // 증상 분류 목록 (incident 전용)
   const { data: symptomCategoriesData } = useQuery<{ items: SymptomCategory[] } | SymptomCategory[]>({
@@ -477,6 +519,54 @@ function TicketFormStep({
               className="w-full rounded-md border border-border-default bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-disabled resize-none focus:outline-none focus:ring-2 focus:ring-border-strong"
             />
           </FormField>
+
+          {/* AI 분류 제안 배너 */}
+          {(aiLoading || aiSuggestion) && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3">
+              {aiLoading ? (
+                <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
+                  <Sparkles size={13} className="animate-pulse" />
+                  AI 분류 분석 중…
+                </div>
+              ) : aiSuggestion ? (
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+                      <Sparkles size={13} />
+                      AI 분류 제안
+                      <span className="text-amber-500">({Math.round(aiSuggestion.confidence * 100)}% 신뢰도)</span>
+                    </div>
+                    <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+                      우선순위: <strong>{
+                        aiSuggestion.priority === 'critical' ? '긴급' :
+                        aiSuggestion.priority === 'high' ? '높음' :
+                        aiSuggestion.priority === 'medium' ? '보통' : '낮음'
+                      }</strong>
+                      {aiSuggestion.symptom_category_name && (
+                        <> · 증상: <strong>{aiSuggestion.symptom_category_name}</strong></>
+                      )}
+                    </p>
+                    {aiSuggestion.reason && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-500 mt-0.5">{aiSuggestion.reason}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setValue('priority', aiSuggestion.priority as CreateTicketValues['priority']);
+                      if (aiSuggestion.symptom_category_id) {
+                        setValue('symptom_category_id', aiSuggestion.symptom_category_id);
+                      }
+                      setAiSuggestion(null);
+                    }}
+                    className="shrink-0 rounded-md bg-amber-500 px-2.5 py-1 text-xs font-medium text-[#1A1A1A] hover:bg-amber-600 transition-colors"
+                  >
+                    적용
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          )}
 
           {/* 우선순위 + 채널 */}
           <div className="grid grid-cols-2 gap-3">

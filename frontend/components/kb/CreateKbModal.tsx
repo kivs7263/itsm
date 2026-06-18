@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, BookOpen } from 'lucide-react';
+import { X, BookOpen, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,7 @@ export function CreateKbModal({ open, onClose, tenantSlug, prefill }: CreateKbMo
   const [content, setContent] = useState('');
   const [tagsInput, setTagsInput] = useState('');
   const [isPublished, setIsPublished] = useState(true);
+  const [aiGenerating, setAiGenerating] = useState(false);
 
   // prefill 적용 (모달 열릴 때마다)
   useEffect(() => {
@@ -64,6 +65,31 @@ export function CreateKbModal({ open, onClose, tenantSlug, prefill }: CreateKbMo
     .split(',')
     .map((t) => t.trim())
     .filter(Boolean);
+
+  async function handleAiDraft() {
+    if (!prefill?.linkedTicketId) {
+      toast.error('연결된 티켓이 없어 AI 초안을 생성할 수 없습니다.');
+      return;
+    }
+    setAiGenerating(true);
+    try {
+      const res = await api.post(`/${tenantSlug}/kb/generate-draft`, {
+        ticket_id: prefill.linkedTicketId,
+      });
+      if (res.data?.title) {
+        setTitle(res.data.title);
+        setContent(res.data.content ?? '');
+        setTagsInput((res.data.tags ?? []).join(', '));
+        toast.success('AI 초안이 생성되었습니다.');
+      } else {
+        toast.error('AI 초안 생성에 실패했습니다. ANTHROPIC_API_KEY 설정을 확인하세요.');
+      }
+    } catch {
+      toast.error('AI 초안 생성 중 오류가 발생했습니다.');
+    } finally {
+      setAiGenerating(false);
+    }
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,6 +127,17 @@ export function CreateKbModal({ open, onClose, tenantSlug, prefill }: CreateKbMo
             <BookOpen size={16} className="text-brand" />
             <h2 className="text-base font-semibold text-text-primary">새 KB 문서</h2>
           </div>
+          {prefill?.linkedTicketId && (
+            <button
+              type="button"
+              onClick={handleAiDraft}
+              disabled={aiGenerating}
+              className="flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
+            >
+              <Sparkles size={12} className={aiGenerating ? 'animate-pulse' : ''} />
+              {aiGenerating ? 'AI 초안 생성 중…' : 'AI 초안 생성'}
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}

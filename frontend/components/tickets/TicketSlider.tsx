@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { X, ExternalLink } from 'lucide-react';
+import { X, ExternalLink, Sparkles, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -108,6 +108,63 @@ function DetailsTab({ ticket }: { ticket: Ticket }) {
 }
 
 // -----------------------------------------------------------------------
+// KB 제안 섹션 (AI-3)
+// -----------------------------------------------------------------------
+function KbSuggestionsSection({ ticketId, tenantSlug }: { ticketId: string; tenantSlug: string }) {
+  const { data: suggestions = [], isLoading } = useQuery<
+    { id: string; title: string; content: string; similarity: number }[]
+  >({
+    queryKey: ['kb-suggestions', tenantSlug, ticketId],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/tickets/${ticketId}/kb-suggestions`).then((r) => r.data),
+    enabled: !!ticketId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  if (!isLoading && suggestions.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-border-default bg-surface">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
+        <Sparkles size={13} className="text-amber-500" />
+        <span className="text-xs font-semibold text-text-primary">관련 KB 문서</span>
+        {!isLoading && (
+          <span className="text-[10px] text-text-tertiary ml-auto">AI 유사도 기반</span>
+        )}
+      </div>
+      <div className="divide-y divide-border-subtle">
+        {isLoading
+          ? Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="px-4 py-3">
+                <Skeleton className="h-4 w-3/4" />
+              </div>
+            ))
+          : suggestions.map((s) => (
+              <a
+                key={s.id}
+                href={`/${tenantSlug}/kb/${s.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start gap-3 px-4 py-3 hover:bg-surface-hover transition-colors group"
+              >
+                <BookOpen size={13} className="mt-0.5 shrink-0 text-text-tertiary group-hover:text-amber-500" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-text-primary line-clamp-1 group-hover:text-brand">
+                    {s.title}
+                  </p>
+                  <p className="text-[11px] text-text-tertiary mt-0.5 line-clamp-2">{s.content}</p>
+                </div>
+                <span className="text-[10px] text-text-tertiary shrink-0 tabular-nums">
+                  {Math.round(s.similarity * 100)}%
+                </span>
+              </a>
+            ))}
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
 // TicketSlider
 // -----------------------------------------------------------------------
 export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSliderProps) {
@@ -141,10 +198,23 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
   const statusMutation = useMutation({
     mutationFn: (status: TicketStatus) =>
       api.patch(`/${tenantSlug}/tickets/${ticketId}`, { status }),
-    onSuccess: () => {
+    onSuccess: (_, newStatus) => {
       queryClient.invalidateQueries({ queryKey: ['ticket', tenantSlug, ticketId] });
       queryClient.invalidateQueries({ queryKey: ['tickets', tenantSlug] });
       toast.success('상태가 변경되었습니다.');
+      // AI-4: resolved 전환 시 KB 초안 생성 제안
+      if (newStatus === 'resolved' && ticketId) {
+        toast('이 해결 과정을 KB 문서로 만드세요', {
+          description: 'AI가 티켓 내용으로 초안을 자동 생성합니다.',
+          action: {
+            label: 'KB 작성',
+            onClick: () => {
+              window.open(`/${tenantSlug}/kb?from_ticket=${ticketId}`, '_blank');
+            },
+          },
+          duration: 8000,
+        });
+      }
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -332,7 +402,7 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
           )}
 
           {activeTab === 'details' && (
-            <div className="p-5 overflow-y-auto h-full">
+            <div className="p-5 overflow-y-auto h-full flex flex-col gap-5">
               {ticketLoading ? (
                 <div className="flex flex-col gap-3">
                   {Array.from({ length: 6 }).map((_, i) => (
@@ -340,7 +410,10 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
                   ))}
                 </div>
               ) : ticket ? (
-                <DetailsTab ticket={ticket} />
+                <>
+                  <DetailsTab ticket={ticket} />
+                  <KbSuggestionsSection ticketId={ticketId!} tenantSlug={tenantSlug} />
+                </>
               ) : null}
             </div>
           )}

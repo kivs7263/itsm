@@ -365,6 +365,67 @@ async def vote_kb_article(
 
 
 # ------------------------------------------------------------------
+# AI KB 초안 생성 (AI-5)
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "/generate-draft",
+    summary="AI KB 초안 생성 (Claude haiku) — 해결된 티켓 내용 기반",
+)
+async def generate_kb_draft(
+    tenant_slug: str,
+    body: dict,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """body: {ticket_id} — 해당 티켓 제목·설명·댓글로 KB 초안 생성.
+    ANTHROPIC_API_KEY 미설정 시 {"title": null, "content": null, "tags": []} 반환.
+    """
+    from app.services import ai_service
+    from app.models.ticket import Ticket, TicketComment
+
+    ticket_id_raw = body.get("ticket_id")
+    if not ticket_id_raw:
+        return {"title": None, "content": None, "tags": []}
+
+    try:
+        ticket_id = uuid.UUID(str(ticket_id_raw))
+    except ValueError:
+        return {"title": None, "content": None, "tags": []}
+
+    ticket = (
+        await db.execute(
+            select(Ticket).where(
+                Ticket.id == ticket_id,
+                Ticket.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if ticket is None:
+        return {"title": None, "content": None, "tags": []}
+
+    comment_rows = (
+        await db.execute(
+            select(TicketComment.body)
+            .where(
+                TicketComment.ticket_id == ticket_id,
+                TicketComment.is_internal.is_(False),
+            )
+            .order_by(TicketComment.created_at)
+            .limit(10)
+        )
+    ).scalars().all()
+
+    result = await ai_service.generate_kb_draft(
+        ticket_title=ticket.title,
+        ticket_description=ticket.description,
+        comments=list(comment_rows),
+    )
+    return result or {"title": None, "content": None, "tags": []}
+
+
+# ------------------------------------------------------------------
 # 포털 공개 KB 검색 (비인증, KB-7)
 # ------------------------------------------------------------------
 
