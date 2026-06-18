@@ -408,6 +408,16 @@ async def create_ticket(
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db),
 ) -> TicketOut:
+    # 플랜 티켓 한도 확인
+    try:
+        from app.services import billing_service
+        from app.core.redis import get_redis
+        await billing_service.check_ticket_limit(db, current_user.tenant_id, get_redis())
+    except Exception as e:
+        if hasattr(e, "status_code") and e.status_code == 402:
+            raise
+        pass  # 빌링 서비스 오류는 graceful skip
+
     ticket_number = await _generate_ticket_number(db, current_user.tenant_id)
     now = datetime.now(timezone.utc)
     sla_response_deadline, sla_resolution_deadline = await _compute_sla_deadlines(

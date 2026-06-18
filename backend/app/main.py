@@ -240,3 +240,8 @@ app.include_router(api_keys_router.router, prefix="/api")           # /api/{slug
 # API-4 Webhook 엔드포인트 관리
 from app.routers import webhooks as webhooks_router  # noqa: E402
 app.include_router(webhooks_router.router, prefix="/api")           # /api/{slug}/settings/webhooks
+
+# BILLING-1 플랜 모델 + Stripe 결제
+from app.routers import billing as billing_router  # noqa: E402
+app.include_router(billing_router.router, prefix="/api")            # /api/{slug}/billing
+app.include_router(billing_router.router_webhook, prefix="/api")    # /api/billing/stripe-webhook

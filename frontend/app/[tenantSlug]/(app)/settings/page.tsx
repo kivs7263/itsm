@@ -45,6 +45,8 @@ import type {
   SymptomCategoryItem,
   SupportTeam,
   ExtNotifLog,
+  SubscriptionInfo,
+  StripeInvoice,
 } from '@/lib/types';
 
 // -----------------------------------------------------------------------
@@ -77,7 +79,7 @@ const TIER_COLORS: Record<string, string> = {
 // -----------------------------------------------------------------------
 // 탭 정의
 // -----------------------------------------------------------------------
-type TabId = 'users' | 'notifications' | 'sla' | 'categories' | 'support-teams' | 'ext-notif-history' | 'email-inbound' | 'api-keys' | 'webhooks';
+type TabId = 'users' | 'notifications' | 'sla' | 'categories' | 'support-teams' | 'ext-notif-history' | 'email-inbound' | 'api-keys' | 'webhooks' | 'billing';
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'users',             label: '사용자 관리',    icon: Users          },
@@ -89,6 +91,7 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'ext-notif-history', label: '외부 알림 이력', icon: History        },
   { id: 'api-keys',          label: 'API 키',         icon: Key            },
   { id: 'webhooks',          label: 'Webhook',        icon: Webhook        },
+  { id: 'billing',           label: '구독',           icon: Zap            },
 ];
 
 // -----------------------------------------------------------------------
@@ -2018,6 +2021,229 @@ function WebhooksTab({ tenantSlug }: { tenantSlug: string }) {
 }
 
 // -----------------------------------------------------------------------
+// 탭 10: 구독 관리 (Billing)
+// -----------------------------------------------------------------------
+const PLAN_LABELS: Record<string, string> = {
+  free: 'Free',
+  starter: 'Starter',
+  professional: 'Professional',
+  enterprise: 'Enterprise',
+};
+const PLAN_COLORS: Record<string, string> = {
+  free: 'bg-border-subtle text-text-secondary',
+  starter: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  professional: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  enterprise: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+};
+const PLAN_FEATURES: Record<string, string[]> = {
+  free: ['엔지니어 3명', '월 100건 티켓', 'KB·SLA 기본'],
+  starter: ['엔지니어 10명', '무제한 티켓', 'KB·SLA·보고서 전체'],
+  professional: ['엔지니어 30명', '무제한 티켓', 'API 키·Webhook', 'AI 티켓 분류'],
+  enterprise: ['무제한', '전체 기능', 'SLA 보장·전담 지원', '맞춤 연동'],
+};
+
+function BillingTab({ tenantSlug }: { tenantSlug: string }) {
+  const queryClient = useQueryClient();
+
+  const { data: sub, isLoading } = useQuery<SubscriptionInfo>({
+    queryKey: ['billing-subscription', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/billing/subscription`).then((r) => r.data),
+    enabled: !!tenantSlug,
+  });
+
+  const { data: invoicesData } = useQuery<{ invoices: StripeInvoice[] }>({
+    queryKey: ['billing-invoices', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/billing/invoices`).then((r) => r.data),
+    enabled: !!tenantSlug,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const checkoutMutation = useMutation({
+    mutationFn: ({ plan }: { plan: string }) =>
+      api.post(`/${tenantSlug}/billing/checkout`, {
+        plan,
+        success_url: `${window.location.origin}/${tenantSlug}/settings?tab=billing&upgraded=1`,
+        cancel_url: `${window.location.origin}/${tenantSlug}/settings?tab=billing`,
+      }).then((r) => r.data),
+    onSuccess: (data) => {
+      if (data.checkout_url) window.open(data.checkout_url, '_blank');
+      else toast.error('결제 페이지를 열 수 없습니다. Stripe 설정을 확인하세요.');
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const plan = sub?.plan ?? 'free';
+  const invoices = invoicesData?.invoices ?? [];
+
+  const seatPct = sub ? Math.min((sub.seat_usage / sub.seats_limit) * 100, 100) : 0;
+  const ticketPct = sub?.ticket_limit_monthly
+    ? Math.min((sub.ticket_usage_this_month / sub.ticket_limit_monthly) * 100, 100)
+    : 0;
+
+  const renewalStr = sub?.current_period_end
+    ? new Date(sub.current_period_end).toLocaleDateString('ko-KR')
+    : null;
+
+  const daysToRenewal = renewalStr
+    ? Math.ceil(
+        (new Date(sub!.current_period_end!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+      )
+    : null;
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-4 max-w-2xl">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-16 w-full rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6 max-w-2xl">
+      {/* 만료 임박 경고 */}
+      {daysToRenewal !== null && daysToRenewal <= 7 && (
+        <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/20 px-4 py-3">
+          <Zap size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
+          <p className="text-sm text-amber-700 dark:text-amber-400">
+            구독이 {daysToRenewal}일 후 만료됩니다. 갱신하지 않으면 Free 플랜으로 자동 전환됩니다.
+          </p>
+        </div>
+      )}
+
+      {/* 현재 플랜 카드 */}
+      <div className="rounded-xl border border-border-default bg-surface p-5">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', PLAN_COLORS[plan])}>
+                {PLAN_LABELS[plan] ?? plan}
+              </span>
+              {renewalStr && (
+                <span className="text-xs text-text-tertiary">갱신일: {renewalStr}</span>
+              )}
+            </div>
+            <ul className="mt-3 flex flex-col gap-1">
+              {(PLAN_FEATURES[plan] ?? []).map((f) => (
+                <li key={f} className="flex items-center gap-2 text-sm text-text-secondary">
+                  <CheckCircle2 size={13} className="text-success shrink-0" />
+                  {f}
+                </li>
+              ))}
+            </ul>
+          </div>
+          {plan !== 'enterprise' && (
+            <div className="flex flex-col gap-2 shrink-0">
+              {plan === 'free' && (
+                <Button
+                  size="sm"
+                  onClick={() => checkoutMutation.mutate({ plan: 'starter' })}
+                  isLoading={checkoutMutation.isPending}
+                >
+                  Starter로 업그레이드
+                </Button>
+              )}
+              {plan === 'starter' && (
+                <Button
+                  size="sm"
+                  onClick={() => checkoutMutation.mutate({ plan: 'professional' })}
+                  isLoading={checkoutMutation.isPending}
+                >
+                  Professional로 업그레이드
+                </Button>
+              )}
+              {plan === 'professional' && (
+                <Button size="sm" variant="outline" onClick={() => toast.info('영업팀에 문의하세요: sales@hivework.io')}>
+                  Enterprise 문의
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 사용량 */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* 시트 */}
+        <div className="rounded-lg border border-border-default bg-surface p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-text-secondary">엔지니어 시트</span>
+            <span className="text-xs text-text-tertiary">
+              {sub?.seat_usage ?? 0} / {sub?.seats_limit ?? 3}
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-border-subtle overflow-hidden">
+            <div
+              className={cn('h-full rounded-full transition-all', seatPct >= 90 ? 'bg-error' : seatPct >= 70 ? 'bg-amber-400' : 'bg-success')}
+              style={{ width: `${seatPct}%` }}
+            />
+          </div>
+        </div>
+
+        {/* 티켓 (Free만) */}
+        <div className="rounded-lg border border-border-default bg-surface p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-text-secondary">이번달 티켓</span>
+            <span className="text-xs text-text-tertiary">
+              {sub?.ticket_usage_this_month ?? 0}
+              {sub?.ticket_limit_monthly ? ` / ${sub.ticket_limit_monthly}` : ' / 무제한'}
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-border-subtle overflow-hidden">
+            {sub?.ticket_limit_monthly ? (
+              <div
+                className={cn('h-full rounded-full transition-all', ticketPct >= 90 ? 'bg-error' : ticketPct >= 70 ? 'bg-amber-400' : 'bg-success')}
+                style={{ width: `${ticketPct}%` }}
+              />
+            ) : (
+              <div className="h-full w-full bg-success/30 rounded-full" />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 인보이스 */}
+      {invoices.length > 0 && (
+        <div className="rounded-lg border border-border-default overflow-hidden">
+          <div className="px-4 py-3 bg-surface-elevated border-b border-border-subtle">
+            <span className="text-xs font-medium text-text-secondary">인보이스</span>
+          </div>
+          <div className="divide-y divide-border-subtle">
+            {invoices.map((inv) => (
+              <div key={inv.id} className="flex items-center gap-3 px-4 py-3 text-sm">
+                <div className="flex-1">
+                  <span className="text-text-primary">
+                    {(inv.amount_paid / 100).toLocaleString()}
+                    {inv.currency.toUpperCase()}
+                  </span>
+                  <span className="ml-2 text-xs text-text-tertiary">
+                    {new Date(inv.period_end * 1000).toLocaleDateString('ko-KR')}
+                  </span>
+                </div>
+                <span className={cn('text-xs', inv.status === 'paid' ? 'text-success' : 'text-amber-500')}>
+                  {inv.status}
+                </span>
+                {inv.invoice_pdf && (
+                  <a
+                    href={inv.invoice_pdf}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-brand hover:underline"
+                  >
+                    PDF
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
 // Settings 메인 페이지
 // -----------------------------------------------------------------------
 export default function SettingsPage() {
@@ -2084,6 +2310,7 @@ export default function SettingsPage() {
         {activeTab === 'ext-notif-history' && <ExtNotifHistoryTab tenantSlug={tenantSlug} />}
         {activeTab === 'api-keys' && <ApiKeysTab tenantSlug={tenantSlug} />}
         {activeTab === 'webhooks' && <WebhooksTab tenantSlug={tenantSlug} />}
+        {activeTab === 'billing' && <BillingTab tenantSlug={tenantSlug} />}
       </div>
     </div>
   );

@@ -612,3 +612,66 @@ async def sso_callback(
     set_auth_cookies(redirect_resp, auth.access_token, auth.refresh_token, tenant.slug)
     redirect_resp.delete_cookie("itsm.pkce_verifier", path="/api/auth/sso")
     return redirect_resp
+
+
+# ------------------------------------------------------------------
+# Self-serve 가입 (BILLING-6)
+# ------------------------------------------------------------------
+
+
+class SelfServeSignupRequest(BaseModel):
+    company_name: str = Field(..., min_length=1, max_length=100)
+    slug: str = Field(..., min_length=2, max_length=50, pattern=r'^[a-z0-9-]+$')
+    admin_email: str = Field(..., min_length=5, max_length=200)
+    admin_name: str = Field(default="Admin", max_length=100)
+    password: str = Field(..., min_length=8)
+
+
+@router.post(
+    "/signup",
+    status_code=status.HTTP_201_CREATED,
+    summary="Self-serve 테넌트 가입 (공개)",
+)
+async def self_serve_signup(
+    data: SelfServeSignupRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """SSO Portal을 통해 KC org + 서비스 테넌트를 자동 프로비저닝한다.
+    성공 시 {slug} 반환 → 클라이언트가 /{slug}/login으로 이동.
+    SSO_PORTAL_INTERNAL_URL 미설정 시 501 반환.
+    """
+    if not settings.SERVICE_BUS_SECRET:
+        raise HTTPException(status_code=501, detail="서비스 간 시크릿이 설정되지 않았습니다.")
+
+    portal_url = settings.SSO_PORTAL_INTERNAL_URL.rstrip("/")
+    endpoint = f"{portal_url}/api/bridge/signup"
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                endpoint,
+                json={
+                    "name": data.company_name,
+                    "slug": data.slug,
+                    "adminEmail": data.admin_email,
+                    "adminName": data.admin_name,
+                    "password": data.password,
+                },
+                headers={
+                    "X-Service-Secret": settings.SERVICE_BUS_SECRET,
+                    "Content-Type": "application/json",
+                },
+            )
+    except httpx.RequestError as exc:
+        logger.error("SSO Portal signup request failed: %s", exc)
+        raise HTTPException(status_code=503, detail="프로비저닝 서비스에 연결할 수 없습니다.")
+
+    if resp.status_code == 409:
+        body = resp.json()
+        raise HTTPException(status_code=409, detail=body.get("error", "이미 존재하는 slug 또는 이메일입니다."))
+
+    if resp.status_code not in (200, 201):
+        logger.error("SSO Portal signup failed: %s %s", resp.status_code, resp.text)
+        raise HTTPException(status_code=502, detail="테넌트 프로비저닝에 실패했습니다.")
+
+    return {"slug": data.slug, "message": "가입이 완료되었습니다. 로그인하세요."}

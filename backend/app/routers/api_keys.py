@@ -96,6 +96,16 @@ async def create_api_key(
     current_user: Annotated[User, Depends(require_roles(UserRole.admin))],
     db: AsyncSession = Depends(get_db),
 ) -> ApiKeyCreateResponse:
+    # API 키는 Professional 이상 전용
+    try:
+        from app.services import billing_service
+        from app.core.redis import get_redis
+        await billing_service.check_api_key_allowed(db, current_user.tenant_id, get_redis())
+    except Exception as e:
+        if hasattr(e, "status_code") and e.status_code == 402:
+            raise
+        pass
+
     raw_key = f"itsm_{secrets.token_urlsafe(32)}"
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
 

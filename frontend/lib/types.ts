@@ -634,3 +634,25 @@ export interface SupportTeam {
   is_active: boolean;
   member_count: number;
 }
+
+export interface SubscriptionInfo {
+  plan: 'free' | 'starter' | 'professional' | 'enterprise';
+  seats_limit: number;
+  ticket_limit_monthly: number | null;
+  api_keys_allowed: boolean;
+  current_period_end: string | null;
+  stripe_customer_id: string | null;
+  is_active: boolean;
+  seat_usage: number;
+  ticket_usage_this_month: number;
+}
+
+export interface StripeInvoice {
+  id: string;
+  amount_paid: number;
+  currency: string;
+  status: string;
+  period_end: number;
+  hosted_invoice_url: string | null;
+  invoice_pdf: string | null;
+}

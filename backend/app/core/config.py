@@ -153,6 +153,21 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
 
     # ------------------------------------------------------------------
+    # [선택] Stripe 결제 (BILLING-1)
+    # 미설정 시 checkout 501 반환, 플랜 제한은 Free 기준 적용
+    # ------------------------------------------------------------------
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_PRICE_STARTER: str = ""        # Stripe price ID (₩50,000/월)
+    STRIPE_PRICE_PROFESSIONAL: str = ""   # Stripe price ID (₩150,000/월)
+
+    # ------------------------------------------------------------------
+    # [선택] SSO Portal 내부 URL — Self-serve 가입 프로비저닝
+    # 미설정 시 signup 기능 비활성 (501 반환)
+    # ------------------------------------------------------------------
+    SSO_PORTAL_INTERNAL_URL: str = "http://sso-admin-portal:3000"
+
+    # ------------------------------------------------------------------
     # [선택] Slack / Teams 웹훅 알림
     # 미설정 시 해당 채널 알림 비활성
     # ------------------------------------------------------------------

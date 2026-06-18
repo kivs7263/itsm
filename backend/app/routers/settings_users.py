@@ -144,6 +144,18 @@ async def invite_user(
     current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> UserOut:
+    # 엔지니어 시트 한도 확인 (engineer/team_lead/admin 역할만)
+    _engineer_roles = {"engineer", "team_lead", "admin"}
+    if data.role in _engineer_roles:
+        try:
+            from app.services import billing_service
+            from app.core.redis import get_redis
+            await billing_service.check_seat_limit(db, current_user.tenant_id, get_redis())
+        except Exception as e:
+            if hasattr(e, "status_code") and e.status_code == 402:
+                raise
+            pass
+
     # 같은 tenant_id + email 중복 체크
     existing = await db.scalar(
         select(User).where(
