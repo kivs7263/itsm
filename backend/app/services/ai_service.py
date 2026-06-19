@@ -33,15 +33,25 @@ def _claude_client():
     return anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 
-async def _call_claude(system: str, user: str) -> str | None:
-    """Claude haiku 호출. 실패 시 None 반환 (graceful)."""
+async def _call_claude(
+    system: str,
+    user: str,
+    model: str = "claude-haiku-4-5",
+    max_tokens: int = 512,
+) -> str | None:
+    """Claude 호출. 실패 시 None 반환 (graceful).
+
+    model: 기본값 claude-haiku-4-5 (기존 동작 유지).
+           고품질 답변이 필요한 경우 claude-sonnet-4-6 전달.
+    max_tokens: 기본 512. 답변 초안 등 긴 출력이 필요하면 상향 전달.
+    """
     if not settings.ANTHROPIC_API_KEY:
         return None
     try:
         client = _claude_client()
         msg = await client.messages.create(
-            model="claude-haiku-4-5",
-            max_tokens=512,
+            model=model,
+            max_tokens=max_tokens,
             messages=[{"role": "user", "content": user}],
             system=system,
         )
@@ -249,4 +259,81 @@ async def generate_kb_draft(
         return result
     except Exception as exc:
         logger.warning("AI KB 초안 파싱 실패: %s | raw=%r", exc, raw[:200])
+        return None
+
+
+# ──────────────────────────────────────────────────────────────────
+# suggest_ticket_reply (P3-2)
+# ──────────────────────────────────────────────────────────────────
+
+
+async def suggest_ticket_reply(
+    ticket_title: str,
+    ticket_description: str | None,
+    ticket_status: str,
+    customer_context: str | None,
+    kb_articles: list[dict],
+) -> str | None:
+    """KB 문서에 근거한 고객 대면 답변 초안 생성 (Claude sonnet-4-6).
+
+    입력:
+        ticket_title       — 티켓 제목
+        ticket_description — 티켓 설명 (없으면 None)
+        ticket_status      — 티켓 현재 상태 (open / in_progress / resolved 등)
+        customer_context   — 고객 이름 등 추가 컨텍스트 (없으면 None)
+        kb_articles        — suggest_kb_articles 결과 리스트
+                             [{id, title, content, similarity}, ...]
+                             빈 리스트이면 KB 없이 일반 답변 초안 생성.
+
+    반환:
+        답변 초안 문자열 (str), 또는 None (graceful: API 키 없음 / 예외).
+        절대 티켓 플로우를 차단하지 않음.
+
+    모델: claude-sonnet-4-6 (고객 대면 품질 우선).
+    max_tokens: 1500 (답변 1~3문단).
+    """
+    if not settings.ANTHROPIC_API_KEY:
+        return None
+
+    # KB 컨텍스트 문자열 구성
+    if kb_articles:
+        kb_lines = []
+        for idx, art in enumerate(kb_articles, 1):
+            title = art.get("title", "")
+            content = (art.get("content") or "")[:400]
+            kb_lines.append(f"[KB{idx}] {title}\n{content}")
+        kb_context = "\n\n".join(kb_lines)
+    else:
+        kb_context = "관련 KB 문서 없음"
+
+    system_prompt = (
+        "당신은 전문 고객지원 상담원입니다. "
+        "제공된 KB 문서에 근거해 정확하고 정중한 한국어 답변 초안을 작성하세요. "
+        "KB에 근거 없는 내용은 추측하지 말고, 불확실하면 추가 확인이 필요하다고 안내하세요. "
+        "이 초안은 상담원이 검토 후 직접 발송하므로 완성도 있게 작성하되 "
+        "상담원이 맥락에 맞게 수정할 수 있도록 자연스럽게 구성하세요. "
+        "인사말 → 문제 이해/공감 → 해결 방법 또는 조치 안내 → 마무리 인사 순서로 작성하세요."
+    )
+
+    user_prompt = (
+        f"[티켓 정보]\n"
+        f"제목: {ticket_title}\n"
+        f"설명: {ticket_description or '없음'}\n"
+        f"상태: {ticket_status}\n"
+        f"고객 정보: {customer_context or '없음'}\n\n"
+        f"[참고 KB 문서]\n{kb_context}\n\n"
+        "위 KB 문서를 참고해 고객에게 발송할 답변 초안을 작성하세요. "
+        "KB 내용에 없는 사항은 추측하지 말고 '추가 확인 후 안내드리겠습니다'로 처리하세요."
+    )
+
+    try:
+        draft = await _call_claude(
+            system_prompt,
+            user_prompt,
+            model="claude-sonnet-4-6",
+            max_tokens=1500,
+        )
+        return draft
+    except Exception as exc:
+        logger.warning("suggest_ticket_reply 실패: %s", exc)
         return None

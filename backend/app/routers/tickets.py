@@ -666,6 +666,83 @@ async def delete_ticket(
 
 
 # ------------------------------------------------------------------
+# AI 답변 초안 제안 (P3-2)
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "/{ticket_id}/ai-suggest-reply",
+    summary="KB 기반 AI 답변 초안 제안 (Claude sonnet-4-6)",
+)
+async def ai_suggest_reply(
+    tenant_slug: str,
+    ticket_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """KB 문서를 근거로 Claude가 답변 초안을 생성합니다.
+
+    상담원이 검토 후 발송 — 자동 발송 아님.
+
+    반환:
+        {"draft": "초안 텍스트", "kb_sources": [{"id": "...", "title": "..."}]}
+        ANTHROPIC_API_KEY 미설정:
+        {"draft": null, "reason": "ai_disabled", "kb_sources": []}
+    """
+    from app.services import ai_service
+
+    ticket = await _get_ticket_or_404(db, current_user.tenant_id, ticket_id)
+
+    # ANTHROPIC_API_KEY 미설정 → 즉시 graceful 반환 (500 금지)
+    from app.core.config import settings as _settings
+    if not _settings.ANTHROPIC_API_KEY:
+        return {"draft": None, "reason": "ai_disabled", "kb_sources": []}
+
+    # 1) 관련 KB 문서 조회 (suggest_kb_articles — OpenAI 임베딩 기반)
+    kb_articles = await ai_service.suggest_kb_articles(
+        title=ticket.title,
+        description=ticket.description,
+        tenant_id=current_user.tenant_id,
+        db=db,
+        top_k=3,
+    )
+
+    # 고객 컨텍스트: customer 이름 조회 (graceful)
+    customer_context: str | None = None
+    if ticket.customer_id:
+        try:
+            row = await db.execute(
+                text("SELECT name FROM customers WHERE id = :cid AND tenant_id = :tid LIMIT 1"),
+                {"cid": str(ticket.customer_id), "tid": str(current_user.tenant_id)},
+            )
+            customer_row = row.first()
+            if customer_row:
+                customer_context = customer_row[0]
+        except Exception:
+            pass
+
+    ticket_status_str = (
+        ticket.status.value if hasattr(ticket.status, "value") else str(ticket.status)
+    )
+
+    # 2) 답변 초안 생성
+    draft = await ai_service.suggest_ticket_reply(
+        ticket_title=ticket.title,
+        ticket_description=ticket.description,
+        ticket_status=ticket_status_str,
+        customer_context=customer_context,
+        kb_articles=kb_articles,
+    )
+
+    kb_sources = [{"id": art["id"], "title": art["title"]} for art in kb_articles]
+
+    if draft is None:
+        return {"draft": None, "reason": "ai_error", "kb_sources": kb_sources}
+
+    return {"draft": draft, "kb_sources": kb_sources}
+
+
+# ------------------------------------------------------------------
 # AI KB 제안 (AI-3)
 # ------------------------------------------------------------------
 
