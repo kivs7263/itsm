@@ -12,7 +12,7 @@
  * Radix DropdownMenu 사용
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import {
   Building2,
@@ -23,6 +23,16 @@ import {
 import { useParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
+
+interface ProductEntry {
+  slug: string
+  name: string
+  subscribed: boolean
+  isRequired: boolean
+}
+
+// API 실패 시 fallback: 모두 표시
+const FALLBACK_SUBSCRIBED = new Set(['sa-workspace', 'groupware', 'itsm'])
 
 // 빌드 타임 주입 (NEXT_PUBLIC_* — Dockerfile ARG)
 const SA_URL           = process.env.NEXT_PUBLIC_SA_URL           || undefined;
@@ -51,6 +61,22 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
   const { user } = useAuth();
 
   const orgName = user?.organization_name ?? '내 조직';
+
+  // /api/me/products — 구독 중인 제품 slug 집합
+  // 로딩 중·실패 시 FALLBACK_SUBSCRIBED 사용 (스위처가 빈 채로 깨지지 않도록)
+  const [subscribedSlugs, setSubscribedSlugs] = useState<Set<string>>(FALLBACK_SUBSCRIBED);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/me/products', { credentials: 'include', cache: 'no-store' })
+      .then(async (res) => {
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as ProductEntry[];
+        const set = new Set(data.filter((p) => p.subscribed).map((p) => p.slug));
+        if (!cancelled && set.size > 0) setSubscribedSlugs(set);
+      })
+      .catch(() => {/* fallback 유지 */});
+    return () => { cancelled = true; };
+  }, []);
 
   const handleSwitchToSA = async () => {
     if (!SA_URL) return;
@@ -199,7 +225,7 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
 
           {/* 앱 그리드 (3열) */}
           <div className="grid grid-cols-3 gap-1 p-1">
-            {/* ITSM — 현재 앱 (브랜드 색 강조) */}
+            {/* ITSM — 현재 앱 (항상 표시, 브랜드 색 강조) */}
             <div
               className={cn(
                 'flex flex-col items-center gap-1.5 p-2.5 rounded-lg relative',
@@ -225,8 +251,8 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
               />
             </div>
 
-            {/* GW (Groupware) */}
-            {GW_URL ? (
+            {/* GW (Groupware) — subscribed 시만 노출 */}
+            {subscribedSlugs.has('groupware') && (GW_URL ? (
               <button
                 type="button"
                 className={cn(
@@ -248,10 +274,10 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
                 </div>
                 <span className="text-[11px] font-medium text-text-disabled text-center leading-tight">GW</span>
               </div>
-            )}
+            ))}
 
-            {/* SA Workspace */}
-            {SA_URL ? (
+            {/* SA Workspace — subscribed 시만 노출 */}
+            {subscribedSlugs.has('sa-workspace') && (SA_URL ? (
               <button
                 type="button"
                 className={cn(
@@ -273,9 +299,9 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
                 </div>
                 <span className="text-[11px] font-medium text-text-disabled text-center leading-tight">SA</span>
               </div>
-            )}
+            ))}
 
-            {/* Admin Portal */}
+            {/* Admin Portal — URL 존재 시 항상 노출 (slug 기반 구독 관리 대상 아님) */}
             {ADMIN_PORTAL_URL ? (
               <button
                 type="button"
@@ -291,14 +317,7 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
                 </div>
                 <span className="text-[11px] font-medium text-text-secondary text-center leading-tight">Admin</span>
               </button>
-            ) : (
-              <div className="flex flex-col items-center gap-1.5 p-2.5 rounded-lg opacity-30 cursor-not-allowed">
-                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-hover">
-                  <ShieldCheck size={14} className="text-text-disabled" />
-                </div>
-                <span className="text-[11px] font-medium text-text-disabled text-center leading-tight">Admin</span>
-              </div>
-            )}
+            ) : null}
           </div>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>

@@ -86,7 +86,7 @@
   --color-text-muted:     #4b5563;
   --color-text-inverse:   #ffffff;
   --color-text-accent:    #B45309;
-  --color-accent-on:      #0E0E0C;
+  --color-accent-on:      #1A1A1A;
 
   /* === 티켓 상태 === */
   --color-status-open:         #2563eb;
@@ -233,7 +233,7 @@
   --ring:    var(--color-accent-400);
   --destructive:            var(--color-error);
   --destructive-foreground: #1a0505;
-  --color-accent-on: #0E0E0C;
+  --color-accent-on: #1A1A1A;
   --color-brand:     #F5C000;
   --color-brand-subtle: rgba(245, 192, 0, 0.10);
 }

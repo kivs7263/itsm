@@ -476,7 +476,7 @@ export default function CustomersPage() {
   return (
     <div className="flex h-full overflow-hidden">
       {/* ─── 왼쪽 트리 패널 ─── */}
-      <div className="w-72 shrink-0 flex flex-col h-full bg-[#0E0E0C] border-r border-white/10">
+      <div className="w-72 shrink-0 flex flex-col h-full bg-[#1A1A1A] border-r border-white/10">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-3 py-3 border-b border-white/10 shrink-0">
           <span className="text-sm font-medium text-white/80">고객</span>

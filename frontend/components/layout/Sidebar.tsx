@@ -99,7 +99,7 @@ export function Sidebar() {
         'flex h-screen flex-col',
         'border-r border-white/10',
         'transition-[width] duration-200 ease-out',
-        'bg-[#0E0E0C]',
+        'bg-[#1A1A1A]',
         collapsed ? 'w-14' : 'w-56',
       )}
     >
@@ -213,7 +213,7 @@ export function Sidebar() {
         className={cn(
           'flex h-6 w-6 items-center justify-center rounded-full',
           'absolute -right-3 top-1/2 -translate-y-1/2',
-          'border border-white/10 bg-[#0E0E0C]',
+          'border border-white/10 bg-[#1A1A1A]',
           'text-white/40 hover:text-white transition-colors duration-fast',
           'focus-visible:outline-none focus-visible:shadow-brand',
           'z-10',
