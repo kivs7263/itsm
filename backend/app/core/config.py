@@ -171,6 +171,15 @@ class Settings(BaseSettings):
     SSO_PORTAL_INTERNAL_URL: str = "http://sso-admin-portal:3000"
 
     # ------------------------------------------------------------------
+    # [선택] notification-service 통합 인박스 fan-in (P1-4-B)
+    # 둘 중 하나라도 미설정 시 발행 헬퍼 완전 no-op — 티켓 플로우 무영향
+    # NOTIFICATION_SERVICE_INTERNAL_SECRET 값 소스: notification-service 컨테이너
+    #   환경변수 INTERNAL_SECRET (docker-compose notification-service 서비스 env 참조)
+    # ------------------------------------------------------------------
+    NOTIFICATION_SERVICE_URL: str | None = None
+    NOTIFICATION_SERVICE_INTERNAL_SECRET: str | None = None
+
+    # ------------------------------------------------------------------
     # [선택] Slack / Teams 웹훅 알림
     # 미설정 시 해당 채널 알림 비활성
     # ------------------------------------------------------------------

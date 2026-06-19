@@ -27,34 +27,57 @@ _running = True
 
 
 async def _enqueue_sla_notification(session, tenant_id, ticket_id, event_type: str) -> None:
-    """티켓 고객에게 SLA 진행 상황 외부 알림 큐 등록."""
+    """티켓 고객에게 SLA 진행 상황 외부 알림 큐 등록 + 담당자 통합 인박스 fan-in (P1-4-B)."""
     try:
         from sqlalchemy import select as sa_select
         from app.models import Ticket
         from app.services.external_notif_service import queue_notification, resolve_customer_email
 
         ticket = await session.get(Ticket, ticket_id)
-        if not ticket or not ticket.customer_id:
+        if not ticket:
             return
 
-        email, name = await resolve_customer_email(session, ticket)
-        if not email:
-            return
+        # 고객 외부 알림 (기존 로직)
+        if ticket.customer_id:
+            email, name = await resolve_customer_email(session, ticket)
+            if email:
+                await queue_notification(
+                    session,
+                    tenant_id=tenant_id,
+                    ticket_id=ticket_id,
+                    escalation_id=None,
+                    channel="email",
+                    event_type=event_type,
+                    recipient=email,
+                    payload={
+                        "ticket_title": ticket.title,
+                        "ticket_number": ticket.ticket_number or str(ticket_id)[:8],
+                        "customer_name": name,
+                    },
+                )
 
-        await queue_notification(
-            session,
-            tenant_id=tenant_id,
-            ticket_id=ticket_id,
-            escalation_id=None,
-            channel="email",
-            event_type=event_type,
-            recipient=email,
-            payload={
-                "ticket_title": ticket.title,
-                "ticket_number": ticket.ticket_number or str(ticket_id)[:8],
-                "customer_name": name,
-            },
-        )
+        # P1-4-B: 담당자 통합 인박스 fan-in
+        try:
+            from app.services.notification_service import push_inbox_sla_with_db
+            is_warning = event_type == "sla_warning"
+            await push_inbox_sla_with_db(
+                session,
+                ticket=ticket,
+                event_namespace="itsm.ticket.sla_warning" if is_warning else "itsm.ticket.sla_breach",
+                title=(
+                    f"SLA 경고: 티켓 #{ticket.ticket_number or str(ticket_id)[:8]}"
+                    if is_warning
+                    else f"SLA 초과: 티켓 #{ticket.ticket_number or str(ticket_id)[:8]}"
+                ),
+                body=(
+                    "SLA 응답 기한 30분 이내입니다." if is_warning
+                    else "티켓의 SLA 응답 시간이 초과되었습니다."
+                ),
+                idempotency_suffix=f"{event_type}:{ticket_id}",
+            )
+        except Exception as exc:
+            logger.warning("SLA 인박스 fan-in 실패 (무시): %s", exc)
+
     except Exception:
         logger.warning("SLA 외부 알림 큐 등록 실패 (무시)", exc_info=True)
 
