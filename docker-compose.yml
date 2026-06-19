@@ -60,6 +60,9 @@ services:
       KEYCLOAK_INTERNAL_URL: ${KEYCLOAK_INTERNAL_URL:-http://keycloak:8080}
       SA_BACKEND_URL: ${SA_BACKEND_URL:-http://sa_backend:8000}
       SA_TENANT_ID: ${SA_TENANT_ID:-}
+      # ELEVATE-1 P1-4: 통합 알림 fan-in (notification-service 발행/읽기). 미설정 시 graceful no-op.
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://notification_service_api:8000}
+      NOTIFICATION_SERVICE_INTERNAL_SECRET: ${NOTIFICATION_SERVICE_INTERNAL_SECRET:-}
     depends_on:
       itsm_postgres_ha:
         condition: service_healthy
