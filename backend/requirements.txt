@@ -1,4 +1,9 @@
-fastapi>=0.115.0
+# 버전 고정 사유 (2026-06-19): 0.137+는 include_router가 app.routes에
+# _IncludedRouter 객체를 넣어 prometheus-fastapi-instrumentator(8.0) route
+# 해석을 깨뜨림 → 전 라우트 500. 반대로 0.116 미만은 204+body assertion으로
+# import 실패. blessed worker 이미지(0.136.3)와 동일 버전으로 고정.
+fastapi==0.136.3
+starlette==1.2.1
 uvicorn[standard]>=0.30.0
 sqlalchemy[asyncio]>=2.0.0
 asyncpg>=0.29.0

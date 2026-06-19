@@ -249,3 +249,7 @@ app.include_router(billing_router.router_webhook, prefix="/api")    # /api/billi
 # API-2 공개 REST API v1 (API 키 Bearer 인증)
 from app.routers import public_v1 as public_v1_router  # noqa: E402
 app.include_router(public_v1_router.router)             # /v1/tickets, /v1/usage
+
+# ADR-044: SSO Portal admin_bridge (KC JWT 인증)
+from app.routers import admin_bridge as admin_bridge_router  # noqa: E402
+app.include_router(admin_bridge_router.router)               # /api/admin/*

@@ -73,6 +73,9 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_ID: str = "itsm"
     KEYCLOAK_CLIENT_SECRET: str = ""    # KC admin에서 발급한 client secret
     KEYCLOAK_REDIRECT_URI: str = ""     # https://itsm.apistech.co.kr/api/auth/sso/callback
+    # ADR-044: admin_bridge JWT 검증용 KC 내부 URL (JWKS 조회)
+    # sso-internal 네트워크 경유 — 컨테이너 내부 호스트명
+    KEYCLOAK_INTERNAL_URL: str = ""     # http://keycloak:8080
 
     # ------------------------------------------------------------------
     # [선택] GW 결재 연동 (Change Management)

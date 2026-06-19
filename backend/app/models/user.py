@@ -44,3 +44,5 @@ class User(Base):
     hashed_password = Column(String, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    # ADR-044 축5: KC sub UUID — SSO Portal admin_bridge로 프로비저닝된 사용자 식별자
+    kc_user_id = Column(String(100), nullable=True, index=True)

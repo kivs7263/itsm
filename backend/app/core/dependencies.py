@@ -284,3 +284,119 @@ def require_roles(*roles: UserRole):
             )
         return current_user
     return _check
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin Portal Bridge JWT 검증 — ADR-044 (SA admin_bridge 패턴 이식)
+# ─────────────────────────────────────────────────────────────────────────────
+
+import time as _time
+import httpx as _httpx
+from fastapi.security import HTTPBearer as _HTTPBearer
+
+_bearer_scheme = _HTTPBearer()
+
+# KC azp/role 상수
+_ADMIN_PORTAL_AZP = "admin-portal"
+_ADMIN_PORTAL_ROLE = "admin-portal-bridge"
+
+# JWKS 메모리 캐시 (1시간 TTL) — {url: {"keys": ..., "ts": float}}
+_jwks_cache: dict = {}
+
+
+async def _fetch_jwks(internal_url: str) -> dict:
+    """KC JWKS 엔드포인트에서 공개키 조회. 1시간 TTL 메모리 캐시."""
+    cached = _jwks_cache.get(internal_url)
+    if cached and _time.monotonic() - cached["ts"] < 3600:
+        return cached["keys"]
+    async with _httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.get(
+            f"{internal_url.rstrip('/')}/realms/platform/protocol/openid-connect/certs"
+        )
+        r.raise_for_status()
+        jwks = r.json()
+    _jwks_cache[internal_url] = {"keys": jwks, "ts": _time.monotonic()}
+    return jwks
+
+
+async def verify_admin_portal_jwt(
+    credentials=Depends(_bearer_scheme),
+) -> dict:
+    """Admin Portal service account JWT를 검증하고 페이로드를 반환한다.
+
+    SA admin_bridge의 동일 패턴 (ADR-044):
+    - KC JWKS RS256 서명 검증 (KEYCLOAK_INTERNAL_URL 기반)
+    - azp == "admin-portal"
+    - resource_access["admin-portal"]["roles"]에 "admin-portal-bridge" 포함
+
+    Returns:
+        dict: 검증된 JWT 페이로드
+
+    Raises:
+        HTTP 503: KC URL 미설정
+        HTTP 401: 서명 검증 실패 또는 토큰 형식 오류
+        HTTP 403: azp 불일치 또는 role 미포함
+    """
+    from app.core.config import settings as _settings
+    from jose import jwt as _jose_jwt
+
+    token = credentials.credentials
+
+    if not _settings.KEYCLOAK_INTERNAL_URL or not _settings.KEYCLOAK_ISSUER:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "status": "error",
+                "code": "KC_NOT_CONFIGURED",
+                "message": "Keycloak 연동이 설정되지 않았습니다.",
+            },
+        )
+
+    try:
+        jwks = await _fetch_jwks(_settings.KEYCLOAK_INTERNAL_URL)
+        # verify_aud=False: admin-portal 서비스 토큰은 aud가 admin-portal 자체를 가리킴.
+        # issuer + azp 이중 검증으로 동등 보안 확보 (ADR-016, SA admin_bridge 동일).
+        payload = _jose_jwt.decode(
+            token,
+            jwks,
+            algorithms=["RS256"],
+            options={"verify_aud": False},
+            issuer=_settings.KEYCLOAK_ISSUER,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "status": "error",
+                "code": "INVALID_KC_TOKEN",
+                "message": "Keycloak 토큰 검증에 실패했습니다.",
+            },
+        )
+
+    # azp 검증
+    if payload.get("azp") != _ADMIN_PORTAL_AZP:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "status": "error",
+                "code": "FORBIDDEN_CLIENT",
+                "message": "admin-portal 클라이언트만 이 API를 호출할 수 있습니다.",
+            },
+        )
+
+    # role 검증: resource_access.admin-portal.roles
+    resource_access = payload.get("resource_access", {})
+    portal_roles = resource_access.get(_ADMIN_PORTAL_AZP, {}).get("roles", [])
+    if _ADMIN_PORTAL_ROLE not in portal_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "status": "error",
+                "code": "FORBIDDEN_ROLE",
+                "message": "admin-portal-bridge 역할이 필요합니다.",
+            },
+        )
+
+    return payload
