@@ -429,6 +429,20 @@ export interface ReplyTemplatesResponse {
 }
 
 // -----------------------------------------------------------------------
+// AI 답변 초안 타입
+// -----------------------------------------------------------------------
+export interface AiSuggestKbSource {
+  id: string;
+  title: string;
+}
+
+export interface AiSuggestReplyResponse {
+  draft: string | null;
+  kb_sources: AiSuggestKbSource[];
+  reason?: 'ai_disabled' | 'ai_error';
+}
+
+// -----------------------------------------------------------------------
 // P5-3 반복 장애 알림 타입
 // -----------------------------------------------------------------------
 export interface RecurringAlert {

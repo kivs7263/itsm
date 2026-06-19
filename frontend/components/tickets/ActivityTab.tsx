@@ -1,11 +1,11 @@
 'use client';
 
 import * as React from 'react';
-import { Play, Clock, Plus, Trash2, Send } from 'lucide-react';
+import { Play, Clock, Plus, Trash2, Send, Sparkles, Loader2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
-import type { TicketComment, EscalationOut } from '@/lib/types';
+import type { TicketComment, EscalationOut, AiSuggestKbSource, AiSuggestReplyResponse } from '@/lib/types';
 import { EscalationEventCard } from './EscalationEventCard';
 import { cn, formatRelativeTime, formatWorkHours } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -198,6 +198,11 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
   const [logBillable, setLogBillable] = React.useState(true);
   const [logMemo, setLogMemo] = React.useState('');
 
+  // AI 답변 초안
+  const [aiLoading, setAiLoading] = React.useState(false);
+  const [aiKbSources, setAiKbSources] = React.useState<AiSuggestKbSource[]>([]);
+  const [aiDisabled, setAiDisabled] = React.useState(false);
+
   // Timer modals
   const [showStopModal, setShowStopModal] = React.useState(false);
   const [showOtherTimerModal, setShowOtherTimerModal] = React.useState(false);
@@ -340,6 +345,51 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
+
+  // ── AI 답변 초안 ───────────────────────────────────────────────────────────
+
+  async function handleAiSuggest() {
+    if (aiLoading) return;
+    setAiLoading(true);
+    setAiKbSources([]);
+    try {
+      const res = await api.post<AiSuggestReplyResponse>(
+        `/${tenantSlug}/tickets/${ticketId}/ai-suggest-reply`,
+      );
+      const { draft, kb_sources, reason } = res.data;
+
+      if (reason === 'ai_disabled') {
+        // 정상 상태 — 에러 토스트 금지, 버튼만 비활성
+        setAiDisabled(true);
+        return;
+      }
+
+      if (reason === 'ai_error' || draft === null) {
+        toast.error('AI 답변 초안을 생성하지 못했습니다. 잠시 후 다시 시도해주세요.');
+        return;
+      }
+
+      // 기존 내용이 있으면 확인 후 교체 또는 append, 비어있으면 바로 채움
+      if (commentBody.trim()) {
+        const confirmed = window.confirm(
+          '입력란에 내용이 있습니다. AI 초안으로 교체하시겠습니까?\n확인: 교체 / 취소: 현재 내용 뒤에 추가',
+        );
+        if (confirmed) {
+          setCommentBody(draft);
+        } else {
+          setCommentBody((prev) => prev + '\n\n' + draft);
+        }
+      } else {
+        setCommentBody(draft);
+      }
+
+      setAiKbSources(kb_sources ?? []);
+    } catch (err) {
+      toast.error('AI 답변 초안 요청에 실패했습니다. 네트워크를 확인해주세요.');
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   const isLoading = commentsLoading || logsLoading;
 
@@ -538,6 +588,21 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
                 }
               }}
             />
+            {/* AI KB 근거 표시 */}
+            {aiKbSources.length > 0 && (
+              <div className="flex items-start gap-1.5 text-xs text-text-secondary">
+                <Sparkles size={11} className="mt-0.5 shrink-0 text-[#F5C000]" />
+                <span>
+                  근거:{' '}
+                  {aiKbSources.map((s, i) => (
+                    <React.Fragment key={s.id}>
+                      {i > 0 && ', '}
+                      <span className="font-medium text-text-primary">{s.title}</span>
+                    </React.Fragment>
+                  ))}
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -558,6 +623,29 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
                 </button>
               </div>
               <div className="flex items-center gap-2">
+                {/* AI 답변 초안 버튼 — ai_disabled 시 미표시 */}
+                {!aiDisabled && (
+                  <button
+                    type="button"
+                    onClick={handleAiSuggest}
+                    disabled={aiLoading}
+                    title="KB 기반 AI 답변 초안 생성"
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium',
+                      'border border-[#F5C000]/50 bg-surface text-[#F5C000]',
+                      'hover:bg-amber-950/20 hover:border-[#F5C000] transition-colors',
+                      aiLoading && 'opacity-60 cursor-not-allowed',
+                    )}
+                    aria-label="AI 답변 초안 생성"
+                  >
+                    {aiLoading ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Sparkles size={12} />
+                    )}
+                    AI 답변 초안
+                  </button>
+                )}
                 <ReplyTemplatePicker
                   tenantSlug={tenantSlug}
                   onSelect={(body) =>
