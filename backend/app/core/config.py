@@ -96,12 +96,13 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     # [선택] SA 브릿지 — ITSM → SA KPI push
     # SA_BACKEND_URL 미설정 시 브릿지 비활성 (graceful skip)
-    # SA_TENANT_ID : SA 워크스페이스 테넌트 UUID.
-    #   ITSM 테넌트와 SA 테넌트가 다를 수 있으므로 별도 명시.
-    #   미설정 시 ITSM 자신의 tenant_id 를 그대로 사용 (단일 테넌트 환경).
+    # SA_TENANT_ID : [DEPRECATED] 전역 SA 테넌트 UUID.
+    #   per-tenant 매핑(tenants.sa_tenant_id, 마이그레이션 045)으로 대체됨.
+    #   요청 경로에서는 더 이상 사용하지 않으며, 마이그레이션 045 의 기존 테넌트
+    #   backfill 소스로만 참조된다 (신규 배포는 tenants.sa_tenant_id 를 직접 설정).
     # ------------------------------------------------------------------
     SA_BACKEND_URL: str = ""           # http://sa_backend:8000
-    SA_TENANT_ID:   str = ""           # SA 워크스페이스 테넌트 UUID (멀티테넌트 시 필수)
+    SA_TENANT_ID:   str = ""           # [DEPRECATED] 마이그레이션 045 backfill 전용
     BRIDGE_INTERVAL_MINUTES: int = 30  # KPI push 주기 (분) — stale 임계값 30분
 
     # ------------------------------------------------------------------

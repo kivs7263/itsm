@@ -16,11 +16,13 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, Depends
 from typing import Annotated
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.redis import get_redis
-from app.models import User
+from app.models import Tenant, User
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,7 @@ _CACHE_TTL = 300  # 5분
 async def list_businesses(
     tenant_slug: str,
     current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[dict[str, Any]]:
     """SA 사업카드 목록 (ITSM 헤더 컨텍스트 드롭다운용).
 
@@ -43,8 +46,13 @@ async def list_businesses(
         return []
 
     itsm_tenant_id = str(current_user.tenant_id)
-    # SA_TENANT_ID 설정이 있으면 SA 테넌트 기준으로 조회 (ITSM ≠ SA 테넌트 환경 대응)
-    sa_tenant_id = settings.SA_TENANT_ID or itsm_tenant_id
+    # per-tenant SA 매핑(tenants.sa_tenant_id) 우선. 미설정 시 자기 tenant_id 사용.
+    # 전역 SA_TENANT_ID env 는 제거 — 멀티테넌트에서 모든 테넌트가 동일 SA 테넌트로
+    # 잘못 라우팅되던 크로스테넌트 결함 차단 (마이그레이션 045 에서 기존 테넌트는 backfill 됨).
+    tenant = await db.get(Tenant, current_user.tenant_id)
+    sa_tenant_id = (
+        str(tenant.sa_tenant_id) if tenant and tenant.sa_tenant_id else itsm_tenant_id
+    )
     cache_key = f"itsm:businesses_cache:{itsm_tenant_id}"
 
     redis = get_redis()
