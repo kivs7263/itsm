@@ -357,6 +357,30 @@ export interface CSATSummary {
 }
 
 // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 통합 인박스 (notification-service proxy) 타입
+// -----------------------------------------------------------------------
+
+/**
+ * GET /api/notifications 응답 항목 — notification-service NotificationOut 스키마
+ * 필드: id, event_namespace, category, title, body, action_url, is_read, created_at
+ */
+export interface InboxNotification {
+  id: string;
+  event_namespace: string;
+  category: string;
+  title: string;
+  body: string | null;
+  action_url: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface InboxUnreadCountResponse {
+  count: number;
+}
+
+// -----------------------------------------------------------------------
 // 알림 로그 타입
 // -----------------------------------------------------------------------
 export type NotifChannel = 'kakao' | 'sms' | 'slack' | 'teams';

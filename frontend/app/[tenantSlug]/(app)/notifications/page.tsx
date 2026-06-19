@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { Bell } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Bell, Layers } from 'lucide-react';
 import { api } from '@/lib/api';
 import type {
   NotifLog,
@@ -11,6 +11,7 @@ import type {
   NotifChannel,
   NotifStatus,
   ChannelStatus,
+  InboxNotification,
 } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/utils';
@@ -160,6 +161,141 @@ function EmptyState() {
 }
 
 // -----------------------------------------------------------------------
+// event_namespace → 출처 서비스 라벨 매핑
+// -----------------------------------------------------------------------
+const NAMESPACE_SERVICE_LABEL: Record<string, string> = {
+  sa_workspace: 'SA',
+  groupware: 'GW',
+  itsm: 'ITSM',
+  calendar: 'Calendar',
+};
+
+function getSourceLabel(eventNamespace: string): string {
+  // event_namespace = "sa_workspace.ticket_created" 형태 또는 단순 "sa_workspace"
+  const prefix = eventNamespace.split('.')[0];
+  return NAMESPACE_SERVICE_LABEL[prefix] ?? '플랫폼';
+}
+
+// -----------------------------------------------------------------------
+// 통합 인박스 스켈레톤
+// -----------------------------------------------------------------------
+function InboxSkeletonRows() {
+  return (
+    <>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-start gap-3 px-4 py-3 border-b border-border-subtle"
+        >
+          <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-3 w-full" />
+          </div>
+          <Skeleton className="h-3 w-16 shrink-0" />
+        </div>
+      ))}
+    </>
+  );
+}
+
+// -----------------------------------------------------------------------
+// 통합 인박스 빈 상태
+// -----------------------------------------------------------------------
+function InboxEmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-10 gap-3">
+      <div
+        className="flex h-10 w-10 items-center justify-center rounded-xl"
+        style={{ background: 'rgba(245, 192, 0, 0.10)' }}
+      >
+        <Layers size={20} strokeWidth={1.5} style={{ color: '#F5C000' }} />
+      </div>
+      <p className="text-sm text-text-secondary">통합 플랫폼 알림이 없습니다.</p>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
+// 통합 인박스 항목
+// -----------------------------------------------------------------------
+function InboxItem({
+  item,
+  onRead,
+}: {
+  item: InboxNotification;
+  onRead: (id: string) => void;
+}) {
+  const sourceLabel = getSourceLabel(item.event_namespace);
+
+  function handleClick() {
+    if (!item.is_read) {
+      onRead(item.id);
+    }
+    if (item.action_url) {
+      window.location.href = item.action_url;
+    }
+  }
+
+  return (
+    <div
+      role={item.action_url || !item.is_read ? 'button' : undefined}
+      tabIndex={item.action_url || !item.is_read ? 0 : undefined}
+      onClick={item.action_url || !item.is_read ? handleClick : undefined}
+      onKeyDown={
+        item.action_url || !item.is_read
+          ? (e) => { if (e.key === 'Enter' || e.key === ' ') handleClick(); }
+          : undefined
+      }
+      className={cn(
+        'flex items-start gap-3 px-4 py-3 border-b border-border-subtle transition-colors duration-micro',
+        (item.action_url || !item.is_read) && 'cursor-pointer hover:bg-surface-hover',
+        !item.is_read && 'bg-[rgba(245,192,0,0.04)]',
+      )}
+    >
+      {/* 미읽음 점 */}
+      <div className="mt-1.5 shrink-0">
+        {!item.is_read ? (
+          <span
+            className="inline-block h-2 w-2 rounded-full"
+            style={{ background: '#F5C000' }}
+          />
+        ) : (
+          <span className="inline-block h-2 w-2" />
+        )}
+      </div>
+
+      {/* 내용 */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          {/* 출처 라벨 */}
+          <span
+            className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
+            style={{
+              background: 'rgba(245,192,0,0.15)',
+              color: '#B45309',
+            }}
+          >
+            {sourceLabel}
+          </span>
+          <span className="text-xs font-medium text-text-primary truncate">
+            {typeof item.title === 'string' ? item.title : ''}
+          </span>
+        </div>
+        {typeof item.body === 'string' && item.body && (
+          <p className="text-xs text-text-secondary line-clamp-2">{item.body}</p>
+        )}
+      </div>
+
+      {/* 시각 */}
+      <span className="shrink-0 text-[10px] text-text-secondary whitespace-nowrap mt-0.5">
+        {formatRelativeTime(item.created_at)}
+      </span>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
 // 페이지네이션
 // -----------------------------------------------------------------------
 function Pagination({
@@ -208,6 +344,7 @@ export default function NotificationsPage() {
   const params = useParams();
   const tenantSlug = params?.tenantSlug as string;
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(1);
@@ -226,7 +363,7 @@ export default function NotificationsPage() {
       enabled: !!tenantSlug && canViewChannelStatus,
     });
 
-  // 알림 로그 쿼리
+  // 알림 로그 쿼리 (로컬 ITSM)
   const { data, isLoading } = useQuery<NotifLogsResponse>({
     queryKey: ['notification-logs', tenantSlug, channelFilter, page],
     queryFn: () =>
@@ -242,8 +379,34 @@ export default function NotificationsPage() {
     enabled: !!tenantSlug,
   });
 
+  // 통합 인박스 쿼리 (notification-service proxy — graceful fallback)
+  const { data: inboxItems, isLoading: inboxLoading } = useQuery<InboxNotification[]>({
+    queryKey: ['inbox-notifications'],
+    queryFn: async () => {
+      try {
+        const r = await api.get<InboxNotification[]>('/notifications', {
+          params: { limit: 50, offset: 0 },
+        });
+        return Array.isArray(r.data) ? r.data : [];
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 30_000,
+  });
+
+  // 통합 인박스 읽음 mutation
+  const markReadMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/notifications/${id}/read`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-unread-count'] });
+    },
+  });
+
   const items: NotifLog[] = data?.items ?? [];
   const total = data?.total ?? 0;
+  const inbox: InboxNotification[] = inboxItems ?? [];
 
   function handleChannelFilterChange(value: string) {
     setChannelFilter(value === 'all' ? '' : value);
@@ -282,6 +445,38 @@ export default function NotificationsPage() {
         </div>
       )}
 
+      {/* 통합 인박스 섹션 (notification-service proxy) */}
+      <div className="px-6 py-4 border-b border-border-default bg-surface shrink-0">
+        <div className="flex items-center gap-2 mb-3">
+          <Layers size={14} style={{ color: '#F5C000' }} />
+          <h2 className="text-sm font-medium text-text-secondary">플랫폼 통합 알림</h2>
+          {inbox.filter((n) => !n.is_read).length > 0 && (
+            <span
+              className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white"
+              style={{ background: '#B45309' }}
+            >
+              {inbox.filter((n) => !n.is_read).length}
+            </span>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border-subtle overflow-hidden">
+          {inboxLoading ? (
+            <InboxSkeletonRows />
+          ) : inbox.length === 0 ? (
+            <InboxEmptyState />
+          ) : (
+            inbox.map((item) => (
+              <InboxItem
+                key={item.id}
+                item={item}
+                onRead={(id) => markReadMutation.mutate(id)}
+              />
+            ))
+          )}
+        </div>
+      </div>
+
       {/* 필터 바 */}
       <div className="flex items-center gap-3 px-6 py-3 border-b border-border-subtle bg-surface shrink-0">
         <div className="w-36">
@@ -301,6 +496,12 @@ export default function NotificationsPage() {
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      {/* ITSM 발송 로그 제목 */}
+      <div className="flex items-center gap-2 px-6 pt-4 pb-2 bg-surface shrink-0">
+        <Bell size={14} className="text-text-secondary" />
+        <h2 className="text-sm font-medium text-text-secondary">ITSM 알림 발송 이력</h2>
       </div>
 
       {/* 테이블 */}

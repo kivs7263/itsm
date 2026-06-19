@@ -46,6 +46,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import type { InboxUnreadCountResponse } from '@/lib/types';
 
 const MOBILE_NAV = [
   { label: '티켓',       href: '/tickets',          icon: LifeBuoy  },
@@ -89,9 +90,12 @@ function BottomNav() {
 
 // -----------------------------------------------------------------------
 // 알림 벨 헤더 (데스크탑용)
+// — 로컬 로그 total + 통합 인박스 unread-count 합산 표시
+// — 통합 호출 실패 시 로컬만 사용 (graceful fallback)
 // -----------------------------------------------------------------------
 function NotificationBell({ tenantSlug }: { tenantSlug: string }) {
-  const { data } = useQuery<{ total: number }>({
+  // 로컬 ITSM 알림 로그 (총 건수)
+  const { data: localData } = useQuery<{ total: number }>({
     queryKey: ['notification-count', tenantSlug],
     queryFn: () =>
       api.get(`/${tenantSlug}/notifications`, { params: { page_size: 1 } }).then((r) => r.data),
@@ -99,7 +103,24 @@ function NotificationBell({ tenantSlug }: { tenantSlug: string }) {
     refetchInterval: 60_000,
   });
 
-  const total = data?.total ?? 0;
+  // 통합 인박스 미읽음 수 (graceful: 실패 시 0)
+  const { data: inboxData } = useQuery<InboxUnreadCountResponse>({
+    queryKey: ['inbox-unread-count'],
+    queryFn: async () => {
+      try {
+        const r = await api.get<InboxUnreadCountResponse>('/notifications/unread-count');
+        return r.data;
+      } catch {
+        return { count: 0 };
+      }
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+  const localTotal = localData?.total ?? 0;
+  const inboxUnread = inboxData?.count ?? 0;
+  const total = localTotal + inboxUnread;
 
   return (
     <Link

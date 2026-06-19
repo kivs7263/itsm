@@ -10,14 +10,20 @@ tags   : ["notifications"]
   GET  /{tenant_slug}/notifications/channel-status — 설정된 채널 목록 반환 (admin/team_lead)
   GET  /{tenant_slug}/notifications/config         — 채널 설정 조회 (admin)
   PUT  /{tenant_slug}/notifications/config         — 채널 설정 저장/업데이트 (admin)
+
+inbox_router (prefix: /notifications — ITSM 자체 인박스 proxy):
+  GET   /notifications              — notification-service 통합 인박스 목록
+  GET   /notifications/unread-count — 미읽음 수
+  PATCH /notifications/{id}/read    — 단건 읽음 처리
 """
 from __future__ import annotations
 
 import logging
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any, Optional
 
+import httpx
 from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel
 from sqlalchemy import and_, func, select
@@ -36,6 +42,45 @@ router = APIRouter(
     prefix="/{tenant_slug}/notifications",
     tags=["notifications"],
 )
+
+# ─── ITSM 통합 인박스 proxy 라우터 (/api/notifications) ────────────────────
+inbox_router = APIRouter(
+    prefix="/notifications",
+    tags=["notifications-inbox-proxy"],
+)
+
+_INBOX_TIMEOUT = 5.0  # notification-service 호출 timeout (초)
+
+
+async def _notif_base_url() -> str | None:
+    """notification-service 기본 URL. 미설정 시 None."""
+    url = settings.NOTIFICATION_SERVICE_URL
+    return url.rstrip("/") if url else None
+
+
+async def _notif_secret() -> str | None:
+    """notification-service 내부 시크릿. 미설정 시 None."""
+    return settings.NOTIFICATION_SERVICE_INTERNAL_SECRET
+
+
+async def _resolve_kc_ids(current_user: User, db: AsyncSession) -> tuple[str | None, str | None]:
+    """현재 유저의 (kc_user_id, sso_org_id) 반환. 없으면 (None, None)."""
+    try:
+        from sqlalchemy import select as _select
+        from app.models.tenant import Tenant as _Tenant
+
+        kc_user_id = current_user.kc_user_id
+        if not kc_user_id:
+            return None, None
+
+        tenant = await db.get(_Tenant, current_user.tenant_id)
+        if not tenant or not tenant.sso_org_id:
+            return None, None
+
+        return str(kc_user_id), str(tenant.sso_org_id)
+    except Exception as exc:
+        logger.warning("kc_user_id/sso_org_id 조회 실패 (무시): %s", exc)
+        return None, None
 
 
 # ------------------------------------------------------------------
@@ -315,3 +360,150 @@ async def upsert_notification_config(
         kakao_template_escalated=cfg.kakao_template_escalated,
         kakao_template_resolved=cfg.kakao_template_resolved,
     )
+
+
+# ─── 통합 인박스 proxy 엔드포인트 (/api/notifications) ─────────────────────
+# ITSM 프론트가 KC JWT 없이 ITSM 쿠키 JWT로 통합 알림을 읽기 위한 proxy.
+# notification-service 내부 엔드포인트(X-Internal-Secret)를 호출한다.
+# 미설정/kc_user_id 없음/네트워크 오류 → 빈 응답(500 금지).
+
+
+@inbox_router.get(
+    "/unread-count",
+    summary="통합 인박스 미읽음 수 (notification-service proxy)",
+)
+async def inbox_unread_count(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """현재 ITSM 유저의 kc_user_id로 notification-service 내부 API를 proxy 호출한다.
+
+    graceful fallback: URL/시크릿 미설정 또는 kc_user_id 없으면 {"count": 0}.
+    httpx 타임아웃 5초, 실패 시 {"count": 0} + logger.warning.
+    """
+    base_url = await _notif_base_url()
+    secret = await _notif_secret()
+    if not base_url or not secret:
+        return {"count": 0}
+
+    kc_user_id, sso_org_id = await _resolve_kc_ids(current_user, db)
+    if not kc_user_id:
+        return {"count": 0}
+
+    try:
+        params: dict[str, Any] = {"user_id": kc_user_id}
+        if sso_org_id:
+            params["tenant_id"] = sso_org_id
+
+        async with httpx.AsyncClient(timeout=_INBOX_TIMEOUT) as client:
+            resp = await client.get(
+                f"{base_url}/internal/notifications/unread-count",
+                params=params,
+                headers={"X-Internal-Secret": secret},
+            )
+        if resp.status_code == 200:
+            return resp.json()
+        logger.warning(
+            "notification-service unread-count 호출 실패: status=%s body=%s",
+            resp.status_code,
+            resp.text[:200],
+        )
+    except Exception as exc:
+        logger.warning("notification-service unread-count 예외 (무시): %s", exc)
+
+    return {"count": 0}
+
+
+@inbox_router.get(
+    "",
+    summary="통합 인박스 목록 (notification-service proxy)",
+)
+async def inbox_list(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    unread_only: bool = Query(False),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[Any]:
+    """현재 ITSM 유저의 kc_user_id로 notification-service 내부 API를 proxy 호출한다.
+
+    graceful fallback: URL/시크릿 미설정 또는 kc_user_id 없으면 [].
+    httpx 타임아웃 5초, 실패 시 [] + logger.warning.
+    """
+    base_url = await _notif_base_url()
+    secret = await _notif_secret()
+    if not base_url or not secret:
+        return []
+
+    kc_user_id, sso_org_id = await _resolve_kc_ids(current_user, db)
+    if not kc_user_id:
+        return []
+
+    try:
+        params: dict[str, Any] = {
+            "user_id": kc_user_id,
+            "limit": limit,
+            "offset": offset,
+            "unread_only": str(unread_only).lower(),
+        }
+        if sso_org_id:
+            params["tenant_id"] = sso_org_id
+
+        async with httpx.AsyncClient(timeout=_INBOX_TIMEOUT) as client:
+            resp = await client.get(
+                f"{base_url}/internal/notifications",
+                params=params,
+                headers={"X-Internal-Secret": secret},
+            )
+        if resp.status_code == 200:
+            return resp.json()
+        logger.warning(
+            "notification-service list 호출 실패: status=%s body=%s",
+            resp.status_code,
+            resp.text[:200],
+        )
+    except Exception as exc:
+        logger.warning("notification-service list 예외 (무시): %s", exc)
+
+    return []
+
+
+@inbox_router.patch(
+    "/{notification_id}/read",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="통합 인박스 단건 읽음 처리 (notification-service proxy)",
+)
+async def inbox_mark_read(
+    notification_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """현재 ITSM 유저의 kc_user_id로 notification-service 내부 PATCH를 proxy 호출한다.
+
+    graceful fallback: URL/시크릿 미설정 또는 kc_user_id 없으면 204 반환(no-op).
+    httpx 타임아웃 5초, 실패 시 204 + logger.warning (500 금지).
+    """
+    base_url = await _notif_base_url()
+    secret = await _notif_secret()
+    if not base_url or not secret:
+        return
+
+    kc_user_id, sso_org_id = await _resolve_kc_ids(current_user, db)
+    if not kc_user_id:
+        return
+
+    try:
+        async with httpx.AsyncClient(timeout=_INBOX_TIMEOUT) as client:
+            resp = await client.patch(
+                f"{base_url}/internal/notifications/{notification_id}/read",
+                params={"user_id": kc_user_id},
+                headers={"X-Internal-Secret": secret},
+            )
+        if resp.status_code not in (204, 200, 404):
+            logger.warning(
+                "notification-service mark-read 호출 실패: status=%s body=%s",
+                resp.status_code,
+                resp.text[:200],
+            )
+    except Exception as exc:
+        logger.warning("notification-service mark-read 예외 (무시): %s", exc)
