@@ -10,11 +10,12 @@
  * - Admin UI hide ≠ URL 보호 — role 체크는 각 page.tsx에서 별도 수행
  */
 
-import React, { Suspense, useEffect } from 'react';
+import React, { Suspense, useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { BusinessContextBar } from '@/components/layout/BusinessContextBar';
+import { CommandPalette } from '@/components/layout/CommandPalette';
 import { useSlug } from '@/lib/slug';
 import { GlobalTimerBar } from '@/components/tickets/GlobalTimerBar';
 import { OnboardingWizard, useOnboarding } from '@/components/onboarding/OnboardingWizard';
@@ -131,6 +132,20 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const isAdmin = user?.role === 'admin';
   const { needsOnboarding } = useOnboarding(tenantSlug, isAdmin);
   const [wizardDismissed, setWizardDismissed] = React.useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // ⌘K / Ctrl+K 전역 단축키 — 모든 hook 선언 이후, conditional return 이전
+  const handleGlobalKeyDown = useCallback((e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      setPaletteOpen((prev) => !prev);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [handleGlobalKeyDown]);
 
   // 미인증 리다이렉트
   useEffect(() => {
@@ -204,6 +219,15 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         <OnboardingWizard
           tenantSlug={tenantSlug}
           onClose={() => setWizardDismissed(true)}
+        />
+      )}
+
+      {/* ⌘K 커맨드 팔레트 — 전역 (z-50, 다른 fixed 요소 위) */}
+      {tenantSlug && (
+        <CommandPalette
+          open={paletteOpen}
+          onOpenChange={setPaletteOpen}
+          tenantSlug={tenantSlug}
         />
       )}
     </div>
