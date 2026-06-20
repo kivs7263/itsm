@@ -132,7 +132,7 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
       key: 'gw',
       label: 'Groupware',
       description: '결재 · 근태 · 자원 · 포털',
-      accentColor: '#C9842A',
+      accentColor: '#E3A53C',
       icon: <Building2 size={17} />,
       current: false,
       onSelect: GW_URL ? handleSwitchToGW : undefined,
