@@ -376,7 +376,7 @@ function Header() {
     <header className="bg-white border-b border-gray-100 shadow-sm">
       <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
         <span className="text-sm font-semibold text-gray-900">ITSM 고객 포털</span>
-        <span className="text-xs text-gray-400">Alvio by hivework</span>
+        <span className="text-xs text-gray-400">Alveo by apistech</span>
       </div>
     </header>
   );

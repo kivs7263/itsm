@@ -2,7 +2,7 @@
  * ITSM — Tailwind 설정
  *
  * 색상 시스템: globals.css CSS 변수 기반 (primary source).
- * 브랜드 컬러: #129B8E (Hivework Honey — GW와 동일 팔레트 공유)
+ * 브랜드 컬러: #129B8E (Apistech Honey — GW와 동일 팔레트 공유)
  */
 import type { Config } from 'tailwindcss';
 

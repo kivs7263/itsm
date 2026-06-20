@@ -48,7 +48,7 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
   const { user } = useAuth();
 
   const orgName = user?.organization_name ?? '내 조직';
-  // ITSM User 타입에 logo_url 미포함 — 로고 없이 AlvioHexLogo 표시
+  // ITSM User 타입에 logo_url 미포함 — 로고 없이 AlveoHexLogo 표시
   const logoUrl: string | null = null;
 
   // /api/me/products — 구독 중인 제품 slug 집합
@@ -172,7 +172,7 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
       orgName={orgName}
       logoUrl={logoUrl}
       apps={apps}
-      subtitle="Alvio ITSM"
+      subtitle="Alveo ITSM"
       orgIcon={<LifeBuoy size={14} color="#1A1A1A" />}
     />
   );

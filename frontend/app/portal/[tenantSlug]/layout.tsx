@@ -70,7 +70,7 @@ export default function PortalLayout({ children, params }: PortalLayoutProps) {
       {/* 포털 푸터 */}
       <footer className="border-t border-border-default py-4 text-center">
         <p className="text-xs text-text-secondary">
-          Powered by Alvio ITSM
+          Powered by Alveo ITSM
         </p>
       </footer>
     </div>

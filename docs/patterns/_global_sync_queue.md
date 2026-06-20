@@ -16,7 +16,7 @@ _생성: 자동 (sync_patterns_bidirectional.sh). 검토 후 docs/patterns/[doma
 | 감사 로그 격리 | flush만, commit은 호출자. 세션 종료 후 별도 AsyncSessionLocal | fastapi | 2 | 보안 |
 | datetime timezone=True 누락 | 신규 모델 datetime 컬럼 전체에 `DateTime(timezone=True)` 명시 | pg | 4 | 검증#=4 |
 | Alembic enum 재사용 raw DDL | `create_type=False` 조합 금지 → `op.execute()` raw DDL | pg | 2 | 검증#=2 |
-| 상위 권한 위임 조회 | `view_user_id: UUID | fastapi | 2 | 검증#=2 |
+| 상위 권한 위임 조회 | `view_user_id: UUID \ | fastapi | 2 | 검증#=2 |
 | bcrypt + passlib 버전 핀 | bcrypt 4.x + passlib 비호환 ("password cannot be longer than 72 | python | 1 | 보안 |
 | RLS fail-CLOSE NULLIF 단독 | RLS USING 절을 `tenant_id = NULLIF(current_setting('app.tenant | fastapi+pg | 1 | 보안 |
 | asyncpg CAST(:param AS type) — :param::t | SQLAlchemy text()에서 named param 바로 뒤 `::type`(`:p::jsonb`, ` | python | 3 | 검증#=3 |

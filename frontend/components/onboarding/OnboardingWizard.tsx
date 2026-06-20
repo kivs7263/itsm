@@ -139,7 +139,7 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
         <Zap size={32} style={{ color: '#129B8E' }} />
       </div>
       <div>
-        <h2 className="text-2xl font-bold text-text-primary">Alvio ITSM에 오신 것을 환영합니다</h2>
+        <h2 className="text-2xl font-bold text-text-primary">Alveo ITSM에 오신 것을 환영합니다</h2>
         <p className="mt-2 text-sm text-text-secondary leading-relaxed">
           5단계 설정을 완료하면 IT 지원 업무를 바로 시작할 수 있습니다.
           <br />
@@ -193,7 +193,7 @@ function EmailStep({
     smtp_user: '',
     smtp_password: '',
     smtp_from_email: '',
-    smtp_from_name: 'Alvio ITSM',
+    smtp_from_name: 'Alveo ITSM',
     smtp_use_tls: true,
   });
 
@@ -680,7 +680,7 @@ export function OnboardingWizard({ tenantSlug, onClose }: OnboardingWizardProps)
                 <rect x="18.5" y="14" width="2" height="3.5" rx="1" />
               </svg>
             </div>
-            <span className="text-sm font-semibold text-text-primary">Alvio ITSM 시작하기</span>
+            <span className="text-sm font-semibold text-text-primary">Alveo ITSM 시작하기</span>
           </div>
           <button
             type="button"

@@ -154,7 +154,7 @@ export default function SignupPage() {
               <input
                 id="company_name"
                 type="text"
-                placeholder="예) 하이브워크"
+                placeholder="예) apistech"
                 className={cn(
                   'h-10 w-full rounded-md border px-3 text-sm bg-surface text-text-primary placeholder:text-text-disabled',
                   'focus:outline-none focus:ring-2 focus:ring-accent-500 transition-colors duration-fast',

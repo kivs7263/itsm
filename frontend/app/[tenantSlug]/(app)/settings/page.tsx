@@ -2156,7 +2156,7 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
                 </Button>
               )}
               {plan === 'professional' && (
-                <Button size="sm" variant="outline" onClick={() => toast.info('영업팀에 문의하세요: sales@hivework.io')}>
+                <Button size="sm" variant="outline" onClick={() => toast.info('영업팀에 문의하세요: sales@apistech.io')}>
                   Enterprise 문의
                 </Button>
               )}
