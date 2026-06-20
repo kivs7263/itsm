@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -36,6 +36,7 @@ function getInitialCollapsed(): boolean {
 type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'recurringIssues' | 'reports' | 'settings';
 type NavItem = { key: NavKey; href: string; icon: React.ElementType };
 
+// SHELL-7 항목 ③: 아이콘 17px 통일
 const ENGINEER_ITEMS: NavItem[] = [
   { key: 'dashboard',       href: '/home',             icon: Home      },
   { key: 'tickets',         href: '/tickets',          icon: LifeBuoy  },
@@ -81,29 +82,70 @@ export function Sidebar() {
   const { user, logout } = useAuth();
   const { locale, setLocale, t } = useLocale();
 
+  // SHELL-7 항목 ⑤: collapsed hover float 패널 추가 (GW/SA 패턴 통일)
+  const [hoverExpanded, setHoverExpanded] = useState(false);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMouseEnter = useCallback(() => {
+    if (!collapsed) return;
+    hoverTimerRef.current = setTimeout(() => setHoverExpanded(true), 150);
+  }, [collapsed]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    setHoverExpanded(false);
+  }, []);
+
   const navItems = useMemo(() => getNavItems(user?.role as UserRole), [user?.role]);
 
-  const toggleCollapsed = () => {
+  // SHELL-7: useCallback으로 변경 ([ 키 단축키 의존성용)
+  const toggleCollapsed = useCallback(() => {
     setCollapsed((prev) => {
       const next = !prev;
       if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEY, String(next));
       return next;
     });
-  };
+  }, []);
+
+  // SHELL-7 항목 ⑤: [ 키 단축키 추가 (GW/SA 패턴 통일)
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key === '[') {
+        e.preventDefault();
+        toggleCollapsed();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleCollapsed]);
 
   const toggleLocale = () => setLocale(locale === 'ko' ? 'en' : 'ko');
+
+  const effectivelyExpanded = !collapsed || hoverExpanded;
+  const isFloating = collapsed && hoverExpanded;
 
   return (
     <aside
       className={cn(
         'flex h-screen flex-col',
-        'border-r border-white/10',
         'transition-[width] duration-200 ease-out',
-        'bg-[#1A1A1A]',
-        collapsed ? 'w-14' : 'w-56',
+        // SHELL-7 항목 ⑤: 절대 위치(floating) 처리
+        isFloating && 'absolute z-30 shadow-lg',
       )}
+      // SHELL-7 항목 ①: 248px 고정 / collapsed 48px
+      // 항목 ⑥: 배경 #17181C + border-right #24262B
+      style={{
+        width: effectivelyExpanded ? 248 : 48,
+        minWidth: isFloating ? undefined : (effectivelyExpanded ? 248 : 48),
+        background: 'var(--sidebar-bg)',
+        borderRight: '1px solid var(--sidebar-border)',
+      }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
-      <WorkspaceSwitcher collapsed={collapsed} />
+      <WorkspaceSwitcher collapsed={!effectivelyExpanded} />
 
       <nav className="flex-1 overflow-y-auto py-2 px-1.5" aria-label={t.nav.dashboard}>
         {navItems.map(({ key, href, icon: Icon }) => {
@@ -116,26 +158,47 @@ export function Sidebar() {
               key={href}
               href={fullHref}
               className={cn(
-                'flex items-center gap-3 rounded-md px-2.5 py-2 text-sm',
-                'transition-colors duration-fast',
+                'flex items-center gap-3 rounded-md px-2.5 py-2',
+                'transition-colors duration-[150ms]',
                 'focus-visible:outline-none focus-visible:shadow-brand',
+                // SHELL-7 항목 ②③: 활성 표현 토큰 + 라벨 13.5px
                 isActive
-                  ? 'text-white font-medium'
-                  : 'text-white/60 hover:text-white hover:bg-white/[0.06]',
+                  ? 'font-medium border-l-2'
+                  : 'border-l-2 border-transparent hover:bg-white/[0.06]',
               )}
-              style={isActive ? { background: 'var(--sidebar-active-bg)' } : undefined}
-              title={collapsed ? label : undefined}
+              style={
+                isActive
+                  ? {
+                      background: 'var(--sidebar-active-bg)',
+                      borderLeftColor: 'var(--color-brand)',
+                      color: 'var(--sidebar-nav-active-text, #ffffff)',
+                      fontSize: '13.5px',
+                    }
+                  : {
+                      color: 'var(--sidebar-nav-text, rgba(255,255,255,0.6))',
+                      fontSize: '13.5px',
+                    }
+              }
+              title={!effectivelyExpanded ? label : undefined}
             >
-              <Icon size={16} className={cn('shrink-0', isActive ? 'text-[#129B8E]' : 'text-white/40')} />
-              {!collapsed && <span className="truncate">{label}</span>}
+              {/* SHELL-7 항목 ③: 아이콘 17px */}
+              <Icon
+                size={17}
+                className={cn('shrink-0', isActive ? '' : 'text-white/40')}
+                style={isActive ? { color: 'var(--color-brand)' } : undefined}
+              />
+              {effectivelyExpanded && <span className="truncate">{label}</span>}
             </Link>
           );
         })}
       </nav>
 
-      {/* 하단: 언어 토글 + 로그아웃 + 사용자 */}
-      <div className="border-t border-white/10 p-2 flex flex-col gap-1">
-        {/* 언어 선택 */}
+      {/* 하단: 사용자 카드 1행 (SHELL-7 항목 ④) + 언어토글 보존 */}
+      <div
+        style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
+        className="p-2 flex flex-col gap-1"
+      >
+        {/* 언어 선택 — ITSM 전용, 보존 (SHELL-7: MUST-CARRY) */}
         <button
           type="button"
           onClick={toggleLocale}
@@ -143,57 +206,59 @@ export function Sidebar() {
             'flex items-center gap-3 rounded-md px-2.5 py-2 text-sm w-full',
             'text-white/60 hover:text-white hover:bg-white/[0.06]',
             'transition-colors duration-fast focus-visible:outline-none focus-visible:shadow-brand',
-            collapsed && 'justify-center',
+            !effectivelyExpanded && 'justify-center',
           )}
-          title={collapsed ? t.sidebar.language : undefined}
+          title={!effectivelyExpanded ? t.sidebar.language : undefined}
         >
-          <Languages size={16} className="shrink-0 text-white/40" />
-          {!collapsed && (
+          <Languages size={17} className="shrink-0 text-white/40" />
+          {effectivelyExpanded && (
             <span className="flex items-center gap-2 flex-1">
-              <span className="flex-1">{t.sidebar.language}</span>
-              <span className="text-[11px] font-medium text-[#129B8E]">
+              <span className="flex-1" style={{ fontSize: '13.5px' }}>{t.sidebar.language}</span>
+              <span className="text-[11px] font-medium" style={{ color: 'var(--color-brand)' }}>
                 {locale === 'ko' ? 'KO' : 'EN'}
               </span>
             </span>
           )}
         </button>
 
-        {/* 로그아웃 */}
-        <button
-          type="button"
-          onClick={logout}
-          className={cn(
-            'flex items-center gap-3 rounded-md px-2.5 py-2 text-sm w-full',
-            'text-white/60 hover:text-white hover:bg-white/[0.06]',
-            'transition-colors duration-fast focus-visible:outline-none focus-visible:shadow-brand',
-            collapsed && 'justify-center',
-          )}
-          title={collapsed ? t.auth.logout : undefined}
-        >
-          <LogOut size={16} className="shrink-0 text-white/40" />
-          {!collapsed && <span>{t.auth.logout}</span>}
-        </button>
-
-        {/* 사용자 */}
+        {/* 1행 사용자 카드: 아바타 32px + 이름/이메일 1줄 + 로그아웃 */}
         {user && (
           <div
             className={cn(
-              'flex items-center gap-2.5 rounded-md px-2.5 py-2',
-              collapsed && 'justify-center',
+              'flex items-center gap-2 rounded-md px-2 py-1',
+              'hover:bg-white/[0.06] cursor-default transition-colors duration-fast',
+              !effectivelyExpanded && 'justify-center',
             )}
           >
+            {/* 아바타 32px */}
             <div
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
-              style={{ background: '#129B8E', color: '#1A1A1A' }}
+              className="flex shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+              style={{
+                width: 32,
+                height: 32,
+                background: 'var(--color-brand, #129B8E)',
+                color: '#1A1A1A',
+              }}
               title={user.name}
             >
               {getInitials(user.name)}
             </div>
-            {!collapsed && (
+            {/* 이름 + 이메일/역할 부제 1줄 */}
+            {effectivelyExpanded && (
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-white truncate">{user.name}</p>
+                <p
+                  className="font-medium truncate leading-none"
+                  style={{ fontSize: '13px', color: '#EDEBF0' }}
+                >
+                  {user.name}
+                </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-[10px] text-white/40 truncate">{user.email}</span>
+                  <span
+                    className="truncate leading-none"
+                    style={{ fontSize: '11px', color: '#6E6B79' }}
+                  >
+                    {user.email}
+                  </span>
                   {user.role && (
                     <span className="shrink-0 rounded px-1 py-px text-[9px] font-medium bg-white/10 text-white/60">
                       {t.auth.role[user.role as UserRole] ?? user.role}
@@ -202,23 +267,38 @@ export function Sidebar() {
                 </div>
               </div>
             )}
+            {/* 로그아웃 아이콘 */}
+            <button
+              type="button"
+              onClick={logout}
+              className={cn(
+                'flex items-center justify-center p-1 rounded',
+                'text-white/40 hover:text-red-400 hover:bg-red-500/10',
+                'transition-colors duration-fast focus-visible:outline-none flex-shrink-0',
+              )}
+              title={t.auth.logout}
+              aria-label={t.auth.logout}
+            >
+              <LogOut size={16} />
+            </button>
           </div>
         )}
       </div>
 
-      {/* collapsed 토글 */}
+      {/* collapsed 토글 — [ 키 + 버튼 (SHELL-7: GW/SA 패턴 통일) */}
       <button
         type="button"
         onClick={toggleCollapsed}
         className={cn(
           'flex h-6 w-6 items-center justify-center rounded-full',
-          'absolute -right-3 top-1/2 -translate-y-1/2',
-          'border border-white/10 bg-[#1A1A1A]',
+          'absolute -right-3 top-7',
+          'border border-white/10 bg-[#2A2A2A]',
           'text-white/40 hover:text-white transition-colors duration-fast',
           'focus-visible:outline-none focus-visible:shadow-brand',
           'z-10',
         )}
         aria-label={collapsed ? t.sidebar.open : t.sidebar.close}
+        title="["
       >
         {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
       </button>

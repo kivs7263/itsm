@@ -120,8 +120,14 @@
   --shadow-xl:    0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
   --shadow-brand: 0 0 0 3px rgba(18, 155, 142, 0.32);
 
-  /* === Sidebar === */
-  --sidebar-active-bg: rgba(18, 155, 142, 0.14);
+  /* === Sidebar (SHELL-7: 3앱 통일 토큰) === */
+  --sidebar-bg:               #17181C;
+  --sidebar-border:           #24262B;
+  --sidebar-nav-text:         #9A96A4;
+  --sidebar-nav-active-text:  #FFFFFF;
+  --sidebar-active-bg:        rgba(18, 155, 142, 0.12);
+  --sidebar-user-name:        #EDEBF0;
+  --sidebar-user-meta:        #6E6B79;
 
   /* === shadcn/ui 브리지 === */
   --background:           var(--color-bg);
@@ -226,8 +232,14 @@
   --shadow-xl:    0 20px 25px -5px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   --shadow-brand: 0 0 0 3px rgba(18, 155, 142, 0.26);
 
-  /* === Sidebar === */
-  --sidebar-active-bg: rgba(18, 155, 142, 0.14);
+  /* === Sidebar (SHELL-7: 3앱 통일 토큰) === */
+  --sidebar-bg:               #17181C;
+  --sidebar-border:           #24262B;
+  --sidebar-nav-text:         #9A96A4;
+  --sidebar-nav-active-text:  #FFFFFF;
+  --sidebar-active-bg:        rgba(18, 155, 142, 0.12);
+  --sidebar-user-name:        #EDEBF0;
+  --sidebar-user-meta:        #6E6B79;
 
   /* === shadcn/ui 브리지 (dark override) === */
   --primary: var(--color-accent-500);
