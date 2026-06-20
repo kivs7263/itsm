@@ -8,10 +8,15 @@
  * - 탭 1: NAV (Sidebar 라우트 미러), 탭 2: 콘텐츠 검색 (unified_search API)
  * - 검색 디바운스 300ms, race condition → cancelled flag
  * - hooks: 모두 조건부 return 이전 선언 ("Rendered more hooks" 방지)
+ * - @total/ui-shell 골격 소비 (SHELL-5 5c):
+ *   CommandPaletteShell: 오버레이+포털+600px
+ *   useAutoTab: query 입력 시 nav→search 자동 전환 (원 ITSM:120~125 패턴을 골격 훅으로)
+ *   useKeyboardNav: ↑↓ Enter Esc 상태머신 (원 hand-rolled 패턴을 골격 훅으로)
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { CommandPaletteShell, useAutoTab, useKeyboardNav } from '@total/ui-shell';
 import {
   Search,
   ArrowRight,
@@ -87,10 +92,7 @@ interface CommandPaletteProps {
 export function CommandPalette({ open, onOpenChange, tenantSlug }: CommandPaletteProps) {
   const router = useRouter();
 
-  // 탭: 'nav' | 'search'
-  const [tab, setTab] = useState<'nav' | 'search'>('nav');
   const [query, setQuery] = useState('');
-  const [activeIdx, setActiveIdx] = useState(0);
 
   // 검색 결과 상태
   const [results, setResults] = useState<SearchResult>({ tickets: [], kb: [] });
@@ -103,28 +105,78 @@ export function CommandPalette({ open, onOpenChange, tenantSlug }: CommandPalett
   // open 시 상태 초기화 + 포커스
   useEffect(() => {
     if (open) {
-      setTab('nav');
       setQuery('');
-      setActiveIdx(0);
       setResults({ tickets: [], kb: [] });
       setSearching(false);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
 
-  // query 변경 시 activeIdx 리셋
-  useEffect(() => {
-    setActiveIdx(0);
-  }, [query, tab]);
+  // SHELL-5 5c: 골격 useAutoTab — query 입력 시 nav→search 자동 전환
+  // 원 ITSM CommandPalette.tsx:120~125 패턴을 골격 훅으로 일반화
+  const { tab } = useAutoTab({
+    query,
+    searchMode: 'search',
+    navMode: 'nav',
+    minLength: 1,
+  });
 
-  // 탭 자동 전환: query 입력 시 search 탭으로
-  useEffect(() => {
-    if (query.trim().length > 0) {
-      setTab('search');
-    } else {
-      setTab('nav');
-    }
-  }, [query]);
+  // nav 탭 필터링 (tab 파생 — 훅 이전에 계산하면 안 됨. 여기서는 tab 이후 선언 OK)
+  const filteredNav = query.trim()
+    ? NAV_ITEMS.filter(
+        (it) =>
+          it.label.toLowerCase().includes(query.toLowerCase()) ||
+          it.section.toLowerCase().includes(query.toLowerCase()),
+      )
+    : NAV_ITEMS;
+
+  // 검색 탭 플랫 항목 (↑↓ 이동용)
+  const flatSearchItems: Array<{ type: 'ticket' | 'kb'; id: string; title: string }> = [
+    ...results.tickets.map((t) => ({ type: 'ticket' as const, id: t.id, title: t.title })),
+    ...results.kb.map((k) => ({ type: 'kb' as const, id: k.id, title: k.title })),
+  ];
+
+  const currentListLength = tab === 'nav' ? filteredNav.length : flatSearchItems.length;
+
+  const handleSelectNav = useCallback(
+    (item: NavItem) => {
+      router.push(`/${tenantSlug}${item.href}`);
+      onOpenChange(false);
+    },
+    [router, tenantSlug, onOpenChange],
+  );
+
+  const handleSelectSearch = useCallback(
+    (item: { type: 'ticket' | 'kb'; id: string }) => {
+      if (item.type === 'ticket') {
+        router.push(`/${tenantSlug}/tickets/${item.id}`);
+      } else {
+        router.push(`/${tenantSlug}/kb/${item.id}`);
+      }
+      onOpenChange(false);
+    },
+    [router, tenantSlug, onOpenChange],
+  );
+
+  // SHELL-5 5c: 골격 useKeyboardNav — ↑↓ Enter Esc 상태머신
+  // 원 hand-rolled handleKeyDown(ITSM:203~203)을 골격 훅으로 일반화
+  const { activeIdx, setActiveIdx, handleKeyDown } = useKeyboardNav({
+    listLength: currentListLength,
+    // query 변경 시 activeIdx 리셋 — nav↔search 탭 전환 시 두 목록 길이가 같아도
+    // 잘못된 항목이 선택되지 않도록 보장 (원 hand-rolled 구현의 query 리셋 동작 보존)
+    resetKey: query,
+    onSelect: (idx) => {
+      if (tab === 'nav') {
+        const item = filteredNav[idx];
+        if (item) handleSelectNav(item);
+      } else {
+        const item = flatSearchItems[idx];
+        if (item) handleSelectSearch(item);
+      }
+    },
+    onClose: () => onOpenChange(false),
+    enabled: open,
+  });
 
   // 검색 디바운스 + race condition 방지
   useEffect(() => {
@@ -165,90 +217,20 @@ export function CommandPalette({ open, onOpenChange, tenantSlug }: CommandPalett
     };
   }, [query, tab, tenantSlug]);
 
-  // nav 탭 필터링
-  const filteredNav = query.trim()
-    ? NAV_ITEMS.filter(
-        (it) =>
-          it.label.toLowerCase().includes(query.toLowerCase()) ||
-          it.section.toLowerCase().includes(query.toLowerCase()),
-      )
-    : NAV_ITEMS;
-
-  // 검색 탭 플랫 항목 (↑↓ 이동용)
-  const flatSearchItems: Array<{ type: 'ticket' | 'kb'; id: string; title: string }> = [
-    ...results.tickets.map((t) => ({ type: 'ticket' as const, id: t.id, title: t.title })),
-    ...results.kb.map((k) => ({ type: 'kb' as const, id: k.id, title: k.title })),
-  ];
-
-  const handleSelectNav = useCallback(
-    (item: NavItem) => {
-      router.push(`/${tenantSlug}${item.href}`);
-      onOpenChange(false);
-    },
-    [router, tenantSlug, onOpenChange],
-  );
-
-  const handleSelectSearch = useCallback(
-    (item: { type: 'ticket' | 'kb'; id: string }) => {
-      if (item.type === 'ticket') {
-        router.push(`/${tenantSlug}/tickets/${item.id}`);
-      } else {
-        router.push(`/${tenantSlug}/kb/${item.id}`);
-      }
-      onOpenChange(false);
-    },
-    [router, tenantSlug, onOpenChange],
-  );
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      const listLength = tab === 'nav' ? filteredNav.length : flatSearchItems.length;
-
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setActiveIdx((i) => Math.min(i + 1, listLength - 1));
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setActiveIdx((i) => Math.max(i - 1, 0));
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (tab === 'nav') {
-          const item = filteredNav[activeIdx];
-          if (item) handleSelectNav(item);
-        } else {
-          const item = flatSearchItems[activeIdx];
-          if (item) handleSelectSearch(item);
-        }
-      } else if (e.key === 'Escape') {
-        onOpenChange(false);
-      }
-    },
-    [tab, filteredNav, flatSearchItems, activeIdx, handleSelectNav, handleSelectSearch, onOpenChange],
-  );
-
   // 전역 단축키 등록 (팔레트 내부 keyDown이 아닌 window 단위는 layout.tsx에서 처리)
   // 이 컴포넌트는 렌더링만, 단축키 토글은 상위(layout)에서 제어
-
-  if (!open) return null;
 
   const totalSearchCount = results.tickets.length + results.kb.length;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] p-4"
-      style={{ background: 'rgba(0,0,0,0.65)' }}
-      onClick={() => onOpenChange(false)}
-      role="dialog"
-      aria-modal="true"
-      aria-label="명령 팔레트"
-    >
+    <CommandPaletteShell open={open} onOpenChange={onOpenChange} zIndex={50}>
+      {() => (
       <div
-        className="w-full max-w-lg rounded-xl overflow-hidden shadow-2xl"
+        className="w-full rounded-xl overflow-hidden shadow-2xl"
         style={{
           background: '#1E1E1E',
           border: '1px solid rgba(255,255,255,0.12)',
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* 검색 입력 */}
         <div
@@ -415,7 +397,8 @@ export function CommandPalette({ open, onOpenChange, tenantSlug }: CommandPalett
           </span>
         </div>
       </div>
-    </div>
+      )}
+    </CommandPaletteShell>
   );
 }
 
