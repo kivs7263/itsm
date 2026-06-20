@@ -19,6 +19,9 @@ import { CommandPalette } from '@/components/layout/CommandPalette';
 import { useSlug } from '@/lib/slug';
 import { GlobalTimerBar } from '@/components/tickets/GlobalTimerBar';
 import { OnboardingWizard, useOnboarding } from '@/components/onboarding/OnboardingWizard';
+import { Topbar, UserMenu } from '@total/ui-shell';
+import { useLocale } from '@/lib/locale';
+import { getInitials } from '@/lib/utils';
 
 // -----------------------------------------------------------------------
 // 인라인 스피너 (외부 컴포넌트 의존 최소화)
@@ -40,6 +43,9 @@ import {
   BookOpen,
   RefreshCw,
   Bell,
+  Settings,
+  LogOut,
+  Languages,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -54,6 +60,14 @@ const MOBILE_NAV = [
   { label: '지식베이스', href: '/kb',               icon: BookOpen  },
   { label: '반복 장애',  href: '/recurring-alerts', icon: RefreshCw },
 ] as const;
+
+// 경로 세그먼트 → breadcrumb 제목 (ALVEO-SHELL-3)
+const SEG_LABELS: Record<string, string> = {
+  tickets: '티켓', queue: '티켓 풀', customers: '고객', kb: '지식베이스',
+  'recurring-alerts': '반복 장애', reports: '리포트', settings: '설정',
+  worklog: '작업 시간', assets: '자산', cmdb: 'CMDB', 'change-requests': '변경 요청',
+  contracts: '계약', notifications: '알림', home: '대시보드', sla: 'SLA',
+};
 
 function BottomNav() {
   const slug = useSlug();
@@ -149,11 +163,17 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const router = useRouter();
   const params = useParams();
   const tenantSlug = params?.tenantSlug as string | undefined;
-  const { user, tenants, isLoading, isAuthenticated } = useAuth();
+  const { user, tenants, isLoading, isAuthenticated, logout } = useAuth();
+  const { locale, setLocale } = useLocale();
+  const pathname = usePathname();
   const isAdmin = user?.role === 'admin';
   const { needsOnboarding } = useOnboarding(tenantSlug, isAdmin);
   const [wizardDismissed, setWizardDismissed] = React.useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // breadcrumb 제목 — /{slug}/<seg> 의 seg 매핑
+  const seg = pathname?.split('/')[2] ?? '';
+  const screenTitle = SEG_LABELS[seg] ?? '';
 
   // ⌘K / Ctrl+K 전역 단축키 — 모든 hook 선언 이후, conditional return 이전
   const handleGlobalKeyDown = useCallback((e: KeyboardEvent) => {
@@ -218,11 +238,32 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         {/* 사업카드 컨텍스트 바 (SA_BACKEND_URL 미설정 시 숨김) */}
         {tenantSlug && <BusinessContextBar tenantSlug={tenantSlug} />}
 
-        {/* 미니 헤더 — 타이머 + 알림 벨 (데스크탑, md 이상) */}
+        {/* 상단 헤더 — breadcrumb + 검색 + 타이머 + 알림 + 유저메뉴 (데스크탑, ALVEO-SHELL-3) */}
         {tenantSlug && (
-          <div className="hidden md:flex items-center justify-end gap-3 px-4 py-1.5 border-b border-border-subtle bg-surface shrink-0">
-            <GlobalTimerBar tenantSlug={tenantSlug} />
-            <NotificationBell tenantSlug={tenantSlug} />
+          <div className="hidden md:block shrink-0">
+            <Topbar
+              crumbs={[
+                { label: 'ITSM' },
+                ...(screenTitle ? [{ label: screenTitle, current: true }] : []),
+              ]}
+              onSearchClick={() => setPaletteOpen(true)}
+              actions={<GlobalTimerBar tenantSlug={tenantSlug} />}
+              notifications={<NotificationBell tenantSlug={tenantSlug} />}
+              userMenu={
+                <UserMenu
+                  initials={getInitials(user?.name ?? '')}
+                  name={user?.name ?? ''}
+                  subtitle={user?.organization_name}
+                  accentFrom="#16A597"
+                  accentTo="#129B8E"
+                  items={[
+                    { key: 'settings', label: '설정', icon: <Settings size={15} />, onClick: () => router.push(`/${tenantSlug}/settings`) },
+                    { key: 'lang', label: '언어', icon: <Languages size={15} />, hint: locale === 'ko' ? 'KO' : 'EN', onClick: () => setLocale(locale === 'ko' ? 'en' : 'ko') },
+                    { key: 'logout', label: '로그아웃', icon: <LogOut size={15} />, danger: true, divider: true, onClick: logout },
+                  ]}
+                />
+              }
+            />
           </div>
         )}
 
