@@ -33,7 +33,7 @@ export default function PortalLayout({ children, params }: PortalLayoutProps) {
           <div className="flex items-center gap-3">
             <div
               className="flex h-8 w-8 items-center justify-center rounded-lg"
-              style={{ background: '#F5C000' }}
+              style={{ background: '#129B8E' }}
             >
               <svg
                 width="16"

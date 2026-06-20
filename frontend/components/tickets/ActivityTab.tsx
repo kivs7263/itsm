@@ -591,7 +591,7 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
             {/* AI KB 근거 표시 */}
             {aiKbSources.length > 0 && (
               <div className="flex items-start gap-1.5 text-xs text-text-secondary">
-                <Sparkles size={11} className="mt-0.5 shrink-0 text-[#F5C000]" />
+                <Sparkles size={11} className="mt-0.5 shrink-0 text-[#129B8E]" />
                 <span>
                   근거:{' '}
                   {aiKbSources.map((s, i) => (
@@ -632,8 +632,8 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
                     title="KB 기반 AI 답변 초안 생성"
                     className={cn(
                       'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium',
-                      'border border-[#F5C000]/50 bg-surface text-[#F5C000]',
-                      'hover:bg-amber-950/20 hover:border-[#F5C000] transition-colors',
+                      'border border-[#129B8E]/50 bg-surface text-[#129B8E]',
+                      'hover:bg-amber-950/20 hover:border-[#129B8E] transition-colors',
                       aiLoading && 'opacity-60 cursor-not-allowed',
                     )}
                     aria-label="AI 답변 초안 생성"

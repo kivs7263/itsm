@@ -1496,7 +1496,7 @@ function EmailInboundTab({ tenantSlug }: { tenantSlug: string }) {
             onClick={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
             className={cn(
               'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
-              form.is_active ? 'bg-[#F5C000]' : 'bg-border-default',
+              form.is_active ? 'bg-[#129B8E]' : 'bg-border-default',
             )}
           >
             <span
@@ -2344,9 +2344,9 @@ export default function SettingsPage() {
       <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
         <div
           className="flex h-12 w-12 items-center justify-center rounded-2xl"
-          style={{ background: 'rgba(245, 192, 0, 0.12)' }}
+          style={{ background: 'rgba(18, 155, 142, 0.12)' }}
         >
-          <ShieldOff size={24} strokeWidth={1.5} style={{ color: '#F5C000' }} />
+          <ShieldOff size={24} strokeWidth={1.5} style={{ color: '#129B8E' }} />
         </div>
         <div>
           <p className="text-sm font-medium text-text-primary">접근 권한 없음</p>

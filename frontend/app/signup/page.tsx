@@ -87,7 +87,7 @@ export default function SignupPage() {
         <div className="w-full max-w-sm flex flex-col items-center gap-6">
           <div
             className="flex h-14 w-14 items-center justify-center rounded-xl shadow-lg"
-            style={{ background: '#F5C000' }}
+            style={{ background: '#129B8E' }}
           >
             <CheckCircle2 size={28} className="text-[#1A1A1A]" />
           </div>
@@ -106,7 +106,7 @@ export default function SignupPage() {
           <button
             onClick={() => router.push(`/${done}/login`)}
             className="w-full h-10 rounded-md text-sm font-semibold"
-            style={{ background: '#F5C000', color: '#1A1A1A' }}
+            style={{ background: '#129B8E', color: '#1A1A1A' }}
           >
             로그인 하러 가기
           </button>
@@ -122,7 +122,7 @@ export default function SignupPage() {
         <div className="flex flex-col items-center gap-3">
           <div
             className="flex h-12 w-12 items-center justify-center rounded-xl shadow-md"
-            style={{ background: '#F5C000' }}
+            style={{ background: '#129B8E' }}
           >
             <LifeBuoy size={24} className="text-[#1A1A1A]" />
           </div>
@@ -275,7 +275,7 @@ export default function SignupPage() {
                 'h-10 w-full rounded-md text-sm font-semibold mt-1 transition-colors duration-fast focus-visible:outline-none',
                 isSubmitting ? 'opacity-60 cursor-not-allowed' : '',
               )}
-              style={{ background: '#F5C000', color: '#1A1A1A' }}
+              style={{ background: '#129B8E', color: '#1A1A1A' }}
             >
               {isSubmitting ? '워크스페이스 생성 중...' : '무료로 시작하기'}
             </button>

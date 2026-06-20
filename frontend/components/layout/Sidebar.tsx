@@ -126,7 +126,7 @@ export function Sidebar() {
               style={isActive ? { background: 'var(--sidebar-active-bg)' } : undefined}
               title={collapsed ? label : undefined}
             >
-              <Icon size={16} className={cn('shrink-0', isActive ? 'text-[#F5C000]' : 'text-white/40')} />
+              <Icon size={16} className={cn('shrink-0', isActive ? 'text-[#129B8E]' : 'text-white/40')} />
               {!collapsed && <span className="truncate">{label}</span>}
             </Link>
           );
@@ -151,7 +151,7 @@ export function Sidebar() {
           {!collapsed && (
             <span className="flex items-center gap-2 flex-1">
               <span className="flex-1">{t.sidebar.language}</span>
-              <span className="text-[11px] font-medium text-[#F5C000]">
+              <span className="text-[11px] font-medium text-[#129B8E]">
                 {locale === 'ko' ? 'KO' : 'EN'}
               </span>
             </span>
@@ -184,7 +184,7 @@ export function Sidebar() {
           >
             <div
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
-              style={{ background: '#F5C000', color: '#1A1A1A' }}
+              style={{ background: '#129B8E', color: '#1A1A1A' }}
               title={user.name}
             >
               {getInitials(user.name)}

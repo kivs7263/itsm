@@ -55,7 +55,7 @@ export default function LoginPage() {
       <div className="flex flex-col items-center gap-3">
         <div
           className="flex h-12 w-12 items-center justify-center rounded-xl shadow-md"
-          style={{ background: '#F5C000' }}
+          style={{ background: '#129B8E' }}
         >
           <LifeBuoy size={24} className="text-[#1A1A1A]" />
         </div>
@@ -156,7 +156,7 @@ export default function LoginPage() {
                 : 'bg-accent text-accent-on hover:bg-accent-hover active:bg-accent-active',
             )}
             style={{
-              background: isLoginPending ? undefined : '#F5C000',
+              background: isLoginPending ? undefined : '#129B8E',
               color: '#1A1A1A',
             }}
           >

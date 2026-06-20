@@ -2,7 +2,7 @@
  * ITSM — Tailwind 설정
  *
  * 색상 시스템: globals.css CSS 변수 기반 (primary source).
- * 브랜드 컬러: #F5C000 (Hivework Honey — GW와 동일 팔레트 공유)
+ * 브랜드 컬러: #129B8E (Hivework Honey — GW와 동일 팔레트 공유)
  */
 import type { Config } from 'tailwindcss';
 
@@ -20,12 +20,12 @@ const config: Config = {
          Colors — CSS 변수 연결
       ===================== */
       colors: {
-        /* Brand — ITSM 고유 (#F5C000) */
+        /* Brand — ITSM 고유 (#129B8E) */
         brand: {
-          DEFAULT: '#F5C000',
-          hover:   '#F5B800',
-          active:  '#E89412',
-          subtle:  'rgba(245, 192, 0, 0.10)',
+          DEFAULT: '#129B8E',
+          hover:   '#16A597',
+          active:  '#0E7E73',
+          subtle:  'rgba(18, 155, 142, 0.10)',
         },
 
         /* Primary accent */

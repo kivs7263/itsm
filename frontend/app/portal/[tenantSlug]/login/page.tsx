@@ -84,7 +84,7 @@ export default function PortalLoginPage() {
       <div className="flex flex-col items-center gap-3">
         <div
           className="flex h-12 w-12 items-center justify-center rounded-xl shadow-sm"
-          style={{ background: '#F5C000' }}
+          style={{ background: '#129B8E' }}
         >
           <Mail size={22} className="text-[#1A1A1A]" />
         </div>
@@ -137,7 +137,7 @@ export default function PortalLoginPage() {
             )}
             style={
               !isSubmitting
-                ? { background: '#F5C000' }
+                ? { background: '#129B8E' }
                 : undefined
             }
           >

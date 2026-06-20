@@ -255,7 +255,7 @@ export function CommandPalette({ open, onOpenChange, tenantSlug }: CommandPalett
           className="flex items-center gap-3 px-4 h-14"
           style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}
         >
-          <Search size={16} className="shrink-0" style={{ color: '#F5C000' }} />
+          <Search size={16} className="shrink-0" style={{ color: '#129B8E' }} />
           <input
             ref={inputRef}
             type="text"
@@ -264,12 +264,12 @@ export function CommandPalette({ open, onOpenChange, tenantSlug }: CommandPalett
             onKeyDown={handleKeyDown}
             placeholder="페이지 이동 또는 검색... (↑↓ 이동, Enter 선택)"
             className="flex-1 bg-transparent border-none outline-none text-sm"
-            style={{ color: 'rgba(255,255,255,0.9)', caretColor: '#F5C000' }}
+            style={{ color: 'rgba(255,255,255,0.9)', caretColor: '#129B8E' }}
             autoComplete="off"
             spellCheck={false}
           />
           {searching && (
-            <Loader2 size={14} className="shrink-0 animate-spin" style={{ color: '#F5C000' }} />
+            <Loader2 size={14} className="shrink-0 animate-spin" style={{ color: '#129B8E' }} />
           )}
           <kbd
             className="hidden sm:inline-flex items-center gap-1 rounded px-1.5 py-0.5"
@@ -305,18 +305,18 @@ export function CommandPalette({ open, onOpenChange, tenantSlug }: CommandPalett
                         onMouseEnter={() => setActiveIdx(idx)}
                         className="flex items-center gap-2.5 px-2 py-2 rounded-md text-sm cursor-pointer transition-colors"
                         style={{
-                          background: isActive ? 'rgba(245,192,0,0.12)' : 'transparent',
+                          background: isActive ? 'rgba(18, 155, 142,0.12)' : 'transparent',
                         }}
                       >
                         <span
                           className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded"
                           style={{
-                            background: isActive ? 'rgba(245,192,0,0.2)' : 'rgba(255,255,255,0.06)',
+                            background: isActive ? 'rgba(18, 155, 142,0.2)' : 'rgba(255,255,255,0.06)',
                           }}
                         >
                           <Icon
                             size={13}
-                            style={{ color: isActive ? '#F5C000' : 'rgba(255,255,255,0.4)' }}
+                            style={{ color: isActive ? '#129B8E' : 'rgba(255,255,255,0.4)' }}
                           />
                         </span>
                         <span
@@ -332,7 +332,7 @@ export function CommandPalette({ open, onOpenChange, tenantSlug }: CommandPalett
                           {item.label}
                         </span>
                         {isActive && (
-                          <ArrowRight size={12} style={{ color: '#F5C000', flexShrink: 0 }} />
+                          <ArrowRight size={12} style={{ color: '#129B8E', flexShrink: 0 }} />
                         )}
                       </li>
                     );
@@ -347,7 +347,7 @@ export function CommandPalette({ open, onOpenChange, tenantSlug }: CommandPalett
             <>
               {searching && totalSearchCount === 0 ? (
                 <div className="flex items-center justify-center py-8 gap-2">
-                  <Loader2 size={16} className="animate-spin" style={{ color: '#F5C000' }} />
+                  <Loader2 size={16} className="animate-spin" style={{ color: '#129B8E' }} />
                   <span className="text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>
                     검색 중...
                   </span>
@@ -468,17 +468,17 @@ function SearchResultItem({
       onClick={onClick}
       onMouseEnter={onMouseEnter}
       className="flex items-center gap-2.5 px-2 py-2 rounded-md text-sm cursor-pointer transition-colors"
-      style={{ background: isActive ? 'rgba(245,192,0,0.12)' : 'transparent' }}
+      style={{ background: isActive ? 'rgba(18, 155, 142,0.12)' : 'transparent' }}
     >
       <span
         className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded"
         style={{
-          background: isActive ? 'rgba(245,192,0,0.2)' : 'rgba(255,255,255,0.06)',
+          background: isActive ? 'rgba(18, 155, 142,0.2)' : 'rgba(255,255,255,0.06)',
         }}
       >
         <Icon
           size={13}
-          style={{ color: isActive ? '#F5C000' : 'rgba(255,255,255,0.4)' }}
+          style={{ color: isActive ? '#129B8E' : 'rgba(255,255,255,0.4)' }}
         />
       </span>
       <span
@@ -499,7 +499,7 @@ function SearchResultItem({
         </span>
       )}
       {isActive && (
-        <ArrowRight size={12} style={{ color: '#F5C000', flexShrink: 0 }} />
+        <ArrowRight size={12} style={{ color: '#129B8E', flexShrink: 0 }} />
       )}
     </div>
   );

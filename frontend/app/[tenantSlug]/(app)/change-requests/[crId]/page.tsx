@@ -355,9 +355,9 @@ export default function CRDetailPage() {
               <div className="flex items-center gap-2 mb-3">
                 <div
                   className="flex h-8 w-8 items-center justify-center rounded-lg"
-                  style={{ background: 'rgba(245, 192, 0, 0.12)' }}
+                  style={{ background: 'rgba(18, 155, 142, 0.12)' }}
                 >
-                  <GitMerge size={16} style={{ color: '#F5C000' }} />
+                  <GitMerge size={16} style={{ color: '#129B8E' }} />
                 </div>
                 <span className="text-sm font-semibold text-text-primary">변경 요약</span>
               </div>

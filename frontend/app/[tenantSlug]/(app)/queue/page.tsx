@@ -87,9 +87,9 @@ function EmptyState() {
         <div className="flex flex-col items-center justify-center py-20 gap-3">
           <div
             className="flex h-12 w-12 items-center justify-center rounded-2xl"
-            style={{ background: 'rgba(245, 192, 0, 0.12)' }}
+            style={{ background: 'rgba(18, 155, 142, 0.12)' }}
           >
-            <Inbox size={24} strokeWidth={1.5} style={{ color: '#F5C000' }} />
+            <Inbox size={24} strokeWidth={1.5} style={{ color: '#129B8E' }} />
           </div>
           <div className="text-center">
             <p className="text-sm font-medium text-text-primary">미배정 티켓 없음</p>

@@ -42,7 +42,7 @@ function KpiCard({
     warning: 'text-warning-text',
     error:   'text-error-text',
     success: 'text-success-text',
-    default: 'text-[#F5C000]',
+    default: 'text-[#129B8E]',
   }[accent ?? 'default'];
 
   return (
@@ -269,7 +269,7 @@ function WeeklyHoursWidget({ tenantSlug }: { tenantSlug: string }) {
     <div className="rounded-lg border border-border-default bg-surface p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium text-text-primary flex items-center gap-1.5">
-          <BarChart2 size={13} className="text-[#F5C000]" />
+          <BarChart2 size={13} className="text-[#129B8E]" />
           이번 주 공수
         </h2>
         <span className="text-xs text-text-secondary">

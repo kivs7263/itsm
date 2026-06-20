@@ -68,7 +68,7 @@ export default function RegisterPage() {
       <div className="flex flex-col items-center gap-3">
         <div
           className="flex h-12 w-12 items-center justify-center rounded-xl shadow-md"
-          style={{ background: '#F5C000' }}
+          style={{ background: '#129B8E' }}
         >
           <LifeBuoy size={24} className="text-[#1A1A1A]" />
         </div>
@@ -224,7 +224,7 @@ export default function RegisterPage() {
               'transition-colors duration-fast focus-visible:outline-none',
               isSubmitting ? 'cursor-not-allowed opacity-60' : '',
             )}
-            style={{ background: '#F5C000', color: '#1A1A1A' }}
+            style={{ background: '#129B8E', color: '#1A1A1A' }}
           >
             {isSubmitting ? '처리 중...' : '회원가입'}
           </button>

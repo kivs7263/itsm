@@ -144,9 +144,9 @@ function EmptyState() {
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <div
             className="flex h-14 w-14 items-center justify-center rounded-2xl"
-            style={{ background: 'rgba(245, 192, 0, 0.12)' }}
+            style={{ background: 'rgba(18, 155, 142, 0.12)' }}
           >
-            <Bell size={28} strokeWidth={1.5} style={{ color: '#F5C000' }} />
+            <Bell size={28} strokeWidth={1.5} style={{ color: '#129B8E' }} />
           </div>
           <div className="text-center">
             <p className="text-base font-semibold text-text-primary">알림 내역 없음</p>
@@ -207,9 +207,9 @@ function InboxEmptyState() {
     <div className="flex flex-col items-center justify-center py-10 gap-3">
       <div
         className="flex h-10 w-10 items-center justify-center rounded-xl"
-        style={{ background: 'rgba(245, 192, 0, 0.10)' }}
+        style={{ background: 'rgba(18, 155, 142, 0.10)' }}
       >
-        <Layers size={20} strokeWidth={1.5} style={{ color: '#F5C000' }} />
+        <Layers size={20} strokeWidth={1.5} style={{ color: '#129B8E' }} />
       </div>
       <p className="text-sm text-text-secondary">통합 플랫폼 알림이 없습니다.</p>
     </div>
@@ -250,7 +250,7 @@ function InboxItem({
       className={cn(
         'flex items-start gap-3 px-4 py-3 border-b border-border-subtle transition-colors duration-micro',
         (item.action_url || !item.is_read) && 'cursor-pointer hover:bg-surface-hover',
-        !item.is_read && 'bg-[rgba(245,192,0,0.04)]',
+        !item.is_read && 'bg-[rgba(18, 155, 142,0.04)]',
       )}
     >
       {/* 미읽음 점 */}
@@ -258,7 +258,7 @@ function InboxItem({
         {!item.is_read ? (
           <span
             className="inline-block h-2 w-2 rounded-full"
-            style={{ background: '#F5C000' }}
+            style={{ background: '#129B8E' }}
           />
         ) : (
           <span className="inline-block h-2 w-2" />
@@ -272,7 +272,7 @@ function InboxItem({
           <span
             className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
             style={{
-              background: 'rgba(245,192,0,0.15)',
+              background: 'rgba(18, 155, 142,0.15)',
               color: '#B45309',
             }}
           >
@@ -448,7 +448,7 @@ export default function NotificationsPage() {
       {/* 통합 인박스 섹션 (notification-service proxy) */}
       <div className="px-6 py-4 border-b border-border-default bg-surface shrink-0">
         <div className="flex items-center gap-2 mb-3">
-          <Layers size={14} style={{ color: '#F5C000' }} />
+          <Layers size={14} style={{ color: '#129B8E' }} />
           <h2 className="text-sm font-medium text-text-secondary">플랫폼 통합 알림</h2>
           {inbox.filter((n) => !n.is_read).length > 0 && (
             <span

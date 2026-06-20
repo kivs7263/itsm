@@ -26,7 +26,7 @@ import { OnboardingWizard, useOnboarding } from '@/components/onboarding/Onboard
 function Spinner() {
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-bg">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-default border-t-accent" style={{ borderTopColor: '#F5C000' }} />
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-default border-t-accent" style={{ borderTopColor: '#129B8E' }} />
     </div>
   );
 }
@@ -75,7 +75,7 @@ function BottomNav() {
               className={cn(
                 'flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-md',
                 'text-[10px] transition-colors duration-fast',
-                isActive ? 'text-[#F5C000]' : 'text-text-secondary',
+                isActive ? 'text-[#129B8E]' : 'text-text-secondary',
               )}
             >
               <Icon size={18} />

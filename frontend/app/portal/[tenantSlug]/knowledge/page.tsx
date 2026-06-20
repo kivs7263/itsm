@@ -120,9 +120,9 @@ export default function PortalKnowledgePage() {
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <div
             className="flex h-14 w-14 items-center justify-center rounded-2xl"
-            style={{ background: 'rgba(245, 192, 0, 0.12)' }}
+            style={{ background: 'rgba(18, 155, 142, 0.12)' }}
           >
-            <BookOpen size={28} strokeWidth={1.5} style={{ color: '#F5C000' }} />
+            <BookOpen size={28} strokeWidth={1.5} style={{ color: '#129B8E' }} />
           </div>
           <p className="text-sm text-text-secondary">
             {q ? `"${q}"에 대한 검색 결과가 없습니다.` : '등록된 FAQ가 없습니다.'}

@@ -133,9 +133,9 @@ function EmptyState({ onNew, canCreate }: { onNew: () => void; canCreate: boolea
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <div
             className="flex h-14 w-14 items-center justify-center rounded-2xl"
-            style={{ background: 'rgba(245, 192, 0, 0.12)' }}
+            style={{ background: 'rgba(18, 155, 142, 0.12)' }}
           >
-            <GitMerge size={28} strokeWidth={1.5} style={{ color: '#F5C000' }} />
+            <GitMerge size={28} strokeWidth={1.5} style={{ color: '#129B8E' }} />
           </div>
           <div className="text-center">
             <p className="text-base font-semibold text-text-primary">변경 요청 없음</p>

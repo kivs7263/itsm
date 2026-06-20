@@ -235,9 +235,9 @@ export default function PortalHomePage() {
           >
             <div
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-              style={{ background: 'rgba(245, 192, 0, 0.12)' }}
+              style={{ background: 'rgba(18, 155, 142, 0.12)' }}
             >
-              <Plus size={20} style={{ color: '#F5C000' }} />
+              <Plus size={20} style={{ color: '#129B8E' }} />
             </div>
             <div>
               <p className="text-sm font-medium text-text-primary">새 티켓 접수</p>
@@ -252,9 +252,9 @@ export default function PortalHomePage() {
           >
             <div
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-              style={{ background: 'rgba(245, 192, 0, 0.12)' }}
+              style={{ background: 'rgba(18, 155, 142, 0.12)' }}
             >
-              <BookOpen size={20} style={{ color: '#F5C000' }} />
+              <BookOpen size={20} style={{ color: '#129B8E' }} />
             </div>
             <div>
               <p className="text-sm font-medium text-text-primary">자주 묻는 질문</p>

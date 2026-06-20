@@ -113,8 +113,8 @@ function TreeNode({
 
         {/* 아이콘 */}
         {node.kind === 'account'
-          ? <Building2 size={13} className={cn('shrink-0', isSelected ? 'text-[#F5C000]' : 'text-white/40')} />
-          : <GitBranch size={13} className={cn('shrink-0', isSelected ? 'text-[#F5C000]' : 'text-white/40')} />
+          ? <Building2 size={13} className={cn('shrink-0', isSelected ? 'text-[#129B8E]' : 'text-white/40')} />
+          : <GitBranch size={13} className={cn('shrink-0', isSelected ? 'text-[#129B8E]' : 'text-white/40')} />
         }
 
         <span className="truncate text-xs">{node.name}</span>
@@ -254,7 +254,7 @@ function CustomerPanel({
             <div className="flex flex-col">
               <span className="text-xs text-text-secondary">활성 티켓</span>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <LifeBuoy size={14} className="text-[#F5C000]" />
+                <LifeBuoy size={14} className="text-[#129B8E]" />
                 <span className="text-base font-semibold text-text-primary">{rollup.open_tickets}</span>
               </div>
             </div>
@@ -340,9 +340,9 @@ function EmptySelection() {
     <div className="flex flex-col items-center justify-center h-full gap-4 text-center p-8">
       <div
         className="flex h-16 w-16 items-center justify-center rounded-2xl"
-        style={{ background: 'rgba(245, 192, 0, 0.08)' }}
+        style={{ background: 'rgba(18, 155, 142, 0.08)' }}
       >
-        <Users size={32} strokeWidth={1.5} style={{ color: '#F5C000' }} />
+        <Users size={32} strokeWidth={1.5} style={{ color: '#129B8E' }} />
       </div>
       <div>
         <p className="text-sm font-medium text-text-primary">고객을 선택하세요</p>
@@ -519,7 +519,7 @@ export default function CustomersPage() {
               <button
                 type="button"
                 onClick={() => setCreateOpen(true)}
-                className="text-xs text-[#F5C000] hover:underline mt-1"
+                className="text-xs text-[#129B8E] hover:underline mt-1"
               >
                 첫 고객 추가 →
               </button>

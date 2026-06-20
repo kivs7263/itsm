@@ -112,7 +112,7 @@ function MonthlyBar({ count, max }: { count: number; max: number }) {
         className="h-full rounded-sm"
         style={{
           width: `${pct}%`,
-          background: 'linear-gradient(90deg, #F5C000, #f59e0b)',
+          background: 'linear-gradient(90deg, #129B8E, #f59e0b)',
           transition: 'width 0.4s ease',
         }}
       />
@@ -174,7 +174,7 @@ function ScoreBar({ star, count, max }: { star: number; count: number; max: numb
           className="h-full rounded-sm"
           style={{
             width: `${pct}%`,
-            background: 'linear-gradient(90deg, #F5C000, #f59e0b)',
+            background: 'linear-gradient(90deg, #129B8E, #f59e0b)',
             transition: 'width 0.4s ease',
           }}
         />
@@ -828,8 +828,8 @@ export default function ReportsPage() {
             value={formatMttr(mttrMinutes)}
             sub="티켓 생성→해결 평균"
             icon={<Timer size={16} />}
-            iconColor="#F5C000"
-            iconBg="rgba(245,192,0,0.12)"
+            iconColor="#129B8E"
+            iconBg="rgba(18, 155, 142,0.12)"
             isLoading={isLoading}
             tooltip="Mean Time To Resolve — 해결/종료된 티켓 기준"
           />
@@ -898,8 +898,8 @@ export default function ReportsPage() {
             value={kbTotalViews.toLocaleString()}
             sub={`게시 문서 ${kbArticleCount}건`}
             icon={<BookOpen size={16} />}
-            iconColor="#F5C000"
-            iconBg="rgba(245,192,0,0.12)"
+            iconColor="#129B8E"
+            iconBg="rgba(18, 155, 142,0.12)"
             isLoading={isLoading}
           />
           <KpiCard
@@ -1165,8 +1165,8 @@ export default function ReportsPage() {
                     : '데이터 없음'
                 }
                 icon={<Star size={18} />}
-                iconColor="#F5C000"
-                iconBg="rgba(245, 192, 0, 0.12)"
+                iconColor="#129B8E"
+                iconBg="rgba(18, 155, 142, 0.12)"
                 isLoading={csatLoading}
               />
               <CsatKpiCard
@@ -1244,7 +1244,7 @@ export default function ReportsPage() {
                               className="h-full rounded-sm"
                               style={{
                                 width: `${(t.avg_score / maxScore) * 100}%`,
-                                background: 'linear-gradient(90deg, #F5C000, #f59e0b)',
+                                background: 'linear-gradient(90deg, #129B8E, #f59e0b)',
                                 transition: 'width 0.4s ease',
                               }}
                             />

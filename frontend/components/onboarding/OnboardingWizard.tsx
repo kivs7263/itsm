@@ -134,9 +134,9 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
     <div className="flex flex-col items-center text-center gap-6 py-4">
       <div
         className="flex h-16 w-16 items-center justify-center rounded-2xl"
-        style={{ background: 'rgba(245, 192, 0, 0.15)' }}
+        style={{ background: 'rgba(18, 155, 142, 0.15)' }}
       >
-        <Zap size={32} style={{ color: '#F5C000' }} />
+        <Zap size={32} style={{ color: '#129B8E' }} />
       </div>
       <div>
         <h2 className="text-2xl font-bold text-text-primary">Alvio ITSM에 오신 것을 환영합니다</h2>
@@ -156,9 +156,9 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
           <div key={label} className="rounded-xl border border-border-subtle bg-surface p-4 flex flex-col items-center gap-2 text-center">
             <div
               className="flex h-9 w-9 items-center justify-center rounded-lg"
-              style={{ background: 'rgba(245, 192, 0, 0.10)' }}
+              style={{ background: 'rgba(18, 155, 142, 0.10)' }}
             >
-              <Icon size={18} style={{ color: '#F5C000' }} />
+              <Icon size={18} style={{ color: '#129B8E' }} />
             </div>
             <p className="text-xs font-semibold text-text-primary">{label}</p>
             <p className="text-[11px] text-text-secondary leading-tight">{desc}</p>
@@ -247,9 +247,9 @@ function EmailStep({
       <div className="flex items-center gap-3">
         <div
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-          style={{ background: 'rgba(245, 192, 0, 0.12)' }}
+          style={{ background: 'rgba(18, 155, 142, 0.12)' }}
         >
-          <Server size={20} style={{ color: '#F5C000' }} />
+          <Server size={20} style={{ color: '#129B8E' }} />
         </div>
         <div>
           <h2 className="text-base font-bold text-text-primary">이메일 알림 설정</h2>
@@ -365,9 +365,9 @@ function SlaStep({
       <div className="flex items-center gap-3">
         <div
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-          style={{ background: 'rgba(245, 192, 0, 0.12)' }}
+          style={{ background: 'rgba(18, 155, 142, 0.12)' }}
         >
-          <Clock size={20} style={{ color: '#F5C000' }} />
+          <Clock size={20} style={{ color: '#129B8E' }} />
         </div>
         <div>
           <h2 className="text-base font-bold text-text-primary">SLA 정책 설정</h2>
@@ -477,9 +477,9 @@ function InviteStep({
       <div className="flex items-center gap-3">
         <div
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-          style={{ background: 'rgba(245, 192, 0, 0.12)' }}
+          style={{ background: 'rgba(18, 155, 142, 0.12)' }}
         >
-          <UserPlus size={20} style={{ color: '#F5C000' }} />
+          <UserPlus size={20} style={{ color: '#129B8E' }} />
         </div>
         <div>
           <h2 className="text-base font-bold text-text-primary">첫 팀원 초대</h2>
@@ -672,7 +672,7 @@ export function OnboardingWizard({ tenantSlug, onClose }: OnboardingWizardProps)
           <div className="flex items-center gap-2">
             <div
               className="flex h-7 w-7 items-center justify-center rounded-lg"
-              style={{ background: '#F5C000' }}
+              style={{ background: '#129B8E' }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M9 14.5c0-2.76 2.24-5 5-5s5 2.24 5 5" />
