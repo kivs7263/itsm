@@ -125,3 +125,14 @@ docker exec itsm_fron | ✅ | itsm | build-hook |
 | 2026-06-14 09:52 | session_close | 세션 정상 종료 / ★★:58개 / ITSM Phase R 전체 완료 | ✅ | itsm | leader |
 | 2026-06-19 17:21 | build | cd /teamwork/sa-workspace
 git add docker-compose.yml docs/failure_log.md docs/pa | ✅ | itsm | build-hook |
+| 2026-06-21 04:36 | build | echo "=== 4앱 전체 계약 (ITSM 마이그 후) ==="
+bash /teamwork/total/scripts/module_contrac | ✅ | itsm | build-hook |
+| 2026-06-21 04:36 | build | cd /teamwork/itsm
+git add backend/app/core/security.py
+git commit -q -m "$(cat < | ✅ | itsm | build-hook |
+| 2026-06-21 04:39 | test | echo "=== ① backend-core pytest 독립 재실행 ==="
+docker exec gw_backend python -m pyt | ✅ | itsm | build-hook |
+| 2026-06-21 04:39 | test | echo "=== ① SA auth 테스트가 crossapp 커버하나 + 실행 ==="
+grep -lE "crossapp|issue_crossa | ✅ | itsm | build-hook |
+| 2026-06-21 04:40 | test | echo "=== ① SA auth 테스트 명확한 결과 ==="
+docker exec sa_backend python -m pytest test | ✅ | itsm | build-hook |
