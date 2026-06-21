@@ -258,3 +258,7 @@ app.include_router(public_v1_router.router)             # /v1/tickets, /v1/usage
 # ADR-044: SSO Portal admin_bridge (KC JWT 인증)
 from app.routers import admin_bridge as admin_bridge_router  # noqa: E402
 app.include_router(admin_bridge_router.router)               # /api/admin/*
+
+# ADR-048 WF-2: GW 결재 승인 → ITSM 작업 티켓 자동 생성 (내부 전용)
+from app.routers import internal_workflow as internal_workflow_router  # noqa: E402
+app.include_router(internal_workflow_router.router)          # /api/internal/workflow/create-ticket
