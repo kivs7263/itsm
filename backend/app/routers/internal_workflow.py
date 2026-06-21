@@ -22,6 +22,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -60,12 +61,22 @@ class WorkflowCreateTicketResponse(BaseModel):
 # ------------------------------------------------------------------
 
 def _verify_internal_secret(x_internal_secret: str = Header(default="")) -> None:
-    """X-Internal-Secret 헤더 검증. 불일치 시 403."""
+    """X-Internal-Secret 헤더 검증.
+
+    - SERVICE_BUS_SECRET 미설정 시: 503 (fail-closed). 엔드포인트는 ops가 시크릿을 설정할 때까지 닫힘.
+    - 헤더 불일치 시: 403.
+    dev 우회 제거 — 빈 시크릿으로 통과하는 경로 없음.
+    """
     expected = settings.SERVICE_BUS_SECRET or ""
     if not expected:
-        # SERVICE_BUS_SECRET 미설정 환경 — 내부망 신뢰 모드 (dev/test 전용)
-        logger.warning("SERVICE_BUS_SECRET 미설정 — 내부 워크플로우 시크릿 검증 건너뜀 (dev 환경)")
-        return
+        logger.error(
+            "SERVICE_BUS_SECRET 미설정 — /api/internal/workflow 엔드포인트 차단 (fail-closed). "
+            "ops: SERVICE_BUS_SECRET 환경변수 설정 후 itsm_backend 재시작 필요."
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="내부 인증 미설정 — 엔드포인트 비활성 상태입니다. ops에 문의하세요.",
+        )
     if x_internal_secret != expected:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -174,8 +185,39 @@ async def create_ticket_from_gw_approval(
     except Exception:
         logger.warning("WF-2 activity_service.record 실패 — graceful skip", exc_info=True)
 
-    await db.commit()
-    await db.refresh(ticket)
+    try:
+        await db.commit()
+        await db.refresh(ticket)
+    except IntegrityError:
+        # DB 레벨 UNIQUE 위반 (uix_tickets_gw_approval_doc_id) — check-then-insert 경쟁 조건 처리.
+        # rollback 후 기존 레코드를 SELECT 하여 멱등 200 반환.
+        await db.rollback()
+        race_result = await db.execute(
+            select(Ticket).where(
+                Ticket.tenant_id == tenant_id,
+                Ticket.gw_approval_doc_id == body.doc_id,
+            )
+        )
+        existing = race_result.scalar_one_or_none()
+        if existing is None:
+            # UNIQUE 위반이지만 레코드를 찾을 수 없는 비정상 상태 — 재시도 가능 에러
+            logger.error(
+                "WF-2 IntegrityError 후 기존 ticket 조회 실패: gw_approval_doc_id=%s tenant=%s",
+                body.doc_id, body.tenant_slug,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="티켓 생성 충돌 — 잠시 후 재시도하세요.",
+            )
+        logger.info(
+            "WF-2 IntegrityError → 멱등 hit (race): gw_approval_doc_id=%s 기존 ticket_id=%s",
+            body.doc_id, existing.id,
+        )
+        return WorkflowCreateTicketResponse(
+            ticket_id=str(existing.id),
+            ticket_number=existing.ticket_number,
+            created=False,
+        )
 
     logger.info(
         "WF-2 ITSM 작업 티켓 생성 완료: ticket_id=%s number=%s gw_approval_doc_id=%s tenant=%s",
