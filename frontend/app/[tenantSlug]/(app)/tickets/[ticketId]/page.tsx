@@ -158,7 +158,7 @@ function SideSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-3">
+    <div className="rounded-lg border border-border-default shadow-[var(--shadow-card)] bg-surface p-4 flex flex-col gap-3">
       <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wide">{title}</h3>
       {children}
     </div>
@@ -485,7 +485,7 @@ export default function TicketDetailPage() {
           <div className="flex flex-col gap-6 min-w-0">
             {/* 설명 */}
             {ticket.description && (
-              <div className="rounded-lg border border-border-default shadow-sm bg-surface p-5">
+              <div className="rounded-lg border border-border-default shadow-[var(--shadow-card)] bg-surface p-5">
                 <h2 className="text-sm font-semibold text-text-secondary mb-3">설명</h2>
                 <p className="text-sm text-text-primary whitespace-pre-wrap leading-relaxed">
                   {ticket.description}
@@ -494,7 +494,7 @@ export default function TicketDetailPage() {
             )}
 
             {/* 활동 타임라인 */}
-            <div className="rounded-lg border border-border-default shadow-sm bg-surface">
+            <div className="rounded-lg border border-border-default shadow-[var(--shadow-card)] bg-surface">
               <div className="px-5 py-3 border-b border-border-default">
                 <h2 className="text-sm font-semibold text-text-primary">활동</h2>
               </div>
