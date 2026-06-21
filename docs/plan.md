@@ -54,6 +54,25 @@
 
 ---
 
+## Phase ALVEO-SCREENS-ITSM: ITSM 본문 Alveo 시안 적용 (2026-06-21 갭분석) [ PENDING ]
+
+> **갭분석(2에이전트, 충돌 실측 검증)**: ITSM은 토큰(`var(--color-*)` 전면 배선, neutral-N/bg-surface도 토큰 경유 — 레거시 아님)·셸(Sidebar 평면 8항목·Topbar @total/ui-shell)·모달(토큰 정합) **이미 Alveo 정합**. 한 에이전트가 "21화면 레거시"로 본 건 token-routed 클래스+죽은 dark: 과대계상(검증으로 교정). 본문은 themed지만 **카드 richness(shadow/radius16) 부족 + 대시보드 위젯 빈약**. → 21화면 재구축 아님, **경량 시각 폴리시**. 기준: GW_LESSONS.md. 브랜드=틸 #129B8E. (ESC-6b=고객포털 별개, 완료)
+> 시안 8화면 중 Dash/Tickets만 실레이아웃, 나머지 6 placeholder→표준패턴. 시안 Alveo.dc.html 256KB truncated.
+
+| ID | 작업 | 크기 |
+|---|---|---|
+| `ITSM-AS-1` | 홈 대시보드 시안화 — sparkline·SLA 도넛·최근 티켓 리스트·카드 shadow (백엔드 데이터 기존) | M |
+| `ITSM-AS-2` | 카드 시각 표준 통일 — 전 화면 카드 shadow-sm/md + radius16 (현재 무그림자 다수) | S~M |
+| `ITSM-AS-3` | overlay 톤 `rgba(14,14,12,0.45)` + 잔여 raw gray(InstallationStepPanel·settings slate/gray 3건) 토큰화 + 죽은 dark: 정리 | XS |
+| `ITSM-AS-4` | (선택) 헤더 동기화 pill 등 미세 시안 정합 | XS |
+| `ITSM-AS-V` | reviewer + 브라우저 검증(xiilab). 대형 settings(2402)·reports(1267·차트색 보존)·customers상세(1988) 폴리시 시 회귀 주의 | M |
+
+진행: AS-1 → AS-2 → AS-3 → (AS-4) → AS-V
+**보존**(GW_LESSONS §3): 상태/SLA/우선순위 의미색맵·차트 BAR_COLORS·역할 게이팅·데이터훅.
+**불필요(이미 정합)**: 토큰 alias 전환·사이드바 평면화·모달 시안화·죽은버튼 처리.
+
+---
+
 ## Phase 4: 운영 완성 + SA 연동 고도화
 
 > 요구사항 정의서 v5.0 + 2026-06-14 에이전트 분석 기반
