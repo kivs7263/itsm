@@ -48,14 +48,16 @@ itsm/
 
 ## 자동 빌드 규칙 (묻지 않고 실행)
 
+> ⚠️ **`docker compose build`/`up`/`recreate` 금지** (total/CLAUDE.md 권위 규칙, 사고 기반). itsm_backend는 **docker-cp 오버레이 서비스**(backend-core 코드가 이미지에 없음) → recreate 시 코드 소실 + fastapi 의존성 드리프트로 전 라우트 500. itsm_frontend는 **`@total/ui-shell` 워크스페이스 의존이 `./frontend` 빌드 컨텍스트 밖** → `compose build`가 npm `extraneous` 오류로 깨짐(2026-06-21 빌드 3회 실패). **반드시 아래 docker-cp / 로컬빌드 방식 사용.**
+
 | 수정 파일 | 자동 실행 명령 |
 |---|---|
-| `backend/app/**/*.py` (migration 제외) | `docker compose build itsm_backend && docker compose up -d itsm_backend` |
-| `frontend/**` | `docker compose build itsm_frontend && docker compose up -d itsm_frontend` |
+| `backend/app/**/*.py` (migration 제외) | `docker cp [file] itsm_backend:/app/[path] && docker restart itsm_backend` |
+| `frontend/**` | `cd /teamwork/itsm/frontend && NODE_ENV=production node_modules/.bin/next build && docker cp .next/. itsm_frontend:/app/.next/ && docker exec -u root itsm_frontend chown -R node:node /app/.next 2>/dev/null; docker restart itsm_frontend` (NEXT_PUBLIC cross-app URL은 `frontend/.env.production`) |
 | `nginx/nginx.conf` | `docker compose restart itsm_nginx` |
 
 **예외 — 절대 자동 실행 금지**: `alembic/versions/*.py` migration은 감지만, 실행 없음.
-**중요**: migration 파일 신규 추가 시에도 `docker compose build itsm_backend` 필수 — 볼륨 마운트 없이 이미지에 베이크되므로 rebuild 없이 `alembic upgrade head` 하면 "Can't locate revision" 오류.
+**중요**: migration 파일은 `docker cp [file] itsm_backend:/app/app/alembic/versions/ && docker exec itsm_backend alembic upgrade head` (이미지 rebuild 아님 — 오버레이 서비스라 compose build 금지. docker-cp로 파일 주입 후 upgrade).
 
 ---
 
@@ -65,9 +67,11 @@ itsm/
 # 전체 기동
 docker compose up -d
 
-# 재빌드
-docker compose build itsm_backend && docker compose up -d itsm_backend
-docker compose build itsm_frontend && docker compose up -d itsm_frontend
+# 재배포 (⚠️ compose build/up 금지 — 위 자동 빌드 규칙 참조)
+# backend: 오버레이 서비스 → docker cp + restart
+docker cp backend/app/routers/[file].py itsm_backend:/app/app/routers/[file].py && docker restart itsm_backend
+# frontend: @total/ui-shell 워크스페이스 의존 → 로컬 next build + docker cp
+cd frontend && NODE_ENV=production node_modules/.bin/next build && docker cp .next/. itsm_frontend:/app/.next/ && docker exec -u root itsm_frontend chown -R node:node /app/.next 2>/dev/null; docker restart itsm_frontend
 docker compose restart itsm_nginx
 
 # 마이그레이션
