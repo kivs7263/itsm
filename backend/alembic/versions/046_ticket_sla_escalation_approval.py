@@ -23,7 +23,7 @@ def upgrade() -> None:
         "tickets",
         sa.Column(
             "sla_escalation_approval_id",
-            sa.Text,
+            sa.String(128),
             nullable=True,
             comment="WF-4: GW 에스컬레이션 결재 doc_id. NULL=미생성. 중복 방지용.",
         ),
