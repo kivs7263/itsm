@@ -136,3 +136,18 @@ docker exec gw_backend python -m pyt | ✅ | itsm | build-hook |
 grep -lE "crossapp|issue_crossa | ✅ | itsm | build-hook |
 | 2026-06-21 04:40 | test | echo "=== ① SA auth 테스트 명확한 결과 ==="
 docker exec sa_backend python -m pytest test | ✅ | itsm | build-hook |
+| 2026-06-21 06:41 | build | cd /teamwork/itsm
+echo "=== 신규 이미지 빌드 (running 컨테이너 미변경) ==="
+timeout 300 docker | ✅ | itsm | build-hook |
+| 2026-06-21 06:43 | build | cd /teamwork/itsm
+echo "=== 워커 3개 빌드+recreate (신규 베이크 이미지) ==="
+docker compose u | ✅ | itsm | build-hook |
+| 2026-06-21 06:48 | build | cd /teamwork/itsm
+docker compose up -d --build itsm_email_worker >/tmp/ew.log 2> | ✅ | itsm | build-hook |
+| 2026-06-21 11:34 | build | cd /teamwork/itsm && docker compose build itsm_frontend > /tmp/itsm_fe_build.log | ✅ | itsm | build-hook |
+| 2026-06-21 11:48 | build | docker compose build --no-cache itsm_frontend > /tmp/itsm_fe_build3.log 2>&1; rc | ✅ | itsm | build-hook |
+| 2026-06-21 11:54 | build | cd /teamwork/itsm
+echo "===== 최신 500 trace (방금 호출) ====="; docker logs itsm_back | ✅ | itsm | build-hook |
+| 2026-06-21 11:59 | build | echo "===== ① 실제 발동 패턴 hit ====="
+bash ~/.claude/hooks/_manual/pattern_hit.sh ba | ✅ | itsm | build-hook |
+| 2026-06-21 12:03 | session_close | ITSM ALVEO phase + reports/summary 500 수정 + 빌드규칙 교정 / ★★:104개 | ✅ | itsm | leader |
