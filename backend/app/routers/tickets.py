@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_roles
+from app.services import gw_approval_service
 from app.models import (
     CauseCategory,
     SymptomCategory,
@@ -116,6 +117,9 @@ class TicketOut(BaseModel):
     updated_at: datetime
     resolved_at: datetime | None
     closed_at: datetime | None
+    # WF-1 (ADR-048): GW 결재 연동 필드
+    gw_approval_doc_id: str | None = None
+    gw_approval_status: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -256,6 +260,15 @@ def _apply_resolved_closed(ticket: Ticket, new_status: TicketStatus) -> None:
         ticket.resolved_at = now
     elif new_status == TicketStatus.closed and ticket.closed_at is None:
         ticket.closed_at = now
+
+
+# WF-1 (ADR-048): GW 결재 선행 티켓 유형 — 이 request_type이면 GW 결재 자동 기안
+_WF1_APPROVAL_REQUEST_TYPES = frozenset({"license_request", "budget_request", "access_request"})
+
+
+def _is_wf1_ticket(request_type: str | None) -> bool:
+    """WF-1 결재 대상 여부."""
+    return bool(request_type and request_type in _WF1_APPROVAL_REQUEST_TYPES)
 
 
 # ------------------------------------------------------------------
@@ -456,6 +469,38 @@ async def create_ticket(
     await db.commit()
     await db.refresh(ticket)
 
+    # WF-1 (ADR-048): 결재 선행 유형 → GW 결재 자동 기안
+    # 멱등성: gw_approval_doc_id IS NULL 일 때만. 외부 HTTP는 commit 후 독립 처리.
+    # graceful: GW/KC 미설정 시 None 반환 → 티켓 흐름 차단 금지.
+    if _is_wf1_ticket(data.request_type):
+        try:
+            gw_result = await gw_approval_service.submit_approval_draft(
+                requester_email=current_user.email,
+                title=f"[ITSM] {ticket.title}",
+                content_text=(
+                    f"티켓 번호: {ticket.ticket_number}\n"
+                    f"유형: {data.request_type}\n"
+                    f"내용: {ticket.description or ticket.title}"
+                ),
+            )
+            if gw_result:
+                ticket.gw_approval_doc_id = str(gw_result.get("id", ""))
+                ticket.gw_approval_status = "pending"
+                logger.info(
+                    "WF-1 GW 결재 기안 성공: ticket=%s doc_id=%s",
+                    ticket.id, ticket.gw_approval_doc_id,
+                )
+            else:
+                ticket.gw_approval_status = "gw_not_configured"
+                logger.info(
+                    "WF-1 GW 결재 휴면(env 미설정): ticket=%s request_type=%s",
+                    ticket.id, data.request_type,
+                )
+            await db.commit()
+            await db.refresh(ticket)
+        except Exception:
+            logger.exception("WF-1 GW 결재 기안 중 예외 (graceful skip): ticket=%s", ticket.id)
+
     # Meilisearch 인덱싱 (graceful fallback)
     await search_service.index_ticket(
         search_service.TicketDoc(
@@ -511,6 +556,41 @@ async def get_ticket(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     ticket = await _get_ticket_or_404(db, current_user.tenant_id, ticket_id)
+
+    # WF-1 (ADR-048): GW 결재 상태 동기화 + 승인 시 자동 클로즈 (폴링 fallback)
+    # 외부 HTTP는 DB 트랜잭션 밖 독립 처리. graceful: 실패해도 조회 응답 차단 금지.
+    if ticket.gw_approval_doc_id and ticket.gw_approval_status == "pending":
+        try:
+            gw_status = await gw_approval_service.get_approval_status(
+                requester_email=current_user.email,
+                gw_doc_id=ticket.gw_approval_doc_id,
+            )
+            if gw_status and gw_status != ticket.gw_approval_status:
+                ticket.gw_approval_status = gw_status
+                if gw_status == "approved":
+                    _apply_resolved_closed(ticket, TicketStatus.closed)
+                    ticket.status = TicketStatus.closed
+                    await activity_service.record(
+                        db,
+                        tenant_id=current_user.tenant_id,
+                        ticket_id=ticket.id,
+                        actor_id=current_user.id,
+                        event_type="status_changed",
+                        from_value="pending",
+                        to_value="closed",
+                        meta={"reason": "wf1_gw_approved"},
+                    )
+                    logger.info(
+                        "WF-1 GW 승인 → 티켓 자동 클로즈: ticket=%s", ticket.id
+                    )
+                elif gw_status == "rejected":
+                    logger.info(
+                        "WF-1 GW 반려: ticket=%s gw_status=%s", ticket.id, gw_status
+                    )
+                await db.commit()
+                await db.refresh(ticket)
+        except Exception:
+            logger.exception("WF-1 GW 상태 동기화 중 예외 (graceful skip): ticket=%s", ticket.id)
 
     comments = (
         await db.execute(

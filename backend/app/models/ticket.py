@@ -110,6 +110,9 @@ class Ticket(Base):
     reopen_count = Column(SmallInteger, nullable=False, default=0)
     # WF-4: SLA 에스컬레이션 결재 (ADR-048)
     sla_escalation_approval_id = Column(String(128), nullable=True)  # GW 결재 doc_id, NULL=미생성
+    # WF-1: 결재 선행 티켓 유형 (license_request/budget_request/access_request) — ADR-048
+    gw_approval_doc_id = Column(String(128), nullable=True)   # GW 결재 doc_id, NULL=비대상 또는 미생성
+    gw_approval_status = Column(String(30), nullable=True)    # pending/approved/rejected/gw_not_configured
 
 
 class TicketComment(Base):
