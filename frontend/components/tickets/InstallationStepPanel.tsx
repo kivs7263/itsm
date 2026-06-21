@@ -76,10 +76,10 @@ function getStepState(
 
 function StepIcon({ state }: { state: StepState }) {
   if (state === 'done' || state === 'all-done') {
-    return <CheckCircle2 className="h-6 w-6 text-green-500 shrink-0" />;
+    return <CheckCircle2 className="h-6 w-6 text-success shrink-0" />;
   }
   if (state === 'current') {
-    return <Circle className="h-6 w-6 text-blue-500 shrink-0 fill-blue-100" />;
+    return <Circle className="h-6 w-6 text-info shrink-0" style={{ fill: 'var(--color-info-bg)' }} />;
   }
   return <Circle className="h-6 w-6 text-neutral-300 shrink-0" />;
 }
@@ -139,7 +139,7 @@ export function InstallationStepPanel({ ticketId, tenantSlug }: InstallationStep
     <div className="p-5 flex flex-col gap-0">
       {/* 완료 배너 */}
       {isAllDone && (
-        <div className="mb-6 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700 font-medium">
+        <div className="mb-6 rounded-lg bg-success-bg border border-success-border px-4 py-3 text-sm text-success-text font-medium">
           설치 완료 — 티켓이 해결됨으로 처리되었습니다
         </div>
       )}
@@ -162,7 +162,7 @@ export function InstallationStepPanel({ ticketId, tenantSlug }: InstallationStep
                     className={cn(
                       'w-0.5 flex-1 min-h-[24px]',
                       state === 'done' || state === 'all-done'
-                        ? 'bg-green-400'
+                        ? 'bg-success'
                         : 'bg-neutral-200',
                     )}
                   />
@@ -176,16 +176,16 @@ export function InstallationStepPanel({ ticketId, tenantSlug }: InstallationStep
                     className={cn(
                       'text-sm font-medium',
                       state === 'done' || state === 'all-done'
-                        ? 'text-green-600'
+                        ? 'text-success-text'
                         : state === 'current'
-                          ? 'text-blue-600'
+                          ? 'text-info-text'
                           : 'text-text-secondary',
                     )}
                   >
                     {STEP_LABELS[step]}
                   </span>
                   {isCurrent && !isAllDone && (
-                    <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                    <span className="inline-flex items-center rounded-full bg-info-bg px-2 py-0.5 text-xs font-medium text-info-text">
                       현재 단계
                     </span>
                   )}

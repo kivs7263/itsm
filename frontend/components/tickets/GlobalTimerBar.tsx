@@ -46,7 +46,7 @@ function TimerPill({
   const elapsed = useElapsed(item.started_at);
 
   return (
-    <div className="flex items-center gap-1.5 rounded-md bg-amber-500 text-[#1A1A1A] pl-2.5 pr-1 py-1">
+    <div className="flex items-center gap-1.5 rounded-md pl-2.5 pr-1 py-1 text-[#1A1A1A]" style={{ background: 'var(--color-warning)' }}>
       <Clock size={11} className="shrink-0 animate-pulse" />
       <span className="font-mono text-xs font-semibold tabular-nums">{elapsed}</span>
 
@@ -66,7 +66,7 @@ function TimerPill({
 
       <button
         onClick={() => onStop(item)}
-        className="flex items-center rounded bg-[#1A1A1A]/20 hover:bg-[#1A1A1A]/35 p-0.5 transition-colors ml-0.5"
+        className="flex items-center rounded p-0.5 transition-colors ml-0.5 bg-black/20 hover:bg-black/35"
         aria-label="중지"
       >
         <Square size={11} />

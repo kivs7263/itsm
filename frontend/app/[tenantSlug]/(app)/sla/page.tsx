@@ -11,6 +11,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 
 // -----------------------------------------------------------------------
+// 시맨틱 색상 상수 (SVG/inline style용 — CSS 변수 불가 컨텍스트)
+// -----------------------------------------------------------------------
+const COLOR_SUCCESS = '#16a34a';  // var(--color-success)
+const COLOR_WARNING = '#d97706';  // var(--color-warning)
+const COLOR_ERROR   = '#991b1b';  // var(--color-error)
+const COLOR_INFO    = '#2563eb';  // var(--color-info)
+
+// -----------------------------------------------------------------------
 // KPI 카드
 // -----------------------------------------------------------------------
 interface KpiCardProps {
@@ -23,7 +31,7 @@ interface KpiCardProps {
 
 function KpiCard({ label, value, icon, color, isLoading }: KpiCardProps) {
   return (
-    <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex items-start gap-3">
+    <div className="rounded-lg border border-border-default shadow-[var(--shadow-card)] bg-surface p-4 flex items-start gap-3">
       <div
         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
         style={{ background: color + '1A' }}
@@ -72,7 +80,7 @@ function TierBadge({ tier }: { tier: ContractTier }) {
 // -----------------------------------------------------------------------
 function ComplianceGauge({ rate }: { rate: number }) {
   const clamped = Math.max(0, Math.min(100, rate));
-  const color = clamped >= 90 ? '#22c55e' : clamped >= 75 ? '#f59e0b' : '#ef4444';
+  const color = clamped >= 90 ? COLOR_SUCCESS : clamped >= 75 ? COLOR_WARNING : COLOR_ERROR;
   const circumference = 2 * Math.PI * 36;
   const strokeDashoffset = circumference - (clamped / 100) * circumference;
 
@@ -177,28 +185,28 @@ export default function SLAPage() {
             label="활성 티켓"
             value={dashboard?.active_tickets ?? 0}
             icon={<TicketIcon size={20} />}
-            color="#6366f1"
+            color={COLOR_INFO}
             isLoading={dashLoading}
           />
           <KpiCard
             label="SLA 위반"
             value={dashboard?.sla_violations ?? 0}
             icon={<AlertTriangle size={20} />}
-            color="#ef4444"
+            color={COLOR_ERROR}
             isLoading={dashLoading}
           />
           <KpiCard
             label="경고"
             value={dashboard?.sla_warnings ?? 0}
             icon={<Clock size={20} />}
-            color="#f59e0b"
+            color={COLOR_WARNING}
             isLoading={dashLoading}
           />
           <KpiCard
             label="준수율"
             value={`${(dashboard?.compliance_rate ?? 0).toFixed(1)}%`}
             icon={<CheckCircle size={20} />}
-            color="#22c55e"
+            color={COLOR_SUCCESS}
             isLoading={dashLoading}
           />
         </div>
@@ -206,7 +214,7 @@ export default function SLAPage() {
         {/* SLA 정책 테이블 + 게이지 */}
         <div className="grid grid-cols-3 gap-6">
           {/* 정책 테이블 */}
-          <div className="col-span-2 rounded-lg border border-border-default shadow-sm bg-surface">
+          <div className="col-span-2 rounded-lg border border-border-default shadow-[var(--shadow-card)] bg-surface">
             <div className="px-5 py-4 border-b border-border-subtle">
               <h2 className="text-sm font-semibold text-text-primary">SLA 정책</h2>
             </div>
@@ -257,7 +265,7 @@ export default function SLAPage() {
           </div>
 
           {/* 준수율 게이지 */}
-          <div className="rounded-lg border border-border-default shadow-sm bg-surface flex items-center justify-center p-6">
+          <div className="rounded-lg border border-border-default shadow-[var(--shadow-card)] bg-surface flex items-center justify-center p-6">
             {dashLoading ? (
               <div className="flex flex-col items-center gap-3">
                 <Skeleton className="h-24 w-24 rounded-full" />

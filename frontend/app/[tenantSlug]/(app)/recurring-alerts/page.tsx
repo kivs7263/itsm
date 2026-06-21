@@ -40,9 +40,9 @@ function EmptyState() {
         <div className="flex flex-col items-center justify-center py-20 gap-3">
           <div
             className="flex h-12 w-12 items-center justify-center rounded-2xl"
-            style={{ background: 'rgba(34, 197, 94, 0.12)' }}
+            style={{ background: 'var(--color-success-bg)' }}
           >
-            <CheckCircle2 size={24} strokeWidth={1.5} style={{ color: '#22c55e' }} />
+            <CheckCircle2 size={24} strokeWidth={1.5} style={{ color: 'var(--color-success)' }} />
           </div>
           <div className="text-center">
             <p className="text-sm font-medium text-text-primary">반복 감지된 장애 없음</p>

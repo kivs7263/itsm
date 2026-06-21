@@ -71,7 +71,7 @@ function ChannelStatusCard({
   configured: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-border-default shadow-sm bg-surface px-4 py-3">
+    <div className="flex items-center justify-between rounded-lg border border-border-default shadow-[var(--shadow-card)] bg-surface px-4 py-3">
       <span className="text-sm font-medium text-text-primary">
         {CHANNEL_LABELS[channel]}
       </span>
@@ -91,7 +91,7 @@ function ChannelStatusCard({
 
 function ChannelStatusSkeleton() {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-border-default shadow-sm bg-surface px-4 py-3">
+    <div className="flex items-center justify-between rounded-lg border border-border-default shadow-[var(--shadow-card)] bg-surface px-4 py-3">
       <Skeleton className="h-4 w-20" />
       <Skeleton className="h-5 w-14 rounded-full" />
     </div>
@@ -272,8 +272,8 @@ function InboxItem({
           <span
             className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
             style={{
-              background: 'rgba(18, 155, 142,0.15)',
-              color: '#B45309',
+              background: 'rgba(18, 155, 142, 0.15)',
+              color: 'var(--color-brand)',
             }}
           >
             {sourceLabel}
@@ -452,8 +452,8 @@ export default function NotificationsPage() {
           <h2 className="text-sm font-medium text-text-secondary">플랫폼 통합 알림</h2>
           {inbox.filter((n) => !n.is_read).length > 0 && (
             <span
-              className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white"
-              style={{ background: '#B45309' }}
+              className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-[#1A1A1A]"
+              style={{ background: 'var(--color-brand)' }}
             >
               {inbox.filter((n) => !n.is_read).length}
             </span>

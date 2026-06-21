@@ -60,7 +60,7 @@ function PriorityBadge({ priority }: { priority: TicketPriority }) {
 // -----------------------------------------------------------------------
 const STATUS_STYLES: Record<TicketStatus, string> = {
   open:        'bg-status-open-bg text-status-open',
-  in_progress: 'bg-purple-50 text-purple-700',
+  in_progress: 'bg-info-bg text-info-text',
   pending:     'bg-status-pending-bg text-status-pending',
   resolved:    'bg-status-resolved-bg text-status-resolved',
   closed:      'bg-status-closed-bg text-status-closed',
@@ -567,7 +567,7 @@ export default function TicketsPage() {
                         {ticket.title}
                       </span>
                       {ticket.is_recurring_flag && (
-                        <span className="shrink-0 inline-flex items-center rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">
+                        <span className="shrink-0 inline-flex items-center rounded-full bg-warning-bg px-1.5 py-0.5 text-[10px] font-semibold text-warning-text">
                           반복
                         </span>
                       )}

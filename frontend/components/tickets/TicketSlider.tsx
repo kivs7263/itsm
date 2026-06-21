@@ -126,7 +126,7 @@ function KbSuggestionsSection({ ticketId, tenantSlug }: { ticketId: string; tena
   return (
     <div className="rounded-lg border border-border-default bg-surface">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
-        <Sparkles size={13} className="text-amber-500" />
+        <Sparkles size={13} className="text-brand" />
         <span className="text-xs font-semibold text-text-primary">관련 KB 문서</span>
         {!isLoading && (
           <span className="text-[10px] text-text-tertiary ml-auto">AI 유사도 기반</span>
@@ -147,7 +147,7 @@ function KbSuggestionsSection({ ticketId, tenantSlug }: { ticketId: string; tena
                 rel="noopener noreferrer"
                 className="flex items-start gap-3 px-4 py-3 hover:bg-surface-hover transition-colors group"
               >
-                <BookOpen size={13} className="mt-0.5 shrink-0 text-text-tertiary group-hover:text-amber-500" />
+                <BookOpen size={13} className="mt-0.5 shrink-0 text-text-tertiary group-hover:text-brand" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-text-primary line-clamp-1 group-hover:text-brand">
                     {s.title}
@@ -285,7 +285,7 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
                 <SlaBadge deadline={ticket.sla_response_deadline} label="응답" />
                 <SlaBadge deadline={ticket.sla_resolution_deadline} label="해결" />
                 {ticket.escalation_level != null && ticket.escalation_level > 1 && (
-                  <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
+                  <span className="inline-flex items-center rounded-full bg-warning-bg px-2 py-0.5 text-xs font-medium text-warning-text">
                     {ticket.escalation_level}차 대응
                   </span>
                 )}
@@ -355,7 +355,7 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
                 size="sm"
                 variant="outline"
                 onClick={() => setEscModalOpen(true)}
-                className="h-7 text-xs text-orange-600 border-orange-300 hover:bg-orange-50"
+                className="h-7 text-xs text-warning-text border-warning-border hover:bg-warning-bg"
               >
                 2차 이관
               </Button>

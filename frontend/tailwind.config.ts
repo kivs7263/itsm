@@ -23,7 +23,7 @@ const config: Config = {
         /* Brand — ITSM 고유 (#129B8E) */
         brand: {
           DEFAULT: '#129B8E',
-          hover:   '#16A597',
+          hover:   '#0E8576',
           active:  '#0E7E73',
           subtle:  'rgba(18, 155, 142, 0.10)',
         },

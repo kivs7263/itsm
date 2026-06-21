@@ -121,13 +121,18 @@
   --shadow-lg:    0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
   --shadow-xl:    0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
   --shadow-brand: 0 0 0 3px rgba(18, 155, 142, 0.32);
+  /* GW_LESSONS §2 soft 2단 카드 그림자 — E4 */
+  --shadow-card:  0 1px 4px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.06);
+  /* 카드 radius primitive — radius-lg(16px) 사용 */
+  --radius-card:  var(--radius-lg);
 
   /* === Sidebar (SHELL-7: 3앱 통일 토큰) === */
   --sidebar-bg:               #17181C;
   --sidebar-border:           #24262B;
   --sidebar-nav-text:         #9A96A4;
-  --sidebar-nav-active-text:  #FFFFFF;
-  --sidebar-active-bg:        rgba(18, 155, 142, 0.12);
+  /* D1: 밝은 pill 정본 — active 텍스트 다크(#16181D) */
+  --sidebar-nav-active-text:  #16181D;
+  --sidebar-active-bg:        #F2F4F6;
   --sidebar-user-name:        #EDEBF0;
   --sidebar-user-meta:        #6E6B79;
 
@@ -238,8 +243,9 @@
   --sidebar-bg:               #17181C;
   --sidebar-border:           #24262B;
   --sidebar-nav-text:         #9A96A4;
-  --sidebar-nav-active-text:  #FFFFFF;
-  --sidebar-active-bg:        rgba(18, 155, 142, 0.12);
+  /* D1: 밝은 pill 정본 — active 텍스트 다크(#16181D) */
+  --sidebar-nav-active-text:  #16181D;
+  --sidebar-active-bg:        #F2F4F6;
   --sidebar-user-name:        #EDEBF0;
   --sidebar-user-meta:        #6E6B79;
 
@@ -286,6 +292,18 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
   }
+}
+
+/* =====================================================================
+   유틸리티 클래스
+===================================================================== */
+/* E5: 타이머/경고 상태 버튼 — warning 토큰 (amber raw 클래스 대체) */
+.btn-warning {
+  background: var(--color-warning);
+}
+.btn-warning:hover {
+  /* WCAG: 어두운 warning-text(#b45309, #1A1A1A 3.47:1 미달) bg전환 대신 base를 어둡힘 */
+  filter: brightness(0.92);
 }
 
 /* =====================================================================

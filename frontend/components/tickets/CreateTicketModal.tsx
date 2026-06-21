@@ -559,7 +559,7 @@ function TicketFormStep({
                       }
                       setAiSuggestion(null);
                     }}
-                    className="shrink-0 rounded-md bg-amber-500 px-2.5 py-1 text-xs font-medium text-[#1A1A1A] hover:bg-amber-600 transition-colors"
+                    className="shrink-0 rounded-md px-2.5 py-1 text-xs font-medium text-[#1A1A1A] btn-warning transition-colors"
                   >
                     적용
                   </button>

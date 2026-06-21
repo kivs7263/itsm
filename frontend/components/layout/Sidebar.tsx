@@ -15,7 +15,7 @@ import {
   RefreshCw,
   Settings,
   Clock,
-  Languages,
+
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSlug } from '@/lib/slug';
@@ -23,7 +23,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { isTeamLeadOrAbove, isSales, isCLevel, isAdminRole, type UserRole } from '@/lib/auth';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { getInitials } from '@/lib/utils';
-import { useLocale, type Locale } from '@/lib/locale';
+import { useLocale } from '@/lib/locale';
 
 const STORAGE_KEY = 'itsm.sidebar.collapsed';
 
@@ -80,7 +80,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const slug = useSlug();
   const { user, logout } = useAuth();
-  const { locale, setLocale, t } = useLocale();
+  const { t } = useLocale();
 
   // SHELL-7 항목 ⑤: collapsed hover float 패널 추가 (GW/SA 패턴 통일)
   const [hoverExpanded, setHoverExpanded] = useState(false);
@@ -121,8 +121,6 @@ export function Sidebar() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleCollapsed]);
 
-  const toggleLocale = () => setLocale(locale === 'ko' ? 'en' : 'ko');
-
   const effectivelyExpanded = !collapsed || hoverExpanded;
   const isFloating = collapsed && hoverExpanded;
 
@@ -161,17 +159,17 @@ export function Sidebar() {
                 'flex items-center gap-3 rounded-md px-2.5 py-2',
                 'transition-colors duration-[150ms]',
                 'focus-visible:outline-none focus-visible:shadow-brand',
-                // SHELL-7 항목 ②③: 활성 표현 토큰 + 라벨 13.5px
+                // D1: 밝은 pill 정본 — isActive 시 box-shadow inset 2px teal
                 isActive
-                  ? 'font-medium border-l-2'
-                  : 'border-l-2 border-transparent hover:bg-white/[0.06]',
+                  ? 'font-medium'
+                  : 'hover:bg-white/[0.06]',
               )}
               style={
                 isActive
                   ? {
                       background: 'var(--sidebar-active-bg)',
-                      borderLeftColor: 'var(--color-brand)',
-                      color: 'var(--sidebar-nav-active-text, #ffffff)',
+                      boxShadow: 'inset 2px 0 0 var(--color-brand)',
+                      color: 'var(--sidebar-nav-active-text, #16181D)',
                       fontSize: '13.5px',
                     }
                   : {
@@ -193,34 +191,11 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* 하단: 사용자 카드 1행 (SHELL-7 항목 ④) + 언어토글 보존 */}
+      {/* 하단: 사용자 카드 1행 (SHELL-7 항목 ④) — D2: 언어 토글은 헤더 UserMenu로 통합 */}
       <div
         style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
         className="p-2 flex flex-col gap-1"
       >
-        {/* 언어 선택 — ITSM 전용, 보존 (SHELL-7: MUST-CARRY) */}
-        <button
-          type="button"
-          onClick={toggleLocale}
-          className={cn(
-            'flex items-center gap-3 rounded-md px-2.5 py-2 text-sm w-full',
-            'text-white/60 hover:text-white hover:bg-white/[0.06]',
-            'transition-colors duration-fast focus-visible:outline-none focus-visible:shadow-brand',
-            !effectivelyExpanded && 'justify-center',
-          )}
-          title={!effectivelyExpanded ? t.sidebar.language : undefined}
-        >
-          <Languages size={17} className="shrink-0 text-white/40" />
-          {effectivelyExpanded && (
-            <span className="flex items-center gap-2 flex-1">
-              <span className="flex-1" style={{ fontSize: '13.5px' }}>{t.sidebar.language}</span>
-              <span className="text-[11px] font-medium" style={{ color: 'var(--color-brand)' }}>
-                {locale === 'ko' ? 'KO' : 'EN'}
-              </span>
-            </span>
-          )}
-        </button>
-
         {/* 1행 사용자 카드: 아바타 32px + 이름/이메일 1줄 + 로그아웃 */}
         {user && (
           <div

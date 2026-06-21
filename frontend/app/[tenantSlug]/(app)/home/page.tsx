@@ -38,7 +38,7 @@ function Card({
   return (
     <div
       className={cn(
-        'rounded-lg border border-border-default bg-surface shadow-md overflow-hidden',
+        'rounded-lg border border-border-default bg-surface shadow-[var(--shadow-card)] overflow-hidden',
         className,
       )}
     >
@@ -339,7 +339,7 @@ function KpiCard({
   }[accent ?? 'default'];
 
   return (
-    <div className="rounded-lg border border-border-default bg-surface shadow-md p-4 flex flex-col gap-3">
+    <div className="rounded-lg border border-border-default bg-surface shadow-[var(--shadow-card)] p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="text-xs text-text-secondary">{label}</span>
         <Icon size={15} className={accentClass} />
@@ -381,7 +381,7 @@ function EngineerDashboard({ tenantSlug }: { tenantSlug: string }) {
         <button
           type="button"
           onClick={() => router.push(`/${tenantSlug}/tickets/new`)}
-          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white bg-brand hover:bg-brand-hover transition-colors"
+          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-[#1A1A1A] bg-brand hover:bg-brand-hover transition-colors"
         >
           <Plus size={14} />
           새 티켓
@@ -711,7 +711,7 @@ function TeamDashboard({ tenantSlug }: { tenantSlug: string }) {
         <button
           type="button"
           onClick={() => router.push(`/${tenantSlug}/tickets/new`)}
-          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white bg-brand hover:bg-brand-hover transition-colors"
+          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-[#1A1A1A] bg-brand hover:bg-brand-hover transition-colors"
         >
           <Plus size={14} />
           새 티켓
@@ -778,7 +778,7 @@ function SalesDashboard({ tenantSlug }: { tenantSlug: string }) {
         <button
           type="button"
           onClick={() => router.push(`/${tenantSlug}/tickets/new`)}
-          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white bg-brand hover:bg-brand-hover transition-colors"
+          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-[#1A1A1A] bg-brand hover:bg-brand-hover transition-colors"
         >
           <Plus size={14} />
           새 티켓
@@ -826,7 +826,7 @@ function CLevelDashboard({ tenantSlug }: { tenantSlug: string }) {
         <button
           type="button"
           onClick={() => router.push(`/${tenantSlug}/tickets/new`)}
-          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white bg-brand hover:bg-brand-hover transition-colors"
+          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-[#1A1A1A] bg-brand hover:bg-brand-hover transition-colors"
         >
           <Plus size={14} />
           새 티켓

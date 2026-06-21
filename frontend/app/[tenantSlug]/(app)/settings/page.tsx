@@ -183,7 +183,7 @@ function UsersTab({ tenantSlug }: { tenantSlug: string }) {
 
       {/* 초대 폼 */}
       {showInvite && (
-        <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-3">
+        <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-3">
           <p className="text-sm font-medium text-text-primary">새 사용자 초대</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
@@ -325,7 +325,7 @@ interface ChannelSectionProps {
 
 function ChannelSection({ title, fields, values, onChange, onSave, isSaving }: ChannelSectionProps) {
   return (
-    <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-3">
+    <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-3">
       <p className="text-sm font-semibold text-text-primary">{title}</p>
       {fields.map(({ key, label, placeholder }) => (
         <div key={key} className="flex flex-col gap-1">
@@ -451,7 +451,7 @@ function NotificationsTab({ tenantSlug }: { tenantSlug: string }) {
       />
 
       {/* SMTP 섹션 — 비밀번호는 별도 state 관리 */}
-      <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-3">
+      <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-3">
         <p className="text-sm font-semibold text-text-primary">SMTP (이메일)</p>
 
         <div className="grid grid-cols-2 gap-3">
@@ -610,7 +610,7 @@ function SlaTab({ tenantSlug }: { tenantSlug: string }) {
           };
 
           return (
-            <div key={tier} className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-3">
+            <div key={tier} className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-3">
               <p className={cn('text-sm font-semibold', TIER_COLORS[tier])}>
                 {TIER_LABELS[tier]}
               </p>
@@ -859,7 +859,7 @@ function CategorySection({ tenantSlug, urlKey, queryKey, title }: CategorySectio
       )}
 
       {/* 트리 목록 */}
-      <div className="rounded-lg border border-border-default shadow-sm bg-surface py-1">
+      <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] py-1">
         {isLoading ? (
           <div className="flex flex-col gap-1 p-2">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -980,7 +980,7 @@ function SupportTeamsTab({ tenantSlug }: { tenantSlug: string }) {
 
       {/* 추가 폼 */}
       {showAddForm && (
-        <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-3">
+        <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-3">
           <p className="text-sm font-medium text-text-primary">새 지원팀</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
@@ -1052,7 +1052,7 @@ function SupportTeamsTab({ tenantSlug }: { tenantSlug: string }) {
           ))}
         </div>
       ) : teams.length === 0 ? (
-        <div className="rounded-lg border border-border-default shadow-sm bg-surface py-12 text-center text-sm text-text-secondary">
+        <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] py-12 text-center text-sm text-text-secondary">
           지원팀이 없습니다.
         </div>
       ) : (
@@ -1061,7 +1061,7 @@ function SupportTeamsTab({ tenantSlug }: { tenantSlug: string }) {
             <div
               key={team.id}
               className={cn(
-                'rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-2',
+                'bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-2',
                 !team.is_active && 'opacity-60',
               )}
             >
@@ -1618,7 +1618,7 @@ function ApiKeysTab({ tenantSlug }: { tenantSlug: string }) {
 
       {/* 생성 폼 */}
       {showCreate && (
-        <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex items-end gap-3">
+        <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex items-end gap-3">
           <div className="flex-1 flex flex-col gap-1">
             <label className="text-xs text-text-secondary">키 이름</label>
             <input
@@ -1681,7 +1681,7 @@ function ApiKeysTab({ tenantSlug }: { tenantSlug: string }) {
       )}
 
       {/* 키 목록 */}
-      <div className="rounded-lg border border-border-default shadow-sm overflow-hidden">
+      <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-default bg-surface-elevated">
@@ -1861,7 +1861,7 @@ function WebhooksTab({ tenantSlug }: { tenantSlug: string }) {
 
       {/* 등록 폼 */}
       {showCreate && (
-        <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-4">
+        <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-text-secondary">URL</label>
             <input
@@ -1922,7 +1922,7 @@ function WebhooksTab({ tenantSlug }: { tenantSlug: string }) {
       ) : (
         <div className="flex flex-col gap-3">
           {webhooks.map((wh) => (
-            <div key={wh.id} className="rounded-lg border border-border-default shadow-sm bg-surface overflow-hidden">
+            <div key={wh.id} className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] overflow-hidden">
               <div className="flex items-start gap-3 px-4 py-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -2115,7 +2115,7 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
       )}
 
       {/* 현재 플랜 카드 */}
-      <div className="rounded-xl border border-border-default bg-surface p-5">
+      <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-5">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -2168,7 +2168,7 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
       {/* 사용량 */}
       <div className="grid grid-cols-2 gap-4">
         {/* 시트 */}
-        <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4">
+        <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-text-secondary">엔지니어 시트</span>
             <span className="text-xs text-text-tertiary">
@@ -2184,7 +2184,7 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
         </div>
 
         {/* 티켓 (Free만) */}
-        <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4">
+        <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-text-secondary">이번달 티켓</span>
             <span className="text-xs text-text-tertiary">
@@ -2207,7 +2207,7 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
 
       {/* 인보이스 */}
       {invoices.length > 0 && (
-        <div className="rounded-lg border border-border-default shadow-sm overflow-hidden">
+        <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] overflow-hidden">
           <div className="px-4 py-3 bg-surface-elevated border-b border-border-subtle">
             <span className="text-xs font-medium text-text-secondary">인보이스</span>
           </div>
@@ -2285,7 +2285,7 @@ function GeneralTab({ tenantSlug }: { tenantSlug: string }) {
 
   return (
     <div className="flex flex-col gap-6 max-w-lg">
-      <div className="rounded-xl border border-border-default bg-surface p-5 flex flex-col gap-4">
+      <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-5 flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-text-primary flex items-center gap-2">
             <Globe size={15} className="text-text-secondary" />

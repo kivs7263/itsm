@@ -349,7 +349,7 @@ export default function MagicPortalPage() {
                 type="submit"
                 disabled={submitting || !comment.trim()}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-                  bg-amber-500 text-gray-900 hover:bg-amber-600 transition-colors
+                  btn-warning text-gray-900 transition-colors
                   disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting ? (

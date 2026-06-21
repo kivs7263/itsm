@@ -31,9 +31,9 @@ interface WorkLog {
 }
 
 const COMPLETION_LABELS: Record<string, { label: string; cls: string }> = {
-  completed:      { label: '완료',         cls: 'bg-green-100 text-green-700' },
-  partial:        { label: '부분 완료',    cls: 'bg-amber-100 text-amber-700' },
-  needs_followup: { label: '추가 대응 필요', cls: 'bg-red-100 text-red-700' },
+  completed:      { label: '완료',         cls: 'bg-success-bg text-success-text' },
+  partial:        { label: '부분 완료',    cls: 'bg-warning-bg text-warning-text' },
+  needs_followup: { label: '추가 대응 필요', cls: 'bg-error-bg text-error-text' },
 };
 
 interface TimerActive {
@@ -222,7 +222,7 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
           <div className="w-px bg-border-subtle" />
           <div className="flex flex-col items-center">
             <span className="text-xs text-text-secondary">유상</span>
-            <span className="font-semibold text-green-600">{totalH.billable}h</span>
+            <span className="font-semibold text-success-text">{totalH.billable}h</span>
           </div>
           <div className="w-px bg-border-subtle" />
           <div className="flex flex-col items-center">
@@ -248,14 +248,14 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
             <Button
               size="sm"
               onClick={() => setShowStopModal(true)}
-              className="bg-amber-500 hover:bg-amber-600 text-[#1A1A1A] border-0"
+              className="btn-warning border-0 text-[#1A1A1A]"
             >
               중지 및 기록
             </Button>
           </div>
         ) : timer?.active && !isThisTicketTimer ? (
           <div className="flex flex-col gap-2">
-            <p className="text-xs text-amber-600">
+            <p className="text-xs text-warning-text">
               {timer.ticket_number
                 ? `${timer.ticket_number}`
                 : '다른 티켓'}
@@ -383,7 +383,7 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
                     <span className={cn(
                       'text-xs rounded-full px-1.5 py-0.5',
                       log.billable
-                        ? 'bg-green-100 text-green-700'
+                        ? 'bg-success-bg text-success-text'
                         : 'bg-surface-hover text-text-secondary',
                     )}>
                       {log.billable ? '유상' : '무상'}

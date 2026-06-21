@@ -92,7 +92,7 @@ function StepIndicator({ current }: { current: StepIndex }) {
                 className={cn(
                   'flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all duration-200',
                   done
-                    ? 'border-brand bg-brand text-white'
+                    ? 'border-brand bg-brand text-[#1A1A1A]'
                     : active
                       ? 'border-brand bg-surface text-brand'
                       : 'border-border-default bg-surface text-text-secondary',
@@ -153,7 +153,7 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
           { icon: Shield, label: 'SLA 관리',    desc: '응답 시간 기준으로 서비스 품질 보장' },
           { icon: Users,  label: '팀 협업',     desc: '팀원을 초대해 티켓을 함께 처리' },
         ].map(({ icon: Icon, label, desc }) => (
-          <div key={label} className="rounded-xl border border-border-subtle bg-surface p-4 flex flex-col items-center gap-2 text-center">
+          <div key={label} className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col items-center gap-2 text-center">
             <div
               className="flex h-9 w-9 items-center justify-center rounded-lg"
               style={{ background: 'rgba(18, 155, 142, 0.10)' }}
@@ -375,7 +375,7 @@ function SlaStep({
         </div>
       </div>
 
-      <div className="rounded-xl border border-border-default bg-surface overflow-hidden">
+      <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] overflow-hidden">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-border-subtle bg-surface-hover">
@@ -596,7 +596,7 @@ function DoneStep({
         </p>
       </div>
 
-      <div className="w-full rounded-xl border border-border-default bg-surface divide-y divide-border-subtle overflow-hidden">
+      <div className="w-full bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] divide-y divide-border-subtle overflow-hidden">
         {ITEMS.map(({ key, label, href }) => {
           const done = checklist[key];
           return (

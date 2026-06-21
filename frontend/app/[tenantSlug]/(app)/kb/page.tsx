@@ -36,7 +36,7 @@ function SkeletonCards() {
   return (
     <>
       {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="rounded-lg border border-border-subtle bg-surface p-4 space-y-2">
+        <div key={i} className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 space-y-2">
           <Skeleton className="h-4 w-3/4" />
           <Skeleton className="h-3 w-full" />
           <Skeleton className="h-3 w-2/3" />
@@ -107,7 +107,7 @@ function KbArticleCard({
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left rounded-lg border border-border-subtle bg-surface p-4 hover:bg-surface-hover hover:border-border-default transition-all duration-fast"
+      className="w-full text-left bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 hover:bg-surface-hover hover:border-border-default transition-all duration-fast"
     >
       <div className="flex items-start justify-between gap-2 min-w-0">
         <p className="font-medium text-text-primary line-clamp-1 text-sm">
@@ -161,7 +161,7 @@ function SemanticResultCard({
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left rounded-lg border border-border-subtle bg-surface p-4 hover:bg-surface-hover hover:border-border-default transition-all duration-fast"
+      className="w-full text-left bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 hover:bg-surface-hover hover:border-border-default transition-all duration-fast"
     >
       <div className="flex items-start justify-between gap-2 min-w-0">
         <p className="font-medium text-text-primary line-clamp-1 text-sm flex-1">

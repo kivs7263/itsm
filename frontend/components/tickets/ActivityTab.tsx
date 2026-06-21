@@ -55,9 +55,9 @@ const WORK_TYPE_LABELS: Record<string, string> = {
 };
 
 const COMPLETION_LABELS: Record<string, { label: string; cls: string }> = {
-  completed:      { label: '완료',         cls: 'bg-green-100 text-green-700' },
-  partial:        { label: '부분 완료',    cls: 'bg-amber-100 text-amber-700' },
-  needs_followup: { label: '추가 대응 필요', cls: 'bg-red-100 text-red-700' },
+  completed:      { label: '완료',         cls: 'bg-success-bg text-success-text' },
+  partial:        { label: '부분 완료',    cls: 'bg-warning-bg text-warning-text' },
+  needs_followup: { label: '추가 대응 필요', cls: 'bg-error-bg text-error-text' },
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ function CommentBubble({ comment }: { comment: TicketComment }) {
       className={cn(
         'rounded-lg p-3 text-sm',
         comment.is_internal
-          ? 'bg-amber-50 border border-amber-200'
+          ? 'bg-warning-bg border border-warning-border'
           : 'bg-surface-elevated',
       )}
     >
@@ -101,7 +101,7 @@ function CommentBubble({ comment }: { comment: TicketComment }) {
         <div className="flex items-center gap-2">
           <span className="font-medium text-text-primary">{comment.author_name}</span>
           {comment.is_internal && (
-            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+            <span className="inline-flex items-center rounded-full bg-warning-bg px-2 py-0.5 text-xs font-medium text-warning-text">
               내부 메모
             </span>
           )}
@@ -124,8 +124,8 @@ function WorkLogCard({
   return (
     <div className="flex gap-2.5">
       {/* 왼쪽 타임라인 아이콘 */}
-      <div className="shrink-0 mt-0.5 w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
-        <Clock size={11} className="text-amber-600" />
+      <div className="shrink-0 mt-0.5 w-6 h-6 rounded-full bg-warning-bg flex items-center justify-center">
+        <Clock size={11} className="text-warning-text" />
       </div>
 
       <div className="flex-1 min-w-0 rounded-lg border border-border-subtle bg-surface-elevated p-2.5">
@@ -135,7 +135,7 @@ function WorkLogCard({
             <span className={cn(
               'text-xs rounded-full px-1.5 py-0.5',
               log.billable
-                ? 'bg-green-100 text-green-700'
+                ? 'bg-success-bg text-success-text'
                 : 'bg-surface-hover text-text-secondary',
             )}>
               {log.billable ? '유상' : '무상'}
@@ -430,23 +430,23 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
         {/* 타이머 스트립 */}
         <div className="shrink-0 px-4 pt-3 pb-2">
           {isThisTicketTimer ? (
-            <div className="flex items-center gap-2.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
-              <Clock size={13} className="text-amber-600 animate-pulse shrink-0" />
-              <span className="font-mono text-sm font-semibold text-amber-800 tabular-nums">
+            <div className="flex items-center gap-2.5 rounded-lg bg-warning-bg border border-warning-border px-3 py-2">
+              <Clock size={13} className="text-warning-text animate-pulse shrink-0" />
+              <span className="font-mono text-sm font-semibold text-warning-text tabular-nums">
                 {elapsed}
               </span>
-              <span className="flex-1 text-xs text-amber-700">작업 진행 중</span>
+              <span className="flex-1 text-xs text-warning-text">작업 진행 중</span>
               <Button
                 size="sm"
                 onClick={() => setShowStopModal(true)}
-                className="bg-amber-500 hover:bg-amber-600 text-[#1A1A1A] border-0 h-6 text-xs px-2"
+                className="btn-warning border-0 text-[#1A1A1A] h-6 text-xs px-2"
               >
                 중지 및 기록
               </Button>
             </div>
           ) : otherTimers.length > 0 ? (
             <div className="flex items-center gap-2 rounded-lg bg-surface-elevated border border-border-default px-3 py-2 text-xs text-text-secondary">
-              <Clock size={12} className="text-amber-500 shrink-0" />
+              <Clock size={12} className="text-warning-text shrink-0" />
               <span className="flex-1">
                 {otherTimers[0].ticket_title
                   ? `"${otherTimers[0].ticket_title}" 타이머 실행 중`

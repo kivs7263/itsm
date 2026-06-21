@@ -162,7 +162,7 @@ function TimelineItem({ event }: { event: TimelineEvent }) {
           className={cn(
             'rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap',
             event.is_customer
-              ? 'bg-accent-500 text-[#1A1A1A] rounded-br-sm'
+              ? 'bg-accent-500 text-white rounded-br-sm'
               : 'bg-surface border border-border-default text-text-primary rounded-bl-sm',
           )}
         >

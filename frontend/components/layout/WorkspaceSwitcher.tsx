@@ -173,7 +173,7 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
       logoUrl={logoUrl}
       apps={apps}
       subtitle="Alveo ITSM"
-      orgIcon={<LifeBuoy size={14} color="#1A1A1A" />}
+      orgIcon={<LifeBuoy size={14} color="#ffffff" />}
     />
   );
 }
