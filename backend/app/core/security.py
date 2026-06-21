@@ -4,13 +4,10 @@
 - JWT: access token (짧은 만료) + refresh token (긴 만료)
 - token payload: {"sub": user_id, "tenant_id": tenant_id, "role": role, "type": "access"|"refresh", "jti": jti}
 - CrossApp HMAC-SHA256: GW/SA ↔ ITSM 교차 로그인용 단기 토큰 (60s TTL)
+  서명 정본: backend_core.crossapp.signer (ADR-046)
 """
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-import json
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -18,6 +15,8 @@ from typing import Literal
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+
+from backend_core.crossapp import signer as _signer
 
 from app.core.config import settings
 
@@ -92,13 +91,10 @@ def decode_token(token: str) -> dict:
 
 # ------------------------------------------------------------------
 # CrossApp HMAC-SHA256 토큰 (GW/SA ↔ ITSM 교차 로그인)
+# 서명 정본: backend_core.crossapp.signer (ADR-046)
 # ------------------------------------------------------------------
 
 _CROSSAPP_TTL = 60  # 60초 단기 토큰
-
-
-def _b64_encode(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
 
 def issue_crossapp_token(
@@ -111,12 +107,17 @@ def issue_crossapp_token(
     iss: str,
     secret: str | None = None,
 ) -> str:
-    """CrossApp 단기 토큰 발급 — SA/GW 호환 {payload_b64}.{sig_b64} 형식."""
+    """CrossApp 단기 토큰 발급 — SA/GW 호환 {payload_b64}.{sig_b64} 형식.
+
+    TTL·payload 구성은 ITSM 래퍼에서 관리.
+    서명(build_token)은 backend_core.crossapp.signer에 위임.
+    """
     if secret is None:
         secret = settings.SERVICE_BUS_SECRET
     if not secret:
         raise ValueError("SERVICE_BUS_SECRET이 설정되지 않았습니다.")
 
+    now = int(time.time())
     payload_dict = {
         "sub": user_id,
         "tenant_id": tenant_id,
@@ -125,45 +126,31 @@ def issue_crossapp_token(
         "name": name,
         "iss": iss,
         "jti": str(uuid.uuid4()),
-        "iat": int(time.time()),
-        "exp": int(time.time()) + _CROSSAPP_TTL,
+        "iat": now,
+        "exp": now + _CROSSAPP_TTL,
     }
-    payload_b64 = _b64_encode(json.dumps(payload_dict, ensure_ascii=False).encode())
-    sig_bytes = hmac.new(secret.encode(), payload_b64.encode(), hashlib.sha256).digest()
-    sig_b64 = _b64_encode(sig_bytes)
-    return f"{payload_b64}.{sig_b64}"
+    return _signer.build_token(payload_dict, secret)
 
 
 def verify_crossapp_token(token: str, *, secret: str | None = None) -> dict:
     """CrossApp 토큰 검증 — SA/GW 호환 {payload_b64}.{sig_b64} 형식.
 
+    서명검증+디코드는 backend_core.crossapp.signer에 위임.
+    만료(exp) 검증 및 ITSM 고유 에러 처리는 래퍼에서 유지.
+
     Returns:
         payload dict (sub, tenant_id, tenant_slug, email, iss, iat, exp)
 
     Raises:
-        ValueError: 서명 불일치 또는 만료
+        ValueError: 서명 불일치, 형식 오류, 또는 만료
     """
     if secret is None:
         secret = settings.SERVICE_BUS_SECRET
     if not secret:
         raise ValueError("SERVICE_BUS_SECRET이 설정되지 않았습니다.")
 
-    try:
-        payload_b64, sig_b64 = token.rsplit(".", 1)
-    except ValueError as exc:
-        raise ValueError("CrossApp 토큰 형식이 올바르지 않습니다.") from exc
-
-    expected_sig_bytes = hmac.new(secret.encode(), payload_b64.encode(), hashlib.sha256).digest()
-    expected_sig_b64 = base64.urlsafe_b64encode(expected_sig_bytes).rstrip(b"=").decode()
-    if not hmac.compare_digest(sig_b64, expected_sig_b64):
-        raise ValueError("CrossApp 토큰 서명이 유효하지 않습니다.")
-
-    try:
-        padding = 4 - len(payload_b64) % 4
-        payload_bytes = base64.urlsafe_b64decode(payload_b64 + "=" * (padding % 4))
-        payload = json.loads(payload_bytes.decode())
-    except Exception as exc:
-        raise ValueError("CrossApp 토큰 페이로드 파싱 실패.") from exc
+    # 서명검증 + 디코드를 signer에 위임 (ValueError 그대로 전파)
+    payload = _signer.verify_and_decode(token, secret)
 
     if int(time.time()) > payload.get("exp", 0):
         raise ValueError("CrossApp 토큰이 만료되었습니다.")
