@@ -332,3 +332,7 @@ async def main() -> None:
             await asyncio.sleep(settings.EMAIL_INTERVAL_SECONDS)
     finally:
         await engine.dispose()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

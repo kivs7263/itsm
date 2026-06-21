@@ -46,6 +46,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      additional_contexts:
+        total_backend_core: ../total/packages/backend-core
     container_name: itsm_backend
     restart: unless-stopped
     environment:
@@ -87,6 +89,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      additional_contexts:
+        total_backend_core: ../total/packages/backend-core
     container_name: itsm_sla_worker
     restart: unless-stopped
     command: python -m app.workers.sla_worker
@@ -108,6 +112,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      additional_contexts:
+        total_backend_core: ../total/packages/backend-core
     container_name: itsm_email_worker
     restart: unless-stopped
     command: python -m app.workers.email_worker
@@ -136,6 +142,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      additional_contexts:
+        total_backend_core: ../total/packages/backend-core
     container_name: itsm_bridge_worker
     restart: unless-stopped
     command: python -m app.workers.bridge_worker

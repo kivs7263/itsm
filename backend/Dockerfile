@@ -14,6 +14,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# @total/backend-core (ADR-046 Phase 4 — 오버레이→이미지 베이크). additional_contexts로 주입.
+COPY --from=total_backend_core . /backend_core_src
+RUN pip install --no-cache-dir -e /backend_core_src
+
 # 소스 복사
 COPY . .
 
