@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbo",
+    "prebuild": "rm -rf node_modules/@total/ui-shell/node_modules/react node_modules/@total/ui-shell/node_modules/react-dom 2>/dev/null || true",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
