@@ -21,15 +21,23 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      # 모노레포 file: 의존성 해결 — @total/ui-shell, @total/tokens 는
+      # /teamwork/total/packages/ 에 위치 (frontend context 외부).
+      # buildx additional_contexts 로 격리하여 COPY.
+      additional_contexts:
+        total_ui_shell: ../total/packages/ui-shell
+        total_tokens: ../total/packages/tokens
       args:
         NEXT_PUBLIC_ITSM_URL: ${NEXT_PUBLIC_ITSM_URL:-}
         NEXT_PUBLIC_SA_URL: ${NEXT_PUBLIC_SA_URL:-}
         NEXT_PUBLIC_GW_URL: ${NEXT_PUBLIC_GW_URL:-}
         NEXT_PUBLIC_ADMIN_PORTAL_URL: ${NEXT_PUBLIC_ADMIN_PORTAL_URL:-}
+        NEXT_PUBLIC_COOKIE_DOMAIN: ${NEXT_PUBLIC_COOKIE_DOMAIN:-}
     container_name: itsm_frontend
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      NEXT_PUBLIC_COOKIE_DOMAIN: ${NEXT_PUBLIC_COOKIE_DOMAIN:-}
     networks:
       - itsm_internal
 
@@ -51,6 +59,7 @@ services:
       MINIO_BUCKET: itsm-files
       SERVICE_BUS_SECRET: ${SERVICE_BUS_SECRET}
       SECRET_KEY: ${SECRET_KEY}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       ENVIRONMENT: ${ENVIRONMENT:-production}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-}
