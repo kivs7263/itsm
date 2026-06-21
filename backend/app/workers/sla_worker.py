@@ -82,6 +82,84 @@ async def _enqueue_sla_notification(session, tenant_id, ticket_id, event_type: s
         logger.warning("SLA 외부 알림 큐 등록 실패 (무시)", exc_info=True)
 
 
+async def _submit_escalation_approval(
+    session, ticket_id, tenant_id, response_deadline, now: datetime
+) -> None:
+    """WF-4 (ADR-048): SLA breach_warning 시 GW 에스컬레이션 결재 자동생성.
+
+    멱등성:
+    - Redis SET NX warn_key (호출부에서 이미 보장) — 동일 주기 중복 방지
+    - sla_escalation_approval_id IS NULL 체크 — 이미 생성된 결재 재호출 방지
+
+    graceful: GW 결재 생성 실패는 logger.warning만. SLA 흐름 차단 금지.
+    """
+    try:
+        from app.models.ticket import Ticket
+        from app.models.user import User
+        from app.services.gw_approval_service import submit_approval_draft
+
+        ticket = await session.get(Ticket, ticket_id)
+        if not ticket:
+            return
+
+        # 멱등성: 이미 결재가 생성된 경우 skip (ADR-048 §315)
+        if ticket.sla_escalation_approval_id is not None:
+            logger.debug(
+                "WF-4 skip: escalation approval already exists ticket=%s doc_id=%s",
+                ticket_id,
+                ticket.sla_escalation_approval_id,
+            )
+            return
+
+        # 기안자 이메일: 담당자 우선, 없으면 skip
+        requester_email: str | None = None
+        if ticket.assigned_to:
+            user = await session.get(User, ticket.assigned_to)
+            if user:
+                requester_email = user.email
+
+        if not requester_email:
+            logger.debug("WF-4 skip: no assignee email ticket=%s", ticket_id)
+            return
+
+        remaining_minutes = int((response_deadline - now).total_seconds() / 60)
+        ticket_number = ticket.ticket_number or str(ticket_id)[:8]
+        title = f"[SLA 에스컬레이션] 티켓 #{ticket_number} — {remaining_minutes}분 남음"
+        content_text = ticket.description or f"티켓 #{ticket_number} SLA 응답 기한 {remaining_minutes}분 이내 — 에스컬레이션 결재 필요"
+
+        result = await submit_approval_draft(
+            requester_email=requester_email,
+            title=title,
+            content_text=content_text,
+        )
+
+        if result and result.get("id"):
+            doc_id = str(result["id"])
+            await session.execute(
+                text(
+                    "UPDATE tickets SET sla_escalation_approval_id = :doc_id "
+                    "WHERE id = :ticket_id"
+                ),
+                {"doc_id": doc_id, "ticket_id": str(ticket_id)},
+            )
+            logger.info(
+                "WF-4: escalation approval created ticket=%s doc_id=%s",
+                ticket_id,
+                doc_id,
+            )
+        else:
+            logger.warning(
+                "WF-4: GW 결재 생성 실패 (graceful skip) ticket=%s", ticket_id
+            )
+
+    except Exception as exc:
+        logger.warning(
+            "WF-4: escalation approval 생성 오류 (graceful skip) ticket=%s: %s",
+            ticket_id,
+            exc,
+        )
+
+
 def _handle_signal(sig: int, _frame) -> None:
     global _running
     logger.info("SLA worker shutting down (signal %s)", sig)
@@ -158,6 +236,11 @@ async def _check_sla_once(_engine, redis) -> None:
                         logger.info("SLA breach_warning: ticket=%s", ticket_id)
                         await _enqueue_sla_notification(
                             session, row.tenant_id, ticket_id, "sla_warning"
+                        )
+                        # WF-4 (ADR-048): GW 에스컬레이션 결재 자동생성
+                        # graceful: 실패해도 SLA 이벤트·알림 흐름 절대 차단 금지
+                        await _submit_escalation_approval(
+                            session, ticket_id, row.tenant_id, response_deadline, now
                         )
 
                 # response breached
