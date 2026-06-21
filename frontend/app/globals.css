@@ -73,7 +73,7 @@
   --color-bg-elevated:      #f8f9fe;
   --color-surface:          #ffffff;
   --color-surface-elevated: #f8f9fe;
-  --color-surface-overlay:  rgba(0, 0, 0, 0.4);
+  --color-surface-overlay:  rgba(14, 14, 12, 0.45);
   --color-surface-hover:    rgba(0, 0, 0, 0.06);
 
   /* === Border === */

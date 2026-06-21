@@ -174,10 +174,10 @@ function RequestTypeStep({
 // SLA 등급 뱃지 색상
 // -----------------------------------------------------------------------
 const SLA_GRADE_CONFIG: Record<string, { label: string; cls: string; desc: string }> = {
-  bronze:   { label: 'Bronze',   cls: 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300', desc: '응답 8시간 이내' },
-  silver:   { label: 'Silver',   cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',       desc: '응답 4시간 이내' },
-  gold:     { label: 'Gold',     cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',   desc: '응답 2시간 이내' },
-  platinum: { label: 'Platinum', cls: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400', desc: '응답 1시간 이내' },
+  bronze:   { label: 'Bronze',   cls: 'bg-neutral-100 text-neutral-600', desc: '응답 8시간 이내' },
+  silver:   { label: 'Silver',   cls: 'bg-blue-100 text-blue-700',       desc: '응답 4시간 이내' },
+  gold:     { label: 'Gold',     cls: 'bg-amber-100 text-amber-700',   desc: '응답 2시간 이내' },
+  platinum: { label: 'Platinum', cls: 'bg-purple-100 text-purple-700', desc: '응답 1시간 이내' },
 };
 
 // -----------------------------------------------------------------------
@@ -522,21 +522,21 @@ function TicketFormStep({
 
           {/* AI 분류 제안 배너 */}
           {(aiLoading || aiSuggestion) && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
               {aiLoading ? (
-                <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
+                <div className="flex items-center gap-2 text-xs text-amber-700">
                   <Sparkles size={13} className="animate-pulse" />
                   AI 분류 분석 중…
                 </div>
               ) : aiSuggestion ? (
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex flex-col gap-0.5">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700">
                       <Sparkles size={13} />
                       AI 분류 제안
                       <span className="text-amber-500">({Math.round(aiSuggestion.confidence * 100)}% 신뢰도)</span>
                     </div>
-                    <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+                    <p className="text-xs text-amber-800 mt-0.5">
                       우선순위: <strong>{
                         aiSuggestion.priority === 'critical' ? '긴급' :
                         aiSuggestion.priority === 'high' ? '높음' :
@@ -547,7 +547,7 @@ function TicketFormStep({
                       )}
                     </p>
                     {aiSuggestion.reason && (
-                      <p className="text-[11px] text-amber-600 dark:text-amber-500 mt-0.5">{aiSuggestion.reason}</p>
+                      <p className="text-[11px] text-amber-600 mt-0.5">{aiSuggestion.reason}</p>
                     )}
                   </div>
                   <button

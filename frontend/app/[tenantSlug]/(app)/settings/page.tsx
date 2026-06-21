@@ -183,7 +183,7 @@ function UsersTab({ tenantSlug }: { tenantSlug: string }) {
 
       {/* 초대 폼 */}
       {showInvite && (
-        <div className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-3">
+        <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-3">
           <p className="text-sm font-medium text-text-primary">새 사용자 초대</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
@@ -246,7 +246,7 @@ function UsersTab({ tenantSlug }: { tenantSlug: string }) {
       )}
 
       {/* 사용자 테이블 */}
-      <div className="overflow-auto rounded-lg border border-border-default">
+      <div className="overflow-auto rounded-lg border border-border-default shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-surface border-b border-border-default">
             <tr>
@@ -325,7 +325,7 @@ interface ChannelSectionProps {
 
 function ChannelSection({ title, fields, values, onChange, onSave, isSaving }: ChannelSectionProps) {
   return (
-    <div className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-3">
+    <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-3">
       <p className="text-sm font-semibold text-text-primary">{title}</p>
       {fields.map(({ key, label, placeholder }) => (
         <div key={key} className="flex flex-col gap-1">
@@ -451,7 +451,7 @@ function NotificationsTab({ tenantSlug }: { tenantSlug: string }) {
       />
 
       {/* SMTP 섹션 — 비밀번호는 별도 state 관리 */}
-      <div className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-3">
+      <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-3">
         <p className="text-sm font-semibold text-text-primary">SMTP (이메일)</p>
 
         <div className="grid grid-cols-2 gap-3">
@@ -610,7 +610,7 @@ function SlaTab({ tenantSlug }: { tenantSlug: string }) {
           };
 
           return (
-            <div key={tier} className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-3">
+            <div key={tier} className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-3">
               <p className={cn('text-sm font-semibold', TIER_COLORS[tier])}>
                 {TIER_LABELS[tier]}
               </p>
@@ -859,7 +859,7 @@ function CategorySection({ tenantSlug, urlKey, queryKey, title }: CategorySectio
       )}
 
       {/* 트리 목록 */}
-      <div className="rounded-lg border border-border-default bg-surface py-1">
+      <div className="rounded-lg border border-border-default shadow-sm bg-surface py-1">
         {isLoading ? (
           <div className="flex flex-col gap-1 p-2">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -980,7 +980,7 @@ function SupportTeamsTab({ tenantSlug }: { tenantSlug: string }) {
 
       {/* 추가 폼 */}
       {showAddForm && (
-        <div className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-3">
+        <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-3">
           <p className="text-sm font-medium text-text-primary">새 지원팀</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
@@ -1052,7 +1052,7 @@ function SupportTeamsTab({ tenantSlug }: { tenantSlug: string }) {
           ))}
         </div>
       ) : teams.length === 0 ? (
-        <div className="rounded-lg border border-border-default bg-surface py-12 text-center text-sm text-text-secondary">
+        <div className="rounded-lg border border-border-default shadow-sm bg-surface py-12 text-center text-sm text-text-secondary">
           지원팀이 없습니다.
         </div>
       ) : (
@@ -1061,7 +1061,7 @@ function SupportTeamsTab({ tenantSlug }: { tenantSlug: string }) {
             <div
               key={team.id}
               className={cn(
-                'rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-2',
+                'rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-2',
                 !team.is_active && 'opacity-60',
               )}
             >
@@ -1214,7 +1214,7 @@ function ExtNotifHistoryTab({ tenantSlug }: { tenantSlug: string }) {
         고객에게 발송된 외부 알림(이메일·SMS·카카오 등) 이력을 확인합니다.
       </p>
 
-      <div className="overflow-auto rounded-lg border border-border-default">
+      <div className="overflow-auto rounded-lg border border-border-default shadow-sm">
         <table className="w-full text-sm min-w-[700px]">
           <thead className="bg-surface border-b border-border-default">
             <tr>
@@ -1618,7 +1618,7 @@ function ApiKeysTab({ tenantSlug }: { tenantSlug: string }) {
 
       {/* 생성 폼 */}
       {showCreate && (
-        <div className="rounded-lg border border-border-default bg-surface p-4 flex items-end gap-3">
+        <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex items-end gap-3">
           <div className="flex-1 flex flex-col gap-1">
             <label className="text-xs text-text-secondary">키 이름</label>
             <input
@@ -1644,10 +1644,10 @@ function ApiKeysTab({ tenantSlug }: { tenantSlug: string }) {
 
       {/* 생성된 키 1회 표시 모달 */}
       {createdKey && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/20 p-4 flex flex-col gap-3">
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <Key size={14} className="text-amber-600 dark:text-amber-400" />
-            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+            <Key size={14} className="text-amber-600" />
+            <p className="text-sm font-medium text-amber-700">
               API 키가 생성되었습니다 — 지금 복사하세요 (이후 다시 볼 수 없습니다)
             </p>
           </div>
@@ -1681,7 +1681,7 @@ function ApiKeysTab({ tenantSlug }: { tenantSlug: string }) {
       )}
 
       {/* 키 목록 */}
-      <div className="rounded-lg border border-border-default overflow-hidden">
+      <div className="rounded-lg border border-border-default shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-default bg-surface-elevated">
@@ -1861,7 +1861,7 @@ function WebhooksTab({ tenantSlug }: { tenantSlug: string }) {
 
       {/* 등록 폼 */}
       {showCreate && (
-        <div className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-4">
+        <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-text-secondary">URL</label>
             <input
@@ -1883,7 +1883,7 @@ function WebhooksTab({ tenantSlug }: { tenantSlug: string }) {
                   className={cn(
                     'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                     newEvents.includes(ev.value)
-                      ? 'border-brand bg-brand/10 text-amber-700 dark:text-amber-300'
+                      ? 'border-brand bg-brand/10 text-brand-active'
                       : 'border-border-default text-text-secondary hover:border-brand',
                   )}
                 >
@@ -1922,7 +1922,7 @@ function WebhooksTab({ tenantSlug }: { tenantSlug: string }) {
       ) : (
         <div className="flex flex-col gap-3">
           {webhooks.map((wh) => (
-            <div key={wh.id} className="rounded-lg border border-border-default bg-surface overflow-hidden">
+            <div key={wh.id} className="rounded-lg border border-border-default shadow-sm bg-surface overflow-hidden">
               <div className="flex items-start gap-3 px-4 py-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -2033,9 +2033,9 @@ const PLAN_LABELS: Record<string, string> = {
 };
 const PLAN_COLORS: Record<string, string> = {
   free: 'bg-border-subtle text-text-secondary',
-  starter: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  professional: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  enterprise: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  starter: 'bg-blue-100 text-blue-700',
+  professional: 'bg-amber-100 text-amber-700',
+  enterprise: 'bg-purple-100 text-purple-700',
 };
 const PLAN_FEATURES: Record<string, string[]> = {
   free: ['엔지니어 3명', '월 100건 티켓', 'KB·SLA 기본'],
@@ -2106,9 +2106,9 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
     <div className="flex flex-col gap-6 max-w-2xl">
       {/* 만료 임박 경고 */}
       {daysToRenewal !== null && daysToRenewal <= 7 && (
-        <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/20 px-4 py-3">
-          <Zap size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
-          <p className="text-sm text-amber-700 dark:text-amber-400">
+        <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <Zap size={16} className="text-amber-600 shrink-0" />
+          <p className="text-sm text-amber-700">
             구독이 {daysToRenewal}일 후 만료됩니다. 갱신하지 않으면 Free 플랜으로 자동 전환됩니다.
           </p>
         </div>
@@ -2168,7 +2168,7 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
       {/* 사용량 */}
       <div className="grid grid-cols-2 gap-4">
         {/* 시트 */}
-        <div className="rounded-lg border border-border-default bg-surface p-4">
+        <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-text-secondary">엔지니어 시트</span>
             <span className="text-xs text-text-tertiary">
@@ -2184,7 +2184,7 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
         </div>
 
         {/* 티켓 (Free만) */}
-        <div className="rounded-lg border border-border-default bg-surface p-4">
+        <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-text-secondary">이번달 티켓</span>
             <span className="text-xs text-text-tertiary">
@@ -2207,7 +2207,7 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
 
       {/* 인보이스 */}
       {invoices.length > 0 && (
-        <div className="rounded-lg border border-border-default overflow-hidden">
+        <div className="rounded-lg border border-border-default shadow-sm overflow-hidden">
           <div className="px-4 py-3 bg-surface-elevated border-b border-border-subtle">
             <span className="text-xs font-medium text-text-secondary">인보이스</span>
           </div>

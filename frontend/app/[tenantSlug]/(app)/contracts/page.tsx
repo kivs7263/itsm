@@ -27,10 +27,10 @@ function formatDate(dateStr: string | null): string {
 // SLA 등급 배지
 // -----------------------------------------------------------------------
 const TIER_STYLES: Record<ContractTier, string> = {
-  bronze:   'bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400',
+  bronze:   'bg-orange-50 text-orange-700',
   silver:   'bg-neutral-100 text-neutral-600',
-  gold:     'bg-yellow-50 text-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-400',
-  platinum: 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400',
+  gold:     'bg-yellow-50 text-yellow-700',
+  platinum: 'bg-blue-50 text-blue-700',
 };
 
 function TierBadge({ tier }: { tier: ContractTier | null }) {

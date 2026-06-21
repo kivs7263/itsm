@@ -23,7 +23,7 @@ interface KpiCardProps {
 
 function KpiCard({ label, value, icon, color, isLoading }: KpiCardProps) {
   return (
-    <div className="rounded-lg border border-border-default bg-surface p-4 flex items-start gap-3">
+    <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex items-start gap-3">
       <div
         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
         style={{ background: color + '1A' }}
@@ -46,10 +46,10 @@ function KpiCard({ label, value, icon, color, isLoading }: KpiCardProps) {
 // SLA 정책 등급 배지
 // -----------------------------------------------------------------------
 const TIER_STYLES: Record<ContractTier, string> = {
-  bronze:   'bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400',
+  bronze:   'bg-orange-50 text-orange-700',
   silver:   'bg-neutral-100 text-neutral-600',
-  gold:     'bg-yellow-50 text-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-400',
-  platinum: 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400',
+  gold:     'bg-yellow-50 text-yellow-700',
+  platinum: 'bg-blue-50 text-blue-700',
 };
 
 const TIER_LABELS: Record<ContractTier, string> = {
@@ -206,7 +206,7 @@ export default function SLAPage() {
         {/* SLA 정책 테이블 + 게이지 */}
         <div className="grid grid-cols-3 gap-6">
           {/* 정책 테이블 */}
-          <div className="col-span-2 rounded-lg border border-border-default bg-surface">
+          <div className="col-span-2 rounded-lg border border-border-default shadow-sm bg-surface">
             <div className="px-5 py-4 border-b border-border-subtle">
               <h2 className="text-sm font-semibold text-text-primary">SLA 정책</h2>
             </div>
@@ -257,7 +257,7 @@ export default function SLAPage() {
           </div>
 
           {/* 준수율 게이지 */}
-          <div className="rounded-lg border border-border-default bg-surface flex items-center justify-center p-6">
+          <div className="rounded-lg border border-border-default shadow-sm bg-surface flex items-center justify-center p-6">
             {dashLoading ? (
               <div className="flex flex-col items-center gap-3">
                 <Skeleton className="h-24 w-24 rounded-full" />

@@ -285,7 +285,7 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
                 <SlaBadge deadline={ticket.sla_response_deadline} label="응답" />
                 <SlaBadge deadline={ticket.sla_resolution_deadline} label="해결" />
                 {ticket.escalation_level != null && ticket.escalation_level > 1 && (
-                  <span className="inline-flex items-center rounded-full bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 text-xs font-medium text-orange-700 dark:text-orange-400">
+                  <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
                     {ticket.escalation_level}차 대응
                   </span>
                 )}
@@ -355,7 +355,7 @@ export function TicketSlider({ ticketId, open, onClose, tenantSlug }: TicketSlid
                 size="sm"
                 variant="outline"
                 onClick={() => setEscModalOpen(true)}
-                className="h-7 text-xs text-orange-600 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-900/20"
+                className="h-7 text-xs text-orange-600 border-orange-300 hover:bg-orange-50"
               >
                 2차 이관
               </Button>

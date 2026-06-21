@@ -55,9 +55,9 @@ const WORK_TYPE_LABELS: Record<string, string> = {
 };
 
 const COMPLETION_LABELS: Record<string, { label: string; cls: string }> = {
-  completed:      { label: '완료',         cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-  partial:        { label: '부분 완료',    cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
-  needs_followup: { label: '추가 대응 필요', cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+  completed:      { label: '완료',         cls: 'bg-green-100 text-green-700' },
+  partial:        { label: '부분 완료',    cls: 'bg-amber-100 text-amber-700' },
+  needs_followup: { label: '추가 대응 필요', cls: 'bg-red-100 text-red-700' },
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ function CommentBubble({ comment }: { comment: TicketComment }) {
       className={cn(
         'rounded-lg p-3 text-sm',
         comment.is_internal
-          ? 'bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800/30'
+          ? 'bg-amber-50 border border-amber-200'
           : 'bg-surface-elevated',
       )}
     >
@@ -101,7 +101,7 @@ function CommentBubble({ comment }: { comment: TicketComment }) {
         <div className="flex items-center gap-2">
           <span className="font-medium text-text-primary">{comment.author_name}</span>
           {comment.is_internal && (
-            <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
               내부 메모
             </span>
           )}
@@ -124,8 +124,8 @@ function WorkLogCard({
   return (
     <div className="flex gap-2.5">
       {/* 왼쪽 타임라인 아이콘 */}
-      <div className="shrink-0 mt-0.5 w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-        <Clock size={11} className="text-amber-600 dark:text-amber-400" />
+      <div className="shrink-0 mt-0.5 w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
+        <Clock size={11} className="text-amber-600" />
       </div>
 
       <div className="flex-1 min-w-0 rounded-lg border border-border-subtle bg-surface-elevated p-2.5">
@@ -135,7 +135,7 @@ function WorkLogCard({
             <span className={cn(
               'text-xs rounded-full px-1.5 py-0.5',
               log.billable
-                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                ? 'bg-green-100 text-green-700'
                 : 'bg-surface-hover text-text-secondary',
             )}>
               {log.billable ? '유상' : '무상'}
@@ -430,12 +430,12 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
         {/* 타이머 스트립 */}
         <div className="shrink-0 px-4 pt-3 pb-2">
           {isThisTicketTimer ? (
-            <div className="flex items-center gap-2.5 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800/40 px-3 py-2">
-              <Clock size={13} className="text-amber-600 dark:text-amber-400 animate-pulse shrink-0" />
-              <span className="font-mono text-sm font-semibold text-amber-800 dark:text-amber-300 tabular-nums">
+            <div className="flex items-center gap-2.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+              <Clock size={13} className="text-amber-600 animate-pulse shrink-0" />
+              <span className="font-mono text-sm font-semibold text-amber-800 tabular-nums">
                 {elapsed}
               </span>
-              <span className="flex-1 text-xs text-amber-700 dark:text-amber-400">작업 진행 중</span>
+              <span className="flex-1 text-xs text-amber-700">작업 진행 중</span>
               <Button
                 size="sm"
                 onClick={() => setShowStopModal(true)}

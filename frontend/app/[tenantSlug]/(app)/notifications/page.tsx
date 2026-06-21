@@ -71,7 +71,7 @@ function ChannelStatusCard({
   configured: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-border-default bg-surface px-4 py-3">
+    <div className="flex items-center justify-between rounded-lg border border-border-default shadow-sm bg-surface px-4 py-3">
       <span className="text-sm font-medium text-text-primary">
         {CHANNEL_LABELS[channel]}
       </span>
@@ -91,7 +91,7 @@ function ChannelStatusCard({
 
 function ChannelStatusSkeleton() {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-border-default bg-surface px-4 py-3">
+    <div className="flex items-center justify-between rounded-lg border border-border-default shadow-sm bg-surface px-4 py-3">
       <Skeleton className="h-4 w-20" />
       <Skeleton className="h-5 w-14 rounded-full" />
     </div>

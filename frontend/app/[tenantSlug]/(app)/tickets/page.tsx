@@ -60,7 +60,7 @@ function PriorityBadge({ priority }: { priority: TicketPriority }) {
 // -----------------------------------------------------------------------
 const STATUS_STYLES: Record<TicketStatus, string> = {
   open:        'bg-status-open-bg text-status-open',
-  in_progress: 'bg-purple-50 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400',
+  in_progress: 'bg-purple-50 text-purple-700',
   pending:     'bg-status-pending-bg text-status-pending',
   resolved:    'bg-status-resolved-bg text-status-resolved',
   closed:      'bg-status-closed-bg text-status-closed',

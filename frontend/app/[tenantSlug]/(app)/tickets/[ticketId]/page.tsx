@@ -48,9 +48,9 @@ const STATUS_LABELS: Record<TicketStatus, string> = {
 const STATUS_STYLES: Record<TicketStatus, string> = {
   open:        'bg-info-bg text-info-text',
   in_progress: 'bg-warning-bg text-warning-text',
-  pending:     'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300',
+  pending:     'bg-neutral-100 text-neutral-600',
   resolved:    'bg-success-bg text-success-text',
-  closed:      'bg-neutral-200 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-400',
+  closed:      'bg-neutral-200 text-neutral-500',
 };
 
 const PRIORITY_LABELS: Record<TicketPriority, string> = {
@@ -61,7 +61,7 @@ const PRIORITY_LABELS: Record<TicketPriority, string> = {
 };
 
 const PRIORITY_STYLES: Record<TicketPriority, string> = {
-  low:      'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400',
+  low:      'bg-neutral-100 text-neutral-500',
   medium:   'bg-info-bg text-info-text',
   high:     'bg-warning-bg text-warning-text',
   critical: 'bg-error-bg text-error-text',
@@ -127,7 +127,7 @@ function CommentBubble({ comment }: { comment: TicketComment }) {
       className={cn(
         'rounded-lg p-3 text-sm',
         comment.is_internal
-          ? 'bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800/30'
+          ? 'bg-amber-50 border border-amber-200'
           : 'bg-surface-elevated',
       )}
     >
@@ -135,7 +135,7 @@ function CommentBubble({ comment }: { comment: TicketComment }) {
         <div className="flex items-center gap-2">
           <span className="font-medium text-text-primary">{comment.author_name}</span>
           {comment.is_internal && (
-            <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
               내부 메모
             </span>
           )}
@@ -158,7 +158,7 @@ function SideSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-3">
+    <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-3">
       <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wide">{title}</h3>
       {children}
     </div>
@@ -460,7 +460,7 @@ export default function TicketDetailPage() {
               {PRIORITY_LABELS[ticket.priority]}
             </span>
             {ticket.escalation_level != null && ticket.escalation_level > 1 && (
-              <span className="inline-flex items-center rounded-full bg-orange-100 dark:bg-orange-900/30 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:text-orange-400">
+              <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700">
                 {ticket.escalation_level}차 대응
               </span>
             )}
@@ -470,7 +470,7 @@ export default function TicketDetailPage() {
               <button
                 type="button"
                 onClick={() => setKbModalOpen(true)}
-                className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+                className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors"
               >
                 <BookOpen size={10} />
                 KB로 저장
@@ -485,7 +485,7 @@ export default function TicketDetailPage() {
           <div className="flex flex-col gap-6 min-w-0">
             {/* 설명 */}
             {ticket.description && (
-              <div className="rounded-lg border border-border-default bg-surface p-5">
+              <div className="rounded-lg border border-border-default shadow-sm bg-surface p-5">
                 <h2 className="text-sm font-semibold text-text-secondary mb-3">설명</h2>
                 <p className="text-sm text-text-primary whitespace-pre-wrap leading-relaxed">
                   {ticket.description}
@@ -494,7 +494,7 @@ export default function TicketDetailPage() {
             )}
 
             {/* 활동 타임라인 */}
-            <div className="rounded-lg border border-border-default bg-surface">
+            <div className="rounded-lg border border-border-default shadow-sm bg-surface">
               <div className="px-5 py-3 border-b border-border-default">
                 <h2 className="text-sm font-semibold text-text-primary">활동</h2>
               </div>

@@ -54,7 +54,11 @@
 
 ---
 
-## Phase ALVEO-SCREENS-ITSM: ITSM 본문 Alveo 시안 적용 (2026-06-21 갭분석) [ PENDING ]
+## Phase ALVEO-SCREENS-ITSM: ITSM 본문 Alveo 시안 적용 (2026-06-21 갭분석) [ DONE 2026-06-21 ]
+
+> **완료 (2026-06-21)**: AS-1 홈 대시보드 재구성(시안 4요소: 4-메트릭 sparkline 스트립·최근 티켓·SLA 도넛 conic-gradient·공수 위젯, 역할분기 4개 모두 shadow-md 통일) / AS-2 전 화면 카드 shadow-sm sweep 45곳 / AS-3 overlay 토큰 `rgba(14,14,12,.45)`·InstallationStepPanel gray→neutral·inert `dark:` 84건 제거(`.dark` 토글 미존재 확인). amber 드리프트→틸 brand 교정. NIT 2건(settings amber→brand-active, SLA okCount=total-breach 정확화) 반영. reviewer BLOCKER 0. **브라우저 검증(xiilab/admin, playwright)**: 시안 4요소 실데이터 렌더·잘림0·콘솔에러0.
+> **부수 발견·수정**: `reports/summary` 500(GroupingError 2건) — `func.to_char`/`case` 식을 SELECT/GROUP BY에서 매번 새로 호출 → bound param 불일치로 PG가 `created_at` GROUP BY 요구. 식 1회 정의 후 재사용으로 복구(선존 버그, 대시보드 데이터 소스 전체 차단이었음).
+> AS-4(헤더 동기화 pill)는 미구현 컨트롤이라 시안에서 제외(죽은버튼 방지).
 
 > **갭분석(2에이전트, 충돌 실측 검증)**: ITSM은 토큰(`var(--color-*)` 전면 배선, neutral-N/bg-surface도 토큰 경유 — 레거시 아님)·셸(Sidebar 평면 8항목·Topbar @total/ui-shell)·모달(토큰 정합) **이미 Alveo 정합**. 한 에이전트가 "21화면 레거시"로 본 건 token-routed 클래스+죽은 dark: 과대계상(검증으로 교정). 본문은 themed지만 **카드 richness(shadow/radius16) 부족 + 대시보드 위젯 빈약**. → 21화면 재구축 아님, **경량 시각 폴리시**. 기준: GW_LESSONS.md. 브랜드=틸 #129B8E. (ESC-6b=고객포털 별개, 완료)
 > 시안 8화면 중 Dash/Tickets만 실레이아웃, 나머지 6 placeholder→표준패턴. 시안 Alveo.dc.html 256KB truncated.

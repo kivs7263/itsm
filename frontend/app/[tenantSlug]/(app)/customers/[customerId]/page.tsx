@@ -325,7 +325,7 @@ function InfoTab({
   return (
     <div className="p-6 flex flex-col gap-6 max-w-2xl">
       {/* ---- 고객 기본 정보 카드 ---- */}
-      <div className="rounded-lg border border-border-default bg-surface p-5">
+      <div className="rounded-lg border border-border-default shadow-sm bg-surface p-5">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-base text-text-primary">{customer.name}</span>
@@ -471,7 +471,7 @@ function InfoTab({
 
         {/* 추가 폼 */}
         {showAddForm && (
-          <div className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-3 mb-3">
+          <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-3 mb-3">
             <p className="text-sm font-medium text-text-primary">새 연락처</p>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
@@ -571,7 +571,7 @@ function InfoTab({
           {contacts.map((contact) => (
             <div
               key={contact.id}
-              className="rounded-lg border border-border-default bg-surface p-4"
+              className="rounded-lg border border-border-default shadow-sm bg-surface p-4"
             >
               {editingId === contact.id ? (
                 <div className="flex flex-col gap-3">
@@ -1630,7 +1630,7 @@ function NotesTab({
     <div className="p-6 flex flex-col gap-4">
       {/* 새 메모 폼 */}
       {showForm && (
-        <div className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-3">
+        <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-3">
           <input
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
@@ -1676,7 +1676,7 @@ function NotesTab({
       )}
 
       {notes.map((note) => (
-        <div key={note.id} className="rounded-lg border border-border-default bg-surface p-4">
+        <div key={note.id} className="rounded-lg border border-border-default shadow-sm bg-surface p-4">
           {editingNote?.id === note.id ? (
             <div className="flex flex-col gap-3">
               <input

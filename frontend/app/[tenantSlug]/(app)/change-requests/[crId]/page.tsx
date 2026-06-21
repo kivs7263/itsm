@@ -351,7 +351,7 @@ export default function CRDetailPage() {
         <div className="grid grid-cols-3 gap-6 h-full">
           {/* 좌측: 기본 요약 카드 */}
           <div className="col-span-1">
-            <div className="rounded-lg border border-border-default bg-surface p-4">
+            <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div
                   className="flex h-8 w-8 items-center justify-center rounded-lg"
@@ -393,7 +393,7 @@ export default function CRDetailPage() {
 
           {/* 우측: 탭 */}
           <div className="col-span-2">
-            <div className="rounded-lg border border-border-default bg-surface p-4 h-full flex flex-col">
+            <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 h-full flex flex-col">
               {/* 탭 헤더 */}
               <div className="flex border-b border-border-subtle mb-4">
                 {([

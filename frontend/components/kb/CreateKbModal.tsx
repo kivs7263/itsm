@@ -132,7 +132,7 @@ export function CreateKbModal({ open, onClose, tenantSlug, prefill }: CreateKbMo
               type="button"
               onClick={handleAiDraft}
               disabled={aiGenerating}
-              className="flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
+              className="flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50"
             >
               <Sparkles size={12} className={aiGenerating ? 'animate-pulse' : ''} />
               {aiGenerating ? 'AI 초안 생성 중…' : 'AI 초안 생성'}

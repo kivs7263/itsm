@@ -65,7 +65,7 @@ function formatDate(dateStr: string | null): string {
 // -----------------------------------------------------------------------
 const TICKET_STATUS_STYLES: Record<TicketStatus, string> = {
   open:        'bg-status-open-bg text-status-open',
-  in_progress: 'bg-purple-50 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400',
+  in_progress: 'bg-purple-50 text-purple-700',
   pending:     'bg-status-pending-bg text-status-pending',
   resolved:    'bg-status-resolved-bg text-status-resolved',
   closed:      'bg-status-closed-bg text-status-closed',
@@ -139,7 +139,7 @@ function CsatKpiCard({
   isLoading: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-border-default bg-surface p-4 flex items-center gap-3">
+    <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex items-center gap-3">
       <div
         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
         style={{ background: iconBg }}
@@ -190,10 +190,10 @@ function ScoreBar({ star, count, max }: { star: number; count: number; max: numb
 // 우선순위 색상
 // -----------------------------------------------------------------------
 const PRIORITY_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  critical: { bg: 'bg-red-50 dark:bg-red-950/30',    text: 'text-red-600 dark:text-red-400',    label: '긴급' },
-  high:     { bg: 'bg-orange-50 dark:bg-orange-950/30', text: 'text-orange-600 dark:text-orange-400', label: '높음' },
-  medium:   { bg: 'bg-yellow-50 dark:bg-yellow-950/30', text: 'text-yellow-600 dark:text-yellow-400', label: '보통' },
-  low:      { bg: 'bg-blue-50 dark:bg-blue-950/30',   text: 'text-blue-600 dark:text-blue-400',   label: '낮음' },
+  critical: { bg: 'bg-red-50',    text: 'text-red-600',    label: '긴급' },
+  high:     { bg: 'bg-orange-50', text: 'text-orange-600', label: '높음' },
+  medium:   { bg: 'bg-yellow-50', text: 'text-yellow-600', label: '보통' },
+  low:      { bg: 'bg-blue-50',   text: 'text-blue-600',   label: '낮음' },
 };
 
 // -----------------------------------------------------------------------
@@ -219,7 +219,7 @@ function KpiCard({
   tooltip?: string;
 }) {
   return (
-    <div className="rounded-lg border border-border-default bg-surface p-4 flex flex-col gap-2" title={tooltip}>
+    <div className="rounded-lg border border-border-default shadow-sm bg-surface p-4 flex flex-col gap-2" title={tooltip}>
       <div className="flex items-center gap-2">
         <div
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
@@ -658,7 +658,7 @@ function ReportManagementSection({ tenantSlug }: { tenantSlug: string }) {
   return (
     <>
       {/* 보고서 관리 헤더 */}
-      <div className="rounded-lg border border-border-default bg-surface">
+      <div className="rounded-lg border border-border-default shadow-sm bg-surface">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
           <div className="flex items-center gap-2">
             <FileText size={16} className="text-text-secondary" />
@@ -919,7 +919,7 @@ export default function ReportsPage() {
         {/* 2컬럼 */}
         <div className="grid grid-cols-2 gap-6">
           {/* 월별 티켓 추세 */}
-          <div className="rounded-lg border border-border-default bg-surface">
+          <div className="rounded-lg border border-border-default shadow-sm bg-surface">
             <div className="flex items-center gap-2 px-5 py-4 border-b border-border-subtle">
               <BarChart2 size={16} className="text-text-secondary" />
               <h2 className="text-sm font-semibold text-text-primary">월별 티켓 생성</h2>
@@ -952,7 +952,7 @@ export default function ReportsPage() {
           {/* 상태별 분포 + SLA 준수율 */}
           <div className="flex flex-col gap-4">
             {/* 상태별 분포 */}
-            <div className="rounded-lg border border-border-default bg-surface">
+            <div className="rounded-lg border border-border-default shadow-sm bg-surface">
               <div className="px-5 py-4 border-b border-border-subtle">
                 <h2 className="text-sm font-semibold text-text-primary">상태별 티켓 분포</h2>
               </div>
@@ -989,7 +989,7 @@ export default function ReportsPage() {
             </div>
 
             {/* SLA 준수율 카드 */}
-            <div className="rounded-lg border border-border-default bg-surface p-5 flex items-center gap-4">
+            <div className="rounded-lg border border-border-default shadow-sm bg-surface p-5 flex items-center gap-4">
               <div
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
                 style={{ background: 'rgba(34, 197, 94, 0.12)' }}
@@ -1014,7 +1014,7 @@ export default function ReportsPage() {
         {/* ── 우선순위 분포 + KB Top 아티클 ── */}
         <div className="grid grid-cols-2 gap-6">
           {/* 우선순위별 분포 */}
-          <div className="rounded-lg border border-border-default bg-surface">
+          <div className="rounded-lg border border-border-default shadow-sm bg-surface">
             <div className="flex items-center gap-2 px-5 py-4 border-b border-border-subtle">
               <AlertTriangle size={16} className="text-text-secondary" />
               <h2 className="text-sm font-semibold text-text-primary">우선순위별 분포</h2>
@@ -1044,7 +1044,7 @@ export default function ReportsPage() {
           </div>
 
           {/* KB 인기 문서 Top 5 */}
-          <div className="rounded-lg border border-border-default bg-surface">
+          <div className="rounded-lg border border-border-default shadow-sm bg-surface">
             <div className="flex items-center gap-2 px-5 py-4 border-b border-border-subtle">
               <BookOpen size={16} className="text-text-secondary" />
               <h2 className="text-sm font-semibold text-text-primary">KB 인기 문서</h2>
@@ -1077,7 +1077,7 @@ export default function ReportsPage() {
         {/* ── 채널별 분포 + 티켓 연령 구간 ── */}
         <div className="grid grid-cols-2 gap-6">
           {/* 채널별 분포 */}
-          <div className="rounded-lg border border-border-default bg-surface">
+          <div className="rounded-lg border border-border-default shadow-sm bg-surface">
             <div className="flex items-center gap-2 px-5 py-4 border-b border-border-subtle">
               <MessageSquare size={16} className="text-text-secondary" />
               <h2 className="text-sm font-semibold text-text-primary">채널별 분포</h2>
@@ -1114,7 +1114,7 @@ export default function ReportsPage() {
           </div>
 
           {/* 티켓 연령 구간 (미해결) */}
-          <div className="rounded-lg border border-border-default bg-surface">
+          <div className="rounded-lg border border-border-default shadow-sm bg-surface">
             <div className="flex items-center gap-2 px-5 py-4 border-b border-border-subtle">
               <Clock size={16} className="text-text-secondary" />
               <h2 className="text-sm font-semibold text-text-primary">티켓 연령 구간</h2>
@@ -1130,9 +1130,9 @@ export default function ReportsPage() {
               ) : (
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { key: '0-7d', label: '7일 이내', color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-950/30' },
-                    { key: '7-30d', label: '7~30일', color: 'text-yellow-600', bg: 'bg-yellow-50 dark:bg-yellow-950/30' },
-                    { key: '30d+', label: '30일 초과', color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-950/30' },
+                    { key: '0-7d', label: '7일 이내', color: 'text-green-600', bg: 'bg-green-50' },
+                    { key: '7-30d', label: '7~30일', color: 'text-yellow-600', bg: 'bg-yellow-50' },
+                    { key: '30d+', label: '30일 초과', color: 'text-red-600', bg: 'bg-red-50' },
                   ].map(({ key, label, color, bg }) => (
                     <div key={key} className={`rounded-lg border border-border-subtle p-3 flex flex-col gap-1 ${bg}`}>
                       <span className={`text-[10px] font-medium ${color}`}>{label}</span>
@@ -1149,7 +1149,7 @@ export default function ReportsPage() {
         </div>
 
         {/* CSAT 섹션 */}
-        <div className="rounded-lg border border-border-default bg-surface">
+        <div className="rounded-lg border border-border-default shadow-sm bg-surface">
           <div className="flex items-center gap-2 px-5 py-4 border-b border-border-subtle">
             <Star size={16} className="text-text-secondary" />
             <h2 className="text-sm font-semibold text-text-primary">고객 만족도 (CSAT)</h2>

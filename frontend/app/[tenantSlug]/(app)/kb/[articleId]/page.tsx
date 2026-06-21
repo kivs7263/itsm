@@ -166,7 +166,7 @@ export default function KbArticlePage() {
         <div className="h-px bg-border-default mb-6" />
 
         {/* 본문 */}
-        <div className="prose prose-sm dark:prose-invert max-w-none">
+        <div className="prose prose-sm max-w-none">
           <pre
             className={cn(
               'whitespace-pre-wrap font-sans text-sm text-text-primary leading-relaxed',

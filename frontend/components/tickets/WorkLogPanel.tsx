@@ -31,9 +31,9 @@ interface WorkLog {
 }
 
 const COMPLETION_LABELS: Record<string, { label: string; cls: string }> = {
-  completed:      { label: '완료',         cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-  partial:        { label: '부분 완료',    cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
-  needs_followup: { label: '추가 대응 필요', cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+  completed:      { label: '완료',         cls: 'bg-green-100 text-green-700' },
+  partial:        { label: '부분 완료',    cls: 'bg-amber-100 text-amber-700' },
+  needs_followup: { label: '추가 대응 필요', cls: 'bg-red-100 text-red-700' },
 };
 
 interface TimerActive {
@@ -383,7 +383,7 @@ export function WorkLogPanel({ ticketId, tenantSlug }: WorkLogPanelProps) {
                     <span className={cn(
                       'text-xs rounded-full px-1.5 py-0.5',
                       log.billable
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                        ? 'bg-green-100 text-green-700'
                         : 'bg-surface-hover text-text-secondary',
                     )}>
                       {log.billable ? '유상' : '무상'}

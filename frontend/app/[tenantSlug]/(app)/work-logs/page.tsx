@@ -55,7 +55,7 @@ function ActiveTimerRow({ item, tenantSlug, isManager, router }: {
 }) {
   const elapsed = useElapsedStr(item.started_at);
   return (
-    <tr className="bg-amber-50/60 dark:bg-amber-950/20 border-l-2 border-amber-400">
+    <tr className="bg-amber-50/60 border-l-2 border-amber-400">
       <td className="px-4 py-2.5">
         {item.ticket_number ? (
           <button
@@ -73,7 +73,7 @@ function ActiveTimerRow({ item, tenantSlug, isManager, router }: {
         )}
       </td>
       <td className="px-4 py-2.5">
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
           진행 중
         </span>
@@ -82,7 +82,7 @@ function ActiveTimerRow({ item, tenantSlug, isManager, router }: {
         <td className="px-4 py-2.5 text-text-secondary text-xs">{item.user_name ?? '—'}</td>
       )}
       <td className="px-4 py-2.5 text-center">
-        <span className="font-mono text-xs font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
+        <span className="font-mono text-xs font-semibold text-amber-700 tabular-nums">
           {elapsed}
         </span>
       </td>
@@ -136,9 +136,9 @@ const WORK_TYPE_LABELS: Record<string, string> = {
   remote: '원격', onsite: '현장', phone: '전화', email: '이메일', internal: '내부',
 };
 const COMPLETION_LABELS: Record<string, { label: string; cls: string }> = {
-  completed:      { label: '완료',           cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-  partial:        { label: '부분 완료',      cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
-  needs_followup: { label: '추가 대응 필요', cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+  completed:      { label: '완료',           cls: 'bg-green-100 text-green-700' },
+  partial:        { label: '부분 완료',      cls: 'bg-amber-100 text-amber-700' },
+  needs_followup: { label: '추가 대응 필요', cls: 'bg-red-100 text-red-700' },
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -251,7 +251,7 @@ function WorkLogDetailModal({
               <span className={cn(
                 'inline-block text-xs rounded-full px-2 py-0.5 font-medium',
                 log.billable
-                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                  ? 'bg-green-100 text-green-700'
                   : 'bg-surface-hover text-text-secondary',
               )}>
                 {log.billable ? '유상' : '무상'}
@@ -414,7 +414,7 @@ export default function WorkLogsPage() {
                 <div className="text-xs text-text-secondary">총 공수</div>
               </div>
               <div className="text-center">
-                <div className="text-xl font-bold text-green-600 dark:text-green-400 tabular-nums">{summary.billable_hours}h</div>
+                <div className="text-xl font-bold text-green-600 tabular-nums">{summary.billable_hours}h</div>
                 <div className="text-xs text-text-secondary">유상</div>
               </div>
               <div className="text-center">
@@ -422,7 +422,7 @@ export default function WorkLogsPage() {
                 <div className="text-xs text-text-secondary">무상</div>
               </div>
               <div className="text-center">
-                <div className="text-xl font-bold text-amber-600 dark:text-amber-400 tabular-nums">
+                <div className="text-xl font-bold text-amber-600 tabular-nums">
                   {(summary.billable_ratio * 100).toFixed(0)}%
                 </div>
                 <div className="text-xs text-text-secondary">유상 비율</div>
@@ -615,7 +615,7 @@ export default function WorkLogsPage() {
                       <span className={cn(
                         'text-xs rounded-full px-1.5 py-0.5',
                         log.billable
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                          ? 'bg-green-100 text-green-700'
                           : 'bg-surface-hover text-text-secondary',
                       )}>
                         {log.billable ? '유상' : '무상'}

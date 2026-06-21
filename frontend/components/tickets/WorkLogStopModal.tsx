@@ -17,9 +17,9 @@ import {
 type CompletionStatus = 'completed' | 'partial' | 'needs_followup';
 
 const COMPLETION_OPTIONS: { value: CompletionStatus; label: string; color: string }[] = [
-  { value: 'completed',      label: '완료',         color: 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700' },
-  { value: 'partial',        label: '부분 완료',    color: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700' },
-  { value: 'needs_followup', label: '추가 대응 필요', color: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700' },
+  { value: 'completed',      label: '완료',         color: 'bg-green-100 text-green-700 border-green-300' },
+  { value: 'partial',        label: '부분 완료',    color: 'bg-amber-100 text-amber-700 border-amber-300' },
+  { value: 'needs_followup', label: '추가 대응 필요', color: 'bg-red-100 text-red-700 border-red-300' },
 ];
 
 const WORK_TYPE_LABELS: Record<string, string> = {
