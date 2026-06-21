@@ -35,6 +35,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """애플리케이션 startup / shutdown 훅."""
     import asyncio as _asyncio
     from app.workers.recurring_worker import run_recurring_worker
+    from app.workers.wf1_approval_worker import run_wf1_approval_worker
 
     # Startup
     try:
@@ -46,11 +47,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # P5-3 반복 장애 감지 워커
     _recurring_task = _asyncio.create_task(run_recurring_worker())
+    # WF-1 GW 결재 상태 폴링 워커 (ADR-048) — 120s 주기
+    _wf1_task = _asyncio.create_task(run_wf1_approval_worker())
 
     yield
 
     # Shutdown
     _recurring_task.cancel()
+    _wf1_task.cancel()
     await close_redis()
     await engine.dispose()
     logger.info("ITSM 백엔드 종료")

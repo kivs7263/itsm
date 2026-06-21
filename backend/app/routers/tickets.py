@@ -470,9 +470,11 @@ async def create_ticket(
     await db.refresh(ticket)
 
     # WF-1 (ADR-048): 결재 선행 유형 → GW 결재 자동 기안
-    # 멱등성: gw_approval_doc_id IS NULL 일 때만. 외부 HTTP는 commit 후 독립 처리.
+    # 멱등성: gw_approval_doc_id IS NULL 일 때만. 외부 HTTP는 1차 commit 후 독립 처리.
     # graceful: GW/KC 미설정 시 None 반환 → 티켓 흐름 차단 금지.
+    # 상태 폴링·자동클로즈는 요청 경로에서 완전 제거 — wf1_approval_worker 전담.
     if _is_wf1_ticket(data.request_type):
+        gw_result = None
         try:
             gw_result = await gw_approval_service.submit_approval_draft(
                 requester_email=current_user.email,
@@ -483,23 +485,35 @@ async def create_ticket(
                     f"내용: {ticket.description or ticket.title}"
                 ),
             )
-            if gw_result:
-                ticket.gw_approval_doc_id = str(gw_result.get("id", ""))
-                ticket.gw_approval_status = "pending"
-                logger.info(
-                    "WF-1 GW 결재 기안 성공: ticket=%s doc_id=%s",
-                    ticket.id, ticket.gw_approval_doc_id,
-                )
-            else:
-                ticket.gw_approval_status = "gw_not_configured"
-                logger.info(
-                    "WF-1 GW 결재 휴면(env 미설정): ticket=%s request_type=%s",
-                    ticket.id, data.request_type,
-                )
+        except Exception:
+            logger.exception("WF-1 GW 결재 기안 중 예외 (graceful skip): ticket=%s", ticket.id)
+
+        if gw_result:
+            ticket.gw_approval_doc_id = str(gw_result.get("id", ""))
+            ticket.gw_approval_status = "pending"
+            logger.info(
+                "WF-1 GW 결재 기안 성공: ticket=%s doc_id=%s",
+                ticket.id, ticket.gw_approval_doc_id,
+            )
+        else:
+            ticket.gw_approval_status = "gw_not_configured"
+            logger.info(
+                "WF-1 GW 결재 휴면(env 미설정 또는 기안 실패): ticket=%s request_type=%s",
+                ticket.id, data.request_type,
+            )
+
+        # 2차 commit: gw_approval_doc_id / gw_approval_status 저장.
+        # 실패해도 티켓 자체는 이미 1차 commit으로 생성됨 — orphan doc_id 추적용 로그만.
+        try:
             await db.commit()
             await db.refresh(ticket)
         except Exception:
-            logger.exception("WF-1 GW 결재 기안 중 예외 (graceful skip): ticket=%s", ticket.id)
+            doc_id = ticket.gw_approval_doc_id or "(미발급)"
+            logger.error(
+                "WF-1 2차 commit 실패 — gw_approval_doc_id orphan 가능: ticket=%s doc_id=%s",
+                ticket.id,
+                doc_id,
+            )
 
     # Meilisearch 인덱싱 (graceful fallback)
     await search_service.index_ticket(
@@ -557,40 +571,8 @@ async def get_ticket(
 ) -> dict:
     ticket = await _get_ticket_or_404(db, current_user.tenant_id, ticket_id)
 
-    # WF-1 (ADR-048): GW 결재 상태 동기화 + 승인 시 자동 클로즈 (폴링 fallback)
-    # 외부 HTTP는 DB 트랜잭션 밖 독립 처리. graceful: 실패해도 조회 응답 차단 금지.
-    if ticket.gw_approval_doc_id and ticket.gw_approval_status == "pending":
-        try:
-            gw_status = await gw_approval_service.get_approval_status(
-                requester_email=current_user.email,
-                gw_doc_id=ticket.gw_approval_doc_id,
-            )
-            if gw_status and gw_status != ticket.gw_approval_status:
-                ticket.gw_approval_status = gw_status
-                if gw_status == "approved":
-                    _apply_resolved_closed(ticket, TicketStatus.closed)
-                    ticket.status = TicketStatus.closed
-                    await activity_service.record(
-                        db,
-                        tenant_id=current_user.tenant_id,
-                        ticket_id=ticket.id,
-                        actor_id=current_user.id,
-                        event_type="status_changed",
-                        from_value="pending",
-                        to_value="closed",
-                        meta={"reason": "wf1_gw_approved"},
-                    )
-                    logger.info(
-                        "WF-1 GW 승인 → 티켓 자동 클로즈: ticket=%s", ticket.id
-                    )
-                elif gw_status == "rejected":
-                    logger.info(
-                        "WF-1 GW 반려: ticket=%s gw_status=%s", ticket.id, gw_status
-                    )
-                await db.commit()
-                await db.refresh(ticket)
-        except Exception:
-            logger.exception("WF-1 GW 상태 동기화 중 예외 (graceful skip): ticket=%s", ticket.id)
+    # WF-1 결재 상태 폴링·자동클로즈는 요청 경로에서 제거됨.
+    # → wf1_approval_worker(120s 주기)가 백그라운드에서 전담.
 
     comments = (
         await db.execute(
