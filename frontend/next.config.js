@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  transpilePackages: ['@total/ui-shell'],
+  transpilePackages: ['@total/tokens', '@total/ui-shell'],
 
   images: {
     remotePatterns: [
