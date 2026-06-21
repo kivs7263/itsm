@@ -11,7 +11,6 @@ import uuid
 from contextvars import ContextVar
 from typing import AsyncGenerator
 
-from sqlalchemy import text as _sa_text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -19,6 +18,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.config import settings
+from backend_core import rls as _bc_rls
 
 # RLS 컨텍스트 — auth dependency(get_current_tenant_id)에서 요청마다 설정
 _rls_tenant_id: ContextVar[str] = ContextVar("rls_tenant_id", default="")
@@ -46,10 +46,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         try:
             tid = _rls_tenant_id.get()
             if tid:
-                await session.execute(
-                    _sa_text("SELECT set_config('app.tenant_id', :tid, TRUE)"),
-                    {"tid": tid},
-                )
+                await _bc_rls.set_app_tenant_id(session, tid)
             yield session
         except Exception:
             await session.rollback()
