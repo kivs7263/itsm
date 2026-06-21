@@ -163,15 +163,18 @@ async def _build_summary_data(
     total = sum(row["count"] for row in by_status)
 
     # 월별 티켓 수 (최근 12개월)
+    # to_char 식을 한 번만 정의해 SELECT/GROUP BY/ORDER BY 에서 재사용 —
+    # 매번 새로 호출하면 bound param 이 달라져($1 vs $2) PG GroupingError 발생
+    month_expr = func.to_char(Ticket.created_at, "YYYY-MM")
     monthly_rows = (
         await db.execute(
             select(
-                func.to_char(Ticket.created_at, "YYYY-MM").label("month"),
+                month_expr.label("month"),
                 func.count().label("cnt"),
             )
             .where(and_(Ticket.tenant_id == tenant_id))
-            .group_by(func.to_char(Ticket.created_at, "YYYY-MM"))
-            .order_by(func.to_char(Ticket.created_at, "YYYY-MM").desc())
+            .group_by(month_expr)
+            .order_by(month_expr.desc())
             .limit(12)
         )
     ).all()
@@ -338,14 +341,17 @@ async def _build_summary_data(
     # KPI-4: 티켓 연령 구간 (age_buckets)
     # ------------------------------------------------------------------
     now_ts = func.now()
+    # group_by 는 문자열 alias("bucket") 대신 CASE 식 자체로 — PG GroupingError 방지
+    # (문자열 alias 전달 시 SQLAlchemy가 상수로 렌더 → tickets.created_at must appear in GROUP BY)
+    age_bucket = case(
+        (func.extract("epoch", now_ts - Ticket.created_at) / 86400 <= 7, "0-7d"),
+        (func.extract("epoch", now_ts - Ticket.created_at) / 86400 <= 30, "7-30d"),
+        else_="30d+",
+    ).label("bucket")
     age_rows = (
         await db.execute(
             select(
-                case(
-                    (func.extract("epoch", now_ts - Ticket.created_at) / 86400 <= 7, "0-7d"),
-                    (func.extract("epoch", now_ts - Ticket.created_at) / 86400 <= 30, "7-30d"),
-                    else_="30d+",
-                ).label("bucket"),
+                age_bucket,
                 func.count().label("cnt"),
             )
             .where(
@@ -354,7 +360,7 @@ async def _build_summary_data(
                     Ticket.status.not_in([TicketStatus.resolved, TicketStatus.closed]),
                 )
             )
-            .group_by("bucket")
+            .group_by(age_bucket)
         )
     ).all()
     age_buckets = {r.bucket: r.cnt for r in age_rows}
