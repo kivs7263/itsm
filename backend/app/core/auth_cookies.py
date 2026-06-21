@@ -4,6 +4,7 @@ from __future__ import annotations
 import secrets
 
 from fastapi import Response
+from backend_core import cookies as _bc_cookies
 
 from app.core.config import settings
 
@@ -21,36 +22,27 @@ def set_auth_cookies(
 ) -> None:
     access_max = settings.JWT_EXPIRE_MINUTES * 60
     refresh_max = settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400
-    domain_kw = {"domain": _COOKIE_DOMAIN} if _COOKIE_DOMAIN else {}
 
-    response.set_cookie(
-        "itsm.access_token", access_token,
-        httponly=True, secure=_COOKIE_SECURE, samesite=_COOKIE_SAMESITE,
-        max_age=access_max, path="/",
-        **domain_kw,
+    _bc_cookies.set_cookie(
+        response, "itsm.access_token", access_token,
+        domain=_COOKIE_DOMAIN, max_age=access_max, secure=_COOKIE_SECURE,
     )
-    response.set_cookie(
-        "itsm.refresh_token", refresh_token,
-        httponly=True, secure=_COOKIE_SECURE, samesite=_COOKIE_SAMESITE,
-        max_age=refresh_max, path="/api/auth",
-        **domain_kw,
+    _bc_cookies.set_cookie(
+        response, "itsm.refresh_token", refresh_token,
+        domain=_COOKIE_DOMAIN, max_age=refresh_max, secure=_COOKIE_SECURE, path="/api/auth",
     )
-    response.set_cookie(
-        "csrf.itsm", secrets.token_urlsafe(16),
-        httponly=False, secure=_COOKIE_SECURE, samesite=_COOKIE_SAMESITE,
-        max_age=access_max, path="/",
-        **domain_kw,
+    _bc_cookies.set_cookie(
+        response, "csrf.itsm", secrets.token_urlsafe(16),
+        domain=_COOKIE_DOMAIN, max_age=access_max, secure=_COOKIE_SECURE, httponly=False,
     )
     if tenant_slug:
-        response.set_cookie(
-            "itsm.last.tenant", tenant_slug,
-            httponly=False, secure=False, samesite=_COOKIE_SAMESITE,
-            max_age=30 * 86400, path="/",
-            **domain_kw,
+        _bc_cookies.set_cookie(
+            response, "itsm.last.tenant", tenant_slug,
+            domain=_COOKIE_DOMAIN, max_age=30 * 86400, secure=False, httponly=False,
         )
 
 
 def clear_auth_cookies(response: Response) -> None:
     for name in ("itsm.access_token", "itsm.refresh_token", "csrf.itsm"):
-        response.delete_cookie(name, path="/", domain=_COOKIE_DOMAIN)
-    response.delete_cookie("itsm.refresh_token", path="/api/auth", domain=_COOKIE_DOMAIN)
+        _bc_cookies.clear_cookie(response, name, domain=_COOKIE_DOMAIN, path="/")
+    _bc_cookies.clear_cookie(response, "itsm.refresh_token", domain=_COOKIE_DOMAIN, path="/api/auth")
