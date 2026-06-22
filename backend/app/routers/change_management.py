@@ -179,7 +179,7 @@ async def _build_cr_out(
         await db.execute(
             select(CRCILink).where(
                 and_(
-                    CRCILink.cr_id == cr.id,
+                    CRCILink.change_request_id == cr.id,
                     CRCILink.tenant_id == cr.tenant_id,
                 )
             )
@@ -814,7 +814,7 @@ async def add_ci_link(
     existing = await db.scalar(
         select(CRCILink).where(
             and_(
-                CRCILink.cr_id == cr_id,
+                CRCILink.change_request_id == cr_id,
                 CRCILink.ci_id == data.ci_id,
                 CRCILink.tenant_id == current_user.tenant_id,
             )
@@ -829,7 +829,7 @@ async def add_ci_link(
     link = CRCILink(
         id=uuid.uuid4(),
         tenant_id=current_user.tenant_id,
-        cr_id=cr_id,
+        change_request_id=cr_id,
         ci_id=data.ci_id,
         notes=data.notes,
     )
@@ -861,7 +861,7 @@ async def remove_ci_link(
     link = await db.scalar(
         select(CRCILink).where(
             and_(
-                CRCILink.cr_id == cr_id,
+                CRCILink.change_request_id == cr_id,
                 CRCILink.ci_id == ci_id,
                 CRCILink.tenant_id == current_user.tenant_id,
             )

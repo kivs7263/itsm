@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { AlertTriangle } from 'lucide-react';
 import { ArrowLeft, Plus, Server } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { CI, CIDetail, CIRelationship, CIHistory, CIStatus, CICriticality, CIType, RelType } from '@/lib/types';
@@ -268,7 +269,7 @@ export default function CIDetailPage() {
   const [addRelOpen, setAddRelOpen] = useState(false);
 
   // CI 상세 조회
-  const { data: ci, isLoading } = useQuery<CIDetail>({
+  const { data: ci, isLoading, isError, error: queryError } = useQuery<CIDetail>({
     queryKey: ['cmdb-ci-detail', tenantSlug, ciId],
     queryFn: () => api.get(`/${tenantSlug}/cmdb/cis/${ciId}`).then((r) => r.data),
     enabled: !!tenantSlug && !!ciId,
@@ -282,6 +283,24 @@ export default function CIDetailPage() {
   });
 
   if (isLoading) return <PageSkeleton />;
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-error-bg">
+          <AlertTriangle size={22} className="text-error-text" />
+        </div>
+        <p className="text-sm text-text-secondary">CI 정보를 불러오지 못했습니다.</p>
+        {queryError instanceof Error && (
+          <p className="text-xs text-text-disabled max-w-xs text-center">{queryError.message}</p>
+        )}
+        <Button size="sm" variant="ghost" onClick={() => router.back()}>
+          돌아가기
+        </Button>
+      </div>
+    );
+  }
+
   if (!ci) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3">
@@ -293,13 +312,17 @@ export default function CIDetailPage() {
     );
   }
 
-  // 관계 목록 (from + to 합치기)
-  const relationships: CIRelationship[] = [
-    ...(ci.relationships_from ?? []),
-    ...(ci.relationships_to ?? []),
-  ];
+  // 관계 목록 (from + to 합치기) — 배열 방어: API가 paginated 객체를 반환할 경우 대비
+  const relFrom: CIRelationship[] = Array.isArray(ci.relationships_from)
+    ? ci.relationships_from
+    : [];
+  const relTo: CIRelationship[] = Array.isArray(ci.relationships_to)
+    ? ci.relationships_to
+    : [];
+  const relationships: CIRelationship[] = [...relFrom, ...relTo];
 
-  const history: CIHistory[] = historyData ?? ci.history ?? [];
+  const historyRaw = historyData ?? ci.history;
+  const history: CIHistory[] = Array.isArray(historyRaw) ? historyRaw : [];
 
   const descriptionAttr = ci.attributes?.description;
   const descriptionText = typeof descriptionAttr === 'string' ? descriptionAttr : undefined;

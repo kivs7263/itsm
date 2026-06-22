@@ -9,7 +9,7 @@ import {
   ArrowLeft, Send, BookOpen,
   CirclePlus, RefreshCw, UserCheck, AlertTriangle,
   MessageSquare, Clock, TrendingUp, CheckCircle2, XCircle,
-  RotateCcw, FileText,
+  RotateCcw, FileText, Play,
 } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
 import type { Ticket, TicketComment, EscalationOut, TicketPriority, TicketStatus } from '@/lib/types';
@@ -18,7 +18,43 @@ import { SlaBadge } from '@/components/tickets/SlaBadge';
 import { EscalationEventCard } from '@/components/tickets/EscalationEventCard';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { WorkLogStopModal } from '@/components/tickets/WorkLogStopModal';
 import { CreateKbModal } from '@/components/kb/CreateKbModal';
+
+// -----------------------------------------------------------------------
+// 타이머 타입 + elapsed 훅
+// -----------------------------------------------------------------------
+interface TimerActiveItem {
+  ticket_id: string;
+  ticket_number: string | null;
+  ticket_title: string | null;
+  started_at: string;
+  elapsed_seconds: number;
+}
+
+function useElapsed(startedAt: string | null, active: boolean): string {
+  const [elapsed, setElapsed] = React.useState(0);
+  React.useEffect(() => {
+    if (!active || !startedAt) { setElapsed(0); return; }
+    const base = Date.now() - new Date(startedAt).getTime();
+    setElapsed(Math.floor(base / 1000));
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [active, startedAt]);
+  const h = Math.floor(elapsed / 3600);
+  const m = Math.floor((elapsed % 3600) / 60);
+  const s = elapsed % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
 
 // -----------------------------------------------------------------------
 // WorkLog 인라인 타입 정의
@@ -261,6 +297,8 @@ export default function TicketDetailPage() {
   const [commentBody, setCommentBody] = React.useState('');
   const [kbModalOpen, setKbModalOpen] = React.useState(false);
   const [isInternal, setIsInternal] = React.useState(false);
+  const [showStopModal, setShowStopModal] = React.useState(false);
+  const [showOtherTimerModal, setShowOtherTimerModal] = React.useState(false);
   const prevStatusRef = React.useRef<string | null>(null);
 
   // 티켓 상세 조회
@@ -405,6 +443,60 @@ export default function TicketDetailPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  // BUG-ITSM-003: 상태 변경 mutation (상세 페이지)
+  const statusMutation = useMutation({
+    mutationFn: (newStatus: TicketStatus) =>
+      api.patch(`/${tenantSlug}/tickets/${ticketId}`, { status: newStatus }),
+    onSuccess: (_, newStatus) => {
+      queryClient.invalidateQueries({ queryKey: ['ticket-detail-full', tenantSlug, ticketId] });
+      queryClient.invalidateQueries({ queryKey: ['ticket-activities', tenantSlug, ticketId] });
+      queryClient.invalidateQueries({ queryKey: ['tickets', tenantSlug] });
+      toast.success('상태가 변경되었습니다.');
+      if (newStatus === 'resolved' && ticketId) {
+        toast('이 해결 과정을 KB 문서로 만드세요', {
+          description: 'AI가 티켓 내용으로 초안을 자동 생성합니다.',
+          action: {
+            label: 'KB 작성',
+            onClick: () => { window.open(`/${tenantSlug}/kb?from_ticket=${ticketId}`, '_blank'); },
+          },
+          duration: 8000,
+        });
+      }
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  // BUG-ITSM-004: 타이머 쿼리 (상세 페이지)
+  const { data: timers = [] } = useQuery<TimerActiveItem[]>({
+    queryKey: ['work-timer', tenantSlug],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/work-logs/timer/active`).then((r) => r.data),
+    refetchInterval: 10000,
+  });
+
+  const myTimer = timers.find((t) => t.ticket_id === ticketId);
+  const otherTimers = timers.filter((t) => t.ticket_id !== ticketId);
+  const elapsed = useElapsed(myTimer?.started_at ?? null, !!myTimer);
+  const otherElapsed = useElapsed(otherTimers[0]?.started_at ?? null, otherTimers.length > 0);
+
+  const startTimerMutation = useMutation({
+    mutationFn: () =>
+      api.post(`/${tenantSlug}/work-logs/timer/start?ticket_id=${ticketId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['work-timer', tenantSlug] });
+      toast.success('타이머가 시작되었습니다.');
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  function handleStartTimer() {
+    if (otherTimers.length > 0) {
+      setShowOtherTimerModal(true);
+      return;
+    }
+    startTimerMutation.mutate();
+  }
+
   if (ticketLoading) return <PageSkeleton />;
 
   if (!ticket) {
@@ -417,8 +509,6 @@ export default function TicketDetailPage() {
       </div>
     );
   }
-
-  const slaGrade = ticket.sla_response_deadline ? undefined : undefined; // 사이드바에서 SlaBadge 사용
 
   return (
     <div className="min-h-full bg-bg">
@@ -442,23 +532,26 @@ export default function TicketDetailPage() {
           <h1 className="text-xl font-bold text-text-primary leading-snug mb-3">
             {ticket.title}
           </h1>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span
-              className={cn(
-                'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                STATUS_STYLES[ticket.status],
-              )}
-            >
-              {STATUS_LABELS[ticket.status]}
-            </span>
-            <span
-              className={cn(
-                'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                PRIORITY_STYLES[ticket.priority],
-              )}
-            >
-              {PRIORITY_LABELS[ticket.priority]}
-            </span>
+          {/* BUG-ITSM-003: 상태/우선순위 Select 드롭다운 (슬라이더와 동일) */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-text-secondary">상태</span>
+              <div className="w-32">
+                <Select
+                  value={ticket.status}
+                  onValueChange={(v) => statusMutation.mutate(v as TicketStatus)}
+                >
+                  <SelectTrigger className="h-7 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(STATUS_LABELS) as TicketStatus[]).map((s) => (
+                      <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             {ticket.escalation_level != null && ticket.escalation_level > 1 && (
               <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700">
                 {ticket.escalation_level}차 대응
@@ -477,6 +570,50 @@ export default function TicketDetailPage() {
               </button>
             )}
           </div>
+        </div>
+
+        {/* BUG-ITSM-004: 타이머 스트립 */}
+        <div className="mb-4">
+          {myTimer ? (
+            <div className="flex items-center gap-2.5 rounded-lg bg-warning-bg border border-warning-border px-3 py-2">
+              <Clock size={13} className="text-warning-text animate-pulse shrink-0" />
+              <span className="font-mono text-sm font-semibold text-warning-text tabular-nums">
+                {elapsed}
+              </span>
+              <span className="flex-1 text-xs text-warning-text">작업 진행 중</span>
+              <Button
+                size="sm"
+                onClick={() => setShowStopModal(true)}
+                className="btn-warning border-0 text-[#1A1A1A] h-6 text-xs px-2"
+              >
+                중지 및 기록
+              </Button>
+            </div>
+          ) : otherTimers.length > 0 ? (
+            <div className="flex items-center gap-2 rounded-lg bg-surface-elevated border border-border-default px-3 py-2 text-xs text-text-secondary">
+              <Clock size={12} className="text-warning-text shrink-0" />
+              <span className="flex-1">
+                {otherTimers[0].ticket_title
+                  ? `"${otherTimers[0].ticket_title}" 타이머 실행 중`
+                  : '다른 티켓 타이머 실행 중'}
+              </span>
+              <button
+                onClick={() => setShowOtherTimerModal(true)}
+                className="text-brand hover:underline font-medium whitespace-nowrap"
+              >
+                중지 후 시작
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleStartTimer}
+              disabled={startTimerMutation.isPending}
+              className="flex items-center justify-center gap-1.5 w-full rounded-lg border border-dashed border-border-default hover:border-border-strong text-xs text-text-secondary hover:text-text-primary px-3 py-2 transition-colors"
+            >
+              <Play size={11} />
+              이 티켓 타이머 시작
+            </button>
+          )}
         </div>
 
         {/* 2컬럼 레이아웃 */}
@@ -667,6 +804,33 @@ export default function TicketDetailPage() {
         linkedTicketId: ticket.id,
       }}
     />
+    {/* BUG-ITSM-004: 타이머 중지 모달 */}
+    <WorkLogStopModal
+      open={showStopModal}
+      onClose={() => setShowStopModal(false)}
+      tenantSlug={tenantSlug}
+      ticketId={ticketId}
+      elapsed={elapsed}
+      onStopped={() => {
+        queryClient.invalidateQueries({ queryKey: ['work-timer', tenantSlug] });
+        queryClient.invalidateQueries({ queryKey: ['work-logs', tenantSlug, ticketId] });
+      }}
+    />
+    {otherTimers[0] && (
+      <WorkLogStopModal
+        open={showOtherTimerModal}
+        onClose={() => setShowOtherTimerModal(false)}
+        tenantSlug={tenantSlug}
+        ticketId={otherTimers[0].ticket_id}
+        elapsed={otherElapsed}
+        title={
+          otherTimers[0].ticket_title
+            ? `${otherTimers[0].ticket_number ?? ''} ${otherTimers[0].ticket_title} 작업 일지 기록`.trim()
+            : '이전 작업 일지 기록'
+        }
+        onStopped={() => startTimerMutation.mutate()}
+      />
+    )}
     </div>
   );
 }

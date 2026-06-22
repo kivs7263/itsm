@@ -220,6 +220,7 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
       }),
     enabled: !!ticketId,
     refetchInterval: 30000,
+    refetchOnMount: 'always',
   });
 
   const { data: workLogs, isLoading: logsLoading } = useQuery<WorkLog[]>({

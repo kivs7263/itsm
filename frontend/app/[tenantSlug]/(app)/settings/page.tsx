@@ -595,6 +595,23 @@ function SlaTab({ tenantSlug }: { tenantSlug: string }) {
     );
   }
 
+  // 등록된 정책이 하나도 없을 때 빈 상태 안내
+  if (policies.length === 0) {
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-text-secondary">
+          계약 등급별 응답 시간(시간)과 해결 시간(시간)을 설정합니다.
+        </p>
+        <div className="flex flex-col items-center justify-center py-16 gap-3 border border-dashed border-border-default rounded-lg">
+          <p className="text-sm font-medium text-text-primary">SLA 정책이 없습니다</p>
+          <p className="text-xs text-text-secondary text-center max-w-xs">
+            Bronze · Silver · Gold · Platinum 4개 등급의 SLA 정책을 초기화하려면 관리자에게 문의하거나 백엔드 초기 데이터를 확인하세요.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-text-secondary">
@@ -603,7 +620,12 @@ function SlaTab({ tenantSlug }: { tenantSlug: string }) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {(['bronze', 'silver', 'gold', 'platinum'] as const).map((tier) => {
           const policy = policies.find((p) => p.tier === tier);
-          if (!policy) return null;
+          if (!policy) return (
+            <div key={tier} className="bg-white border border-dashed border-border-default rounded-[16px] p-4 flex flex-col items-center justify-center gap-2 min-h-[120px]">
+              <p className={`text-sm font-semibold capitalize`}>{tier}</p>
+              <p className="text-xs text-text-disabled">정책 미등록</p>
+            </div>
+          );
           const d = draftHours[policy.id] ?? {
             response_hours: policy.response_hours,
             resolution_hours: policy.resolution_hours,

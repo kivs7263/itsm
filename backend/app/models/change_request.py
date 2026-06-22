@@ -178,6 +178,7 @@ class ChangeRequest(Base):
         nullable=False,
         default="not_submitted",
     )
+    rejection_reason = Column(Text, nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Package } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -227,6 +227,7 @@ function CreateAssetModal({
 // -----------------------------------------------------------------------
 export default function AssetsPage() {
   const params = useParams();
+  const router = useRouter();
   const tenantSlug = params?.tenantSlug as string;
 
   const [search, setSearch] = useState('');
@@ -293,7 +294,8 @@ export default function AssetsPage() {
               assets.map((a) => (
                 <tr
                   key={a.id}
-                  className="border-b border-border-subtle hover:bg-surface-hover transition-colors"
+                  className="border-b border-border-subtle hover:bg-surface-hover transition-colors cursor-pointer"
+                  onClick={() => router.push(`/${tenantSlug}/assets/${a.id}`)}
                 >
                   <td className="px-4 py-3 font-mono text-xs text-text-primary">
                     {typeof a.asset_tag === 'string' ? a.asset_tag : '-'}

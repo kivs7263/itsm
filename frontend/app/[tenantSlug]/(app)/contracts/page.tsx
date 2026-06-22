@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Search, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -91,6 +91,7 @@ function EmptyState() {
 // -----------------------------------------------------------------------
 export default function ContractsPage() {
   const params = useParams();
+  const router = useRouter();
   const tenantSlug = params?.tenantSlug as string;
 
   const [search, setSearch] = useState('');
@@ -153,7 +154,8 @@ export default function ContractsPage() {
               contracts.map((c) => (
                 <tr
                   key={c.id}
-                  className="border-b border-border-subtle hover:bg-surface-hover transition-colors"
+                  className="border-b border-border-subtle hover:bg-surface-hover transition-colors cursor-pointer"
+                  onClick={() => router.push(`/${tenantSlug}/contracts/${c.id}`)}
                 >
                   <td className="px-4 py-3 font-medium text-text-primary">
                     {typeof c.name === 'string' ? c.name : '-'}
