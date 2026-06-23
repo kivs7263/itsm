@@ -140,26 +140,27 @@ async def claim_ticket(
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db),
 ) -> QueueTicketOut:
-    async with db.begin():
-        # SKIP LOCKED: 이미 다른 트랜잭션이 잠근 행은 건너뜀
-        ticket = await db.scalar(
-            select(Ticket)
-            .where(
-                and_(
-                    Ticket.id == ticket_id,
-                    Ticket.tenant_id == current_user.tenant_id,
-                    Ticket.assigned_to.is_(None),
-                )
+    # SKIP LOCKED: 이미 다른 트랜잭션이 잠근 행은 건너뜀.
+    # async 세션은 첫 쿼리 시 autobegin이므로 db.begin() 중첩 불필요.
+    # assign/release 핸들러와 동일 패턴: 쿼리 → commit.
+    ticket = await db.scalar(
+        select(Ticket)
+        .where(
+            and_(
+                Ticket.id == ticket_id,
+                Ticket.tenant_id == current_user.tenant_id,
+                Ticket.assigned_to.is_(None),
             )
-            .with_for_update(skip_locked=True)
         )
-        if ticket is None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="이미 다른 담당자가 접수했습니다.",
-            )
-        ticket.assigned_to = current_user.id
-
+        .with_for_update(skip_locked=True)
+    )
+    if ticket is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="이미 다른 담당자가 접수했습니다.",
+        )
+    ticket.assigned_to = current_user.id
+    await db.commit()
     await db.refresh(ticket)
     return QueueTicketOut.model_validate(ticket)
 

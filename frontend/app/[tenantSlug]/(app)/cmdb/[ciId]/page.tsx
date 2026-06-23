@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
 import { ArrowLeft, Plus, Server } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { CI, CIDetail, CIRelationship, CIHistory, CIStatus, CICriticality, CIType, RelType } from '@/lib/types';
+import type { CI, CIDetailResponse, CIRelationship, CIHistory, CIStatus, CICriticality, CIType, RelType } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -139,13 +139,9 @@ function PageSkeleton() {
 // 관계 목록 탭
 // -----------------------------------------------------------------------
 function RelationshipsTab({
-  ciId,
-  tenantSlug,
   relationships,
   onAdd,
 }: {
-  ciId: string;
-  tenantSlug: string;
   relationships: CIRelationship[];
   onAdd: () => void;
 }) {
@@ -177,22 +173,22 @@ function RelationshipsTab({
         </thead>
         <tbody>
           {relationships.map((rel) => {
-            const isFrom = rel.from_ci_id === ciId;
-            const otherCI = isFrom ? rel.to_ci : rel.from_ci;
+            const isOut = rel.direction === 'out';
+            const relatedName = rel.related_ci?.name ?? rel.related_ci?.id ?? '-';
             return (
               <tr key={rel.id} className="border-b border-border-subtle">
                 <td className="py-2 pr-3">
                   <span className={cn(
                     'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium',
-                    isFrom
+                    isOut
                       ? 'bg-blue-50 text-blue-600'
                       : 'bg-purple-50 text-purple-600',
                   )}>
-                    {isFrom ? '→ 대상' : '← 소스'}
+                    {isOut ? '→ 대상' : '← 소스'}
                   </span>
                 </td>
                 <td className="py-2 pr-3 text-text-primary font-medium">
-                  {otherCI ? (typeof otherCI.name === 'string' ? otherCI.name : rel.to_ci_id) : rel.to_ci_id}
+                  {typeof relatedName === 'string' ? relatedName : '-'}
                 </td>
                 <td className="py-2 text-text-secondary text-xs">
                   {REL_TYPE_LABELS[rel.rel_type] ?? rel.rel_type}
@@ -268,8 +264,8 @@ export default function CIDetailPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('relationships');
   const [addRelOpen, setAddRelOpen] = useState(false);
 
-  // CI 상세 조회
-  const { data: ci, isLoading, isError, error: queryError } = useQuery<CIDetail>({
+  // CI 상세 조회 — 백엔드 응답: { ci: CIOut, relationships: [...] }
+  const { data: detailResponse, isLoading, isError, error: queryError } = useQuery<CIDetailResponse>({
     queryKey: ['cmdb-ci-detail', tenantSlug, ciId],
     queryFn: () => api.get(`/${tenantSlug}/cmdb/cis/${ciId}`).then((r) => r.data),
     enabled: !!tenantSlug && !!ciId,
@@ -301,6 +297,8 @@ export default function CIDetailPage() {
     );
   }
 
+  const ci = detailResponse?.ci ?? null;
+
   if (!ci) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3">
@@ -312,17 +310,12 @@ export default function CIDetailPage() {
     );
   }
 
-  // 관계 목록 (from + to 합치기) — 배열 방어: API가 paginated 객체를 반환할 경우 대비
-  const relFrom: CIRelationship[] = Array.isArray(ci.relationships_from)
-    ? ci.relationships_from
+  // 관계 목록 — 백엔드: { direction: 'out'|'in', related_ci: {...} } 배열
+  const relationships: CIRelationship[] = Array.isArray(detailResponse?.relationships)
+    ? detailResponse.relationships
     : [];
-  const relTo: CIRelationship[] = Array.isArray(ci.relationships_to)
-    ? ci.relationships_to
-    : [];
-  const relationships: CIRelationship[] = [...relFrom, ...relTo];
 
-  const historyRaw = historyData ?? ci.history;
-  const history: CIHistory[] = Array.isArray(historyRaw) ? historyRaw : [];
+  const history: CIHistory[] = Array.isArray(historyData) ? historyData : [];
 
   const descriptionAttr = ci.attributes?.description;
   const descriptionText = typeof descriptionAttr === 'string' ? descriptionAttr : undefined;
@@ -438,8 +431,6 @@ export default function CIDetailPage() {
               <div className="flex-1 overflow-auto">
                 {activeTab === 'relationships' && (
                   <RelationshipsTab
-                    ciId={ciId}
-                    tenantSlug={tenantSlug}
                     relationships={relationships}
                     onAdd={() => setAddRelOpen(true)}
                   />

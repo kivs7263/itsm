@@ -106,13 +106,18 @@ export interface CIsResponse {
   total: number;
 }
 
+/** 백엔드 GET /{tenant}/cmdb/cis/{id} 응답의 relationships 배열 항목 */
 export interface CIRelationship {
   id: string;
-  from_ci_id: string;
-  to_ci_id: string;
   rel_type: RelType;
-  from_ci?: CI;
-  to_ci?: CI;
+  /** "out" = 현재 CI → 대상 / "in" = 대상 → 현재 CI */
+  direction: 'out' | 'in';
+  related_ci: {
+    id: string;
+    name: string;
+    ci_type: string;
+    status: string;
+  } | null;
 }
 
 export interface CIHistory {
@@ -126,9 +131,16 @@ export interface CIHistory {
   created_at: string;
 }
 
+/** 백엔드 GET /{tenant}/cmdb/cis/{id} 응답 구조 */
+export interface CIDetailResponse {
+  ci: CI;
+  relationships: CIRelationship[];
+}
+
+/** @deprecated 사용하지 말 것 — CIDetailResponse 사용 */
 export interface CIDetail extends CI {
-  relationships_from: CIRelationship[];
-  relationships_to: CIRelationship[];
+  relationships_from: never[];
+  relationships_to: never[];
   history: CIHistory[];
 }
 
@@ -246,9 +258,12 @@ export interface ContractsResponse {
 export interface SlaPolicy {
   id: string;
   tenant_id: string;
-  tier: ContractTier;
-  response_hours: number;
-  resolution_hours: number;
+  /** 백엔드 SLAPolicyOut 필드명: grade (bronze|silver|gold|platinum) */
+  grade: ContractTier;
+  /** 백엔드 SLAPolicyOut 필드명: response_minutes */
+  response_minutes: number;
+  /** 백엔드 SLAPolicyOut 필드명: resolution_minutes */
+  resolution_minutes: number;
   created_at: string;
 }
 

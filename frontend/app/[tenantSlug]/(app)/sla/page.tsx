@@ -245,17 +245,17 @@ export default function SLAPage() {
                   policyList.map((p) => (
                     <tr key={p.id} className="border-b border-border-subtle last:border-0">
                       <td className="px-5 py-3">
-                        <TierBadge tier={p.tier} />
+                        <TierBadge tier={p.grade} />
                       </td>
                       <td className="px-5 py-3 text-text-primary">
-                        {p.response_hours < 1
-                          ? `${Math.round(p.response_hours * 60)}분`
-                          : `${p.response_hours}시간`}
+                        {p.response_minutes < 60
+                          ? `${p.response_minutes}분`
+                          : `${Math.round(p.response_minutes / 60)}시간`}
                       </td>
                       <td className="px-5 py-3 text-text-primary">
-                        {p.resolution_hours < 24
-                          ? `${p.resolution_hours}시간`
-                          : `${Math.round(p.resolution_hours / 24)}일`}
+                        {p.resolution_minutes < 1440
+                          ? `${Math.round(p.resolution_minutes / 60)}시간`
+                          : `${Math.round(p.resolution_minutes / 1440)}일`}
                       </td>
                     </tr>
                   ))

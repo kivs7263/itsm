@@ -858,6 +858,38 @@ async def ai_classify_ticket(
 
 
 # ------------------------------------------------------------------
+# 댓글 목록 조회
+# ------------------------------------------------------------------
+
+
+@router.get(
+    "/{ticket_id}/comments",
+    response_model=list[CommentOut],
+    summary="댓글 목록 (시간순)",
+)
+async def list_comments(
+    tenant_slug: str,
+    ticket_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> list[CommentOut]:
+    await _get_ticket_or_404(db, current_user.tenant_id, ticket_id)
+    comments = (
+        await db.execute(
+            select(TicketComment)
+            .where(
+                and_(
+                    TicketComment.ticket_id == ticket_id,
+                    TicketComment.tenant_id == current_user.tenant_id,
+                )
+            )
+            .order_by(TicketComment.created_at.asc())
+        )
+    ).scalars().all()
+    return [CommentOut.model_validate(c) for c in comments]
+
+
+# ------------------------------------------------------------------
 # 댓글 추가
 # ------------------------------------------------------------------
 

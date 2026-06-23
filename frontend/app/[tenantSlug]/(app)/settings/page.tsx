@@ -554,7 +554,8 @@ function NotificationsTab({ tenantSlug }: { tenantSlug: string }) {
 // -----------------------------------------------------------------------
 function SlaTab({ tenantSlug }: { tenantSlug: string }) {
   const queryClient = useQueryClient();
-  const [draftHours, setDraftHours] = useState<Record<string, { response_hours: number; resolution_hours: number }>>({});
+  // 드래프트: 백엔드 단위(분) 그대로 보관
+  const [draftMinutes, setDraftMinutes] = useState<Record<string, { response_minutes: number; resolution_minutes: number }>>({});
 
   const { data, isLoading } = useQuery<SlaPolicy[]>({
     queryKey: ['sla-policies', tenantSlug],
@@ -564,17 +565,17 @@ function SlaTab({ tenantSlug }: { tenantSlug: string }) {
 
   useEffect(() => {
     if (data) {
-      const initial: typeof draftHours = {};
+      const initial: typeof draftMinutes = {};
       data.forEach((p) => {
-        initial[p.id] = { response_hours: p.response_hours, resolution_hours: p.resolution_hours };
+        initial[p.id] = { response_minutes: p.response_minutes, resolution_minutes: p.resolution_minutes };
       });
-      setDraftHours(initial);
+      setDraftMinutes(initial);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
   const saveMutation = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: { response_hours: number; resolution_hours: number } }) =>
+    mutationFn: ({ id, body }: { id: string; body: { response_minutes: number; resolution_minutes: number } }) =>
       api.put(`/${tenantSlug}/sla/policies/${id}`, body).then((r) => r.data),
     onSuccess: () => {
       toast.success('SLA 정책이 저장되었습니다.');
@@ -600,7 +601,7 @@ function SlaTab({ tenantSlug }: { tenantSlug: string }) {
     return (
       <div className="flex flex-col gap-4">
         <p className="text-sm text-text-secondary">
-          계약 등급별 응답 시간(시간)과 해결 시간(시간)을 설정합니다.
+          계약 등급별 응답 시간(분)과 해결 시간(분)을 설정합니다.
         </p>
         <div className="flex flex-col items-center justify-center py-16 gap-3 border border-dashed border-border-default rounded-lg">
           <p className="text-sm font-medium text-text-primary">SLA 정책이 없습니다</p>
@@ -615,20 +616,21 @@ function SlaTab({ tenantSlug }: { tenantSlug: string }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-text-secondary">
-        계약 등급별 응답 시간(시간)과 해결 시간(시간)을 설정합니다.
+        계약 등급별 응답 시간(분)과 해결 시간(분)을 설정합니다.
       </p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {(['bronze', 'silver', 'gold', 'platinum'] as const).map((tier) => {
-          const policy = policies.find((p) => p.tier === tier);
+          // 백엔드 필드: grade (tier가 아님)
+          const policy = policies.find((p) => p.grade === tier);
           if (!policy) return (
             <div key={tier} className="bg-white border border-dashed border-border-default rounded-[16px] p-4 flex flex-col items-center justify-center gap-2 min-h-[120px]">
-              <p className={`text-sm font-semibold capitalize`}>{tier}</p>
+              <p className={cn('text-sm font-semibold', TIER_COLORS[tier])}>{TIER_LABELS[tier]}</p>
               <p className="text-xs text-text-disabled">정책 미등록</p>
             </div>
           );
-          const d = draftHours[policy.id] ?? {
-            response_hours: policy.response_hours,
-            resolution_hours: policy.resolution_hours,
+          const d = draftMinutes[policy.id] ?? {
+            response_minutes: policy.response_minutes,
+            resolution_minutes: policy.resolution_minutes,
           };
 
           return (
@@ -638,30 +640,30 @@ function SlaTab({ tenantSlug }: { tenantSlug: string }) {
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs text-text-secondary">응답 시간 (시간)</label>
+                  <label className="text-xs text-text-secondary">응답 시간 (분)</label>
                   <input
                     type="number"
                     min={1}
-                    value={d.response_hours}
+                    value={d.response_minutes}
                     onChange={(e) =>
-                      setDraftHours((prev) => ({
+                      setDraftMinutes((prev) => ({
                         ...prev,
-                        [policy.id]: { ...d, response_hours: Number(e.target.value) },
+                        [policy.id]: { ...d, response_minutes: Number(e.target.value) },
                       }))
                     }
                     className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs text-text-secondary">해결 시간 (시간)</label>
+                  <label className="text-xs text-text-secondary">해결 시간 (분)</label>
                   <input
                     type="number"
                     min={1}
-                    value={d.resolution_hours}
+                    value={d.resolution_minutes}
                     onChange={(e) =>
-                      setDraftHours((prev) => ({
+                      setDraftMinutes((prev) => ({
                         ...prev,
-                        [policy.id]: { ...d, resolution_hours: Number(e.target.value) },
+                        [policy.id]: { ...d, resolution_minutes: Number(e.target.value) },
                       }))
                     }
                     className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
