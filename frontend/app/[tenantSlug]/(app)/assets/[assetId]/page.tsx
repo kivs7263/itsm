@@ -1,13 +1,15 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Package, AlertTriangle } from 'lucide-react';
-import { api } from '@/lib/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Package, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { api, getErrorMessage } from '@/lib/api';
 import type { Asset } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EditAssetModal } from '@/components/assets/EditAssetModal';
 
 // -----------------------------------------------------------------------
 // 날짜 포맷
@@ -76,14 +78,34 @@ function PageSkeleton() {
 export default function AssetDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const tenantSlug = params?.tenantSlug as string;
   const assetId = params?.assetId as string;
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const { data: asset, isLoading, isError, error: queryError } = useQuery<Asset>({
     queryKey: ['asset-detail', tenantSlug, assetId],
     queryFn: () => api.get(`/${tenantSlug}/assets/${assetId}`).then((r) => r.data),
     enabled: !!tenantSlug && !!assetId,
   });
+
+  async function handleDelete() {
+    setIsDeleting(true);
+    try {
+      await api.delete(`/${tenantSlug}/assets/${assetId}`);
+      toast.success('자산이 삭제되었습니다.');
+      await queryClient.invalidateQueries({ queryKey: ['assets', tenantSlug] });
+      router.push(`/${tenantSlug}/assets`);
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setIsDeleting(false);
+      setDeleteOpen(false);
+    }
+  }
 
   if (isLoading) return <PageSkeleton />;
 
@@ -143,6 +165,25 @@ export default function AssetDetailPage() {
         <span className="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-info-bg text-info-text">
           {assetTypeLabel}
         </span>
+        <div className="ml-auto flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            leftIcon={<Pencil size={13} />}
+            onClick={() => setEditOpen(true)}
+          >
+            수정
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            leftIcon={<Trash2 size={13} />}
+            onClick={() => setDeleteOpen(true)}
+            className="text-error-text border-error hover:bg-error-bg"
+          >
+            삭제
+          </Button>
+        </div>
       </div>
 
       {/* 본문 */}
@@ -211,6 +252,61 @@ export default function AssetDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* 자산 수정 모달 */}
+      {editOpen && asset && (
+        <EditAssetModal
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          tenantSlug={tenantSlug}
+          asset={asset}
+        />
+      )}
+
+      {/* 자산 삭제 확인 다이얼로그 */}
+      {deleteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => { if (!isDeleting) setDeleteOpen(false); }}
+            aria-hidden="true"
+          />
+          <div className="relative z-10 bg-surface rounded-xl shadow-xl border border-border-default p-6 max-w-sm w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-error-bg shrink-0">
+                <Trash2 size={18} className="text-error-text" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-text-primary">자산 삭제</h3>
+                <p className="text-xs text-text-secondary mt-0.5">이 작업은 되돌릴 수 없습니다.</p>
+              </div>
+            </div>
+            <p className="text-sm text-text-secondary mb-6">
+              <span className="font-medium text-text-primary">
+                {typeof asset?.asset_tag === 'string' ? asset.asset_tag : assetId}
+              </span>을(를) 정말 삭제하시겠습니까?
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDeleteOpen(false)}
+                disabled={isDeleting}
+              >
+                취소
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleDelete}
+                isLoading={isDeleting}
+                className="bg-error text-white hover:bg-error/90"
+              >
+                삭제
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

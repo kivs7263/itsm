@@ -2,16 +2,18 @@
 
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
-import { ArrowLeft, Plus, Server } from 'lucide-react';
-import { api } from '@/lib/api';
+import { ArrowLeft, Plus, Server, Pencil, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { api, getErrorMessage } from '@/lib/api';
 import type { CI, CIDetailResponse, CIRelationship, CIHistory, CIStatus, CICriticality, CIType, RelType } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddRelationshipModal } from '@/components/cmdb/AddRelationshipModal';
+import { EditCIModal } from '@/components/cmdb/EditCIModal';
 
 // -----------------------------------------------------------------------
 // 상수 매핑
@@ -141,9 +143,11 @@ function PageSkeleton() {
 function RelationshipsTab({
   relationships,
   onAdd,
+  onDeleteRel,
 }: {
   relationships: CIRelationship[];
   onAdd: () => void;
+  onDeleteRel: (relId: string) => void;
 }) {
   if (relationships.length === 0) {
     return (
@@ -169,6 +173,7 @@ function RelationshipsTab({
             <th className="text-left text-xs font-medium text-text-secondary py-2 pr-3">방향</th>
             <th className="text-left text-xs font-medium text-text-secondary py-2 pr-3">대상 CI</th>
             <th className="text-left text-xs font-medium text-text-secondary py-2">관계 유형</th>
+            <th className="text-right text-xs font-medium text-text-secondary py-2"></th>
           </tr>
         </thead>
         <tbody>
@@ -176,7 +181,7 @@ function RelationshipsTab({
             const isOut = rel.direction === 'out';
             const relatedName = rel.related_ci?.name ?? rel.related_ci?.id ?? '-';
             return (
-              <tr key={rel.id} className="border-b border-border-subtle">
+              <tr key={rel.id} className="border-b border-border-subtle group">
                 <td className="py-2 pr-3">
                   <span className={cn(
                     'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium',
@@ -192,6 +197,17 @@ function RelationshipsTab({
                 </td>
                 <td className="py-2 text-text-secondary text-xs">
                   {REL_TYPE_LABELS[rel.rel_type] ?? rel.rel_type}
+                </td>
+                <td className="py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteRel(rel.id)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-text-disabled hover:text-error-text hover:bg-error-bg"
+                    title="관계 삭제"
+                    aria-label="관계 삭제"
+                  >
+                    <Trash2 size={13} />
+                  </button>
                 </td>
               </tr>
             );
@@ -260,9 +276,14 @@ export default function CIDetailPage() {
   const tenantSlug = params?.tenantSlug as string;
   const ciId = params?.ciId as string;
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<TabKey>('relationships');
   const [addRelOpen, setAddRelOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteRelId, setDeleteRelId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // CI 상세 조회 — 백엔드 응답: { ci: CIOut, relationships: [...] }
   const { data: detailResponse, isLoading, isError, error: queryError } = useQuery<CIDetailResponse>({
@@ -277,6 +298,40 @@ export default function CIDetailPage() {
     queryFn: () => api.get(`/${tenantSlug}/cmdb/cis/${ciId}/history`).then((r) => r.data),
     enabled: !!tenantSlug && !!ciId && activeTab === 'history',
   });
+
+  // CI 삭제
+  async function handleDeleteCI() {
+    setIsDeleting(true);
+    try {
+      await api.delete(`/${tenantSlug}/cmdb/cis/${ciId}`);
+      toast.success('CI가 삭제되었습니다.');
+      await queryClient.invalidateQueries({ queryKey: ['cmdb-cis', tenantSlug] });
+      router.push(`/${tenantSlug}/cmdb`);
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setIsDeleting(false);
+      setDeleteOpen(false);
+    }
+  }
+
+  // 관계 삭제
+  async function handleDeleteRel(relId: string) {
+    setDeleteRelId(relId);
+  }
+
+  async function confirmDeleteRel() {
+    if (!deleteRelId) return;
+    try {
+      await api.delete(`/${tenantSlug}/cmdb/cis/${ciId}/relationships/${deleteRelId}`);
+      toast.success('관계가 삭제되었습니다.');
+      await queryClient.invalidateQueries({ queryKey: ['cmdb-ci-detail', tenantSlug, ciId] });
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setDeleteRelId(null);
+    }
+  }
 
   if (isLoading) return <PageSkeleton />;
 
@@ -339,6 +394,23 @@ export default function CIDetailPage() {
         <div className="ml-auto flex items-center gap-2">
           <CIStatusBadge status={ci.status} />
           <CICriticalityBadge criticality={ci.criticality} />
+          <Button
+            size="sm"
+            variant="outline"
+            leftIcon={<Pencil size={13} />}
+            onClick={() => setEditOpen(true)}
+          >
+            수정
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            leftIcon={<Trash2 size={13} />}
+            onClick={() => setDeleteOpen(true)}
+            className="text-error-text border-error hover:bg-error-bg"
+          >
+            삭제
+          </Button>
         </div>
       </div>
 
@@ -433,6 +505,7 @@ export default function CIDetailPage() {
                   <RelationshipsTab
                     relationships={relationships}
                     onAdd={() => setAddRelOpen(true)}
+                    onDeleteRel={handleDeleteRel}
                   />
                 )}
                 {activeTab === 'history' && (
@@ -451,6 +524,97 @@ export default function CIDetailPage() {
         tenantSlug={tenantSlug}
         ciId={ciId}
       />
+
+      {/* CI 수정 모달 */}
+      {editOpen && ci && (
+        <EditCIModal
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          tenantSlug={tenantSlug}
+          ci={ci}
+        />
+      )}
+
+      {/* CI 삭제 확인 다이얼로그 */}
+      {deleteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => { if (!isDeleting) setDeleteOpen(false); }}
+            aria-hidden="true"
+          />
+          <div className="relative z-10 bg-surface rounded-xl shadow-xl border border-border-default p-6 max-w-sm w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-error-bg shrink-0">
+                <Trash2 size={18} className="text-error-text" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-text-primary">CI 삭제</h3>
+                <p className="text-xs text-text-secondary mt-0.5">이 작업은 되돌릴 수 없습니다.</p>
+              </div>
+            </div>
+            <p className="text-sm text-text-secondary mb-6">
+              <span className="font-medium text-text-primary">{typeof ci?.name === 'string' ? ci.name : ciId}</span>을(를) 정말 삭제하시겠습니까?
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDeleteOpen(false)}
+                disabled={isDeleting}
+              >
+                취소
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleDeleteCI}
+                isLoading={isDeleting}
+                className="bg-error text-white hover:bg-error/90"
+              >
+                삭제
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 관계 삭제 확인 다이얼로그 */}
+      {deleteRelId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setDeleteRelId(null)}
+            aria-hidden="true"
+          />
+          <div className="relative z-10 bg-surface rounded-xl shadow-xl border border-border-default p-6 max-w-sm w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-error-bg shrink-0">
+                <Trash2 size={18} className="text-error-text" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-text-primary">관계 삭제</h3>
+                <p className="text-xs text-text-secondary mt-0.5">이 관계를 삭제하시겠습니까?</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDeleteRelId(null)}
+              >
+                취소
+              </Button>
+              <Button
+                size="sm"
+                onClick={confirmDeleteRel}
+                className="bg-error text-white hover:bg-error/90"
+              >
+                삭제
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

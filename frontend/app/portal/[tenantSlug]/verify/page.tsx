@@ -43,7 +43,7 @@ function VerifyContent() {
       }
 
       try {
-        await api.post(`/portal/${tenantSlug}/auth/verify`, { token });
+        await api.get(`/portal/${tenantSlug}/auth/verify`, { params: { token } });
         if (!cancelled) {
           router.replace(`/portal/${tenantSlug}/tickets`);
         }

@@ -2,9 +2,9 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Eye, ThumbsUp, ThumbsDown, Pencil } from 'lucide-react';
+import { ArrowLeft, Eye, ThumbsUp, ThumbsDown, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type { KbArticle } from '@/lib/types';
@@ -51,8 +51,11 @@ export default function KbArticlePage() {
   const articleId = params?.articleId as string;
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [voted, setVoted] = useState<'helpful' | 'not_helpful' | null>(null);
 
   const { data: article, isLoading } = useQuery<KbArticleDetail>({
@@ -74,6 +77,22 @@ export default function KbArticlePage() {
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
+
+  async function handleDelete() {
+    setIsDeleting(true);
+    try {
+      await api.delete(`/${tenantSlug}/kb/${articleId}`);
+      toast.success('KB 문서가 삭제되었습니다.');
+      await queryClient.invalidateQueries({ queryKey: ['kb-list', tenantSlug] });
+      await queryClient.invalidateQueries({ queryKey: ['kb-keyword', tenantSlug] });
+      router.push(`/${tenantSlug}/kb`);
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setIsDeleting(false);
+      setDeleteOpen(false);
+    }
+  }
 
   if (isLoading) return <PageSkeleton />;
 
@@ -113,15 +132,25 @@ export default function KbArticlePage() {
               {article.title}
             </h1>
             {canEdit && (
-              <Button
-                variant="outline"
-                size="sm"
-                leftIcon={<Pencil size={12} />}
-                onClick={() => setEditOpen(true)}
-                className="shrink-0"
-              >
-                수정
-              </Button>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leftIcon={<Pencil size={12} />}
+                  onClick={() => setEditOpen(true)}
+                >
+                  수정
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leftIcon={<Trash2 size={12} />}
+                  onClick={() => setDeleteOpen(true)}
+                  className="text-error-text border-error hover:bg-error-bg"
+                >
+                  삭제
+                </Button>
+              </div>
             )}
           </div>
 
@@ -238,6 +267,49 @@ export default function KbArticlePage() {
             linkedTicketId: article.linked_ticket_id ?? undefined,
           }}
         />
+      )}
+
+      {/* KB 삭제 확인 다이얼로그 */}
+      {deleteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => { if (!isDeleting) setDeleteOpen(false); }}
+            aria-hidden="true"
+          />
+          <div className="relative z-10 bg-surface rounded-xl shadow-xl border border-border-default p-6 max-w-sm w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-error-bg shrink-0">
+                <Trash2 size={18} className="text-error-text" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-text-primary">KB 문서 삭제</h3>
+                <p className="text-xs text-text-secondary mt-0.5">이 작업은 되돌릴 수 없습니다.</p>
+              </div>
+            </div>
+            <p className="text-sm text-text-secondary mb-6">
+              <span className="font-medium text-text-primary">{article.title}</span>을(를) 정말 삭제하시겠습니까?
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDeleteOpen(false)}
+                disabled={isDeleting}
+              >
+                취소
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleDelete}
+                isLoading={isDeleting}
+                className="bg-error text-white hover:bg-error/90"
+              >
+                삭제
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
