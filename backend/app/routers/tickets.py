@@ -550,7 +550,34 @@ async def create_ticket(
     except Exception:
         pass
 
-    return TicketOut.model_validate(ticket)
+    # 응답 스냅샷: dispatch 이전에 캡처 (세션 오염 차단)
+    _ticket_out = TicketOut.model_validate(ticket)
+
+    # ADR-050 자동화 룰 엔진 — ticket.created 트리거 (graceful)
+    try:
+        from app.automation.engine import dispatch as _auto_dispatch
+        await _auto_dispatch(
+            "ticket.created",
+            {
+                "ticket_id": str(ticket.id),
+                "request_type": str(ticket.request_type) if hasattr(ticket, "request_type") and ticket.request_type else None,
+                "priority": str(_ticket_out.priority),
+                "status": str(_ticket_out.status),
+                "tenant_id": str(current_user.tenant_id),
+                "created_by": str(current_user.id),
+            },
+            db,
+            depth=0,
+        )
+        # run 기록 커밋
+        await db.commit()
+    except Exception:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+
+    return _ticket_out
 
 
 # ------------------------------------------------------------------
@@ -682,6 +709,10 @@ async def update_ticket(
     await db.commit()
     await db.refresh(ticket)
 
+    # 응답 스냅샷: dispatch 이전에 캡처해야 세션 오염 위험 없음
+    # (dispatch 내부 IntegrityError 격리 실패 시 rollback이 ticket 만료시킬 수 있음)
+    _ticket_out = TicketOut.model_validate(ticket)
+
     # Webhook: status_changed / assigned (graceful)
     try:
         from app.services import webhook_service as _wh
@@ -701,7 +732,34 @@ async def update_ticket(
     except Exception:
         pass
 
-    return TicketOut.model_validate(ticket)
+    # ADR-050 자동화 룰 엔진 — ticket.status_changed 트리거 (graceful)
+    # _prev_status는 commit 이전 캡처된 값
+    if "status" in data.model_dump(exclude_unset=True):
+        try:
+            from app.automation.engine import dispatch as _auto_dispatch
+            _cur_status = str(_ticket_out.status)
+            await _auto_dispatch(
+                "ticket.status_changed",
+                {
+                    "ticket_id": str(ticket.id),
+                    "prev_status": _prev_status,
+                    "new_status": _cur_status,
+                    "assignee_id": str(ticket.assigned_to) if ticket.assigned_to else None,
+                    "tenant_id": str(current_user.tenant_id),
+                    "actor_id": str(current_user.id),
+                },
+                db,
+                depth=0,
+            )
+            # run 기록 커밋
+            await db.commit()
+        except Exception:
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
+    return _ticket_out
 
 
 # ------------------------------------------------------------------

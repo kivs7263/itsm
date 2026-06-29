@@ -275,6 +275,23 @@ async def _check_sla_once(_engine, redis) -> None:
                         await _enqueue_sla_notification(
                             session, row.tenant_id, ticket_id, "sla_warning"
                         )
+                        # ADR-050 자동화 룰 엔진 — ticket.sla_breach_warning 트리거 (graceful)
+                        # sla_worker는 session.commit()을 직접 관리하므로
+                        # dispatch()는 flush만 수행, commit은 아래 worker commit에서 처리
+                        try:
+                            from app.automation.engine import dispatch as _auto_dispatch
+                            await _auto_dispatch(
+                                "ticket.sla_breach_warning",
+                                {
+                                    "ticket_id": str(ticket_id),
+                                    "response_deadline": response_deadline.isoformat(),
+                                    "tenant_id": str(row.tenant_id),
+                                },
+                                session,
+                                depth=0,
+                            )
+                        except Exception as _ae:
+                            logger.warning("automation dispatch sla_breach_warning 실패 (무시): %s", _ae)
                         # WF-4 (ADR-048): GW 에스컬레이션 후처리 대상 수집.
                         # 실제 GW HTTP 호출은 아래 메인 commit 완료 이후에 수행한다.
                         # 여기서는 필요 데이터(email·title·content)만 DB에서 읽어 수집.

@@ -262,3 +262,7 @@ app.include_router(admin_bridge_router.router)               # /api/admin/*
 # ADR-048 WF-2: GW 결재 승인 → ITSM 작업 티켓 자동 생성 (내부 전용)
 from app.routers import internal_workflow as internal_workflow_router  # noqa: E402
 app.include_router(internal_workflow_router.router)          # /api/internal/workflow/create-ticket
+
+# ADR-050: 자동화 룰 엔진 관리자 API (Phase 1a)
+from app.automation.router import router as automation_router  # noqa: E402
+app.include_router(automation_router, prefix="/api")         # /api/{slug}/automation/rules, /api/{slug}/automation/runs
