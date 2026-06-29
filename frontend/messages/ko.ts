@@ -8,6 +8,11 @@ const ko = {
     recurringIssues: '반복 이슈',
     reports: '리포트',
     settings: '설정',
+    assets: '자산',
+    cmdb: 'CMDB',
+    changeRequests: '변경 요청',
+    sla: 'SLA',
+    contracts: '계약',
   },
   auth: {
     logout: '로그아웃',
@@ -108,7 +113,7 @@ const ko = {
 };
 
 export interface Messages {
-  nav: { dashboard: string; tickets: string; workLogs: string; customers: string; kb: string; recurringIssues: string; reports: string; settings: string };
+  nav: { dashboard: string; tickets: string; workLogs: string; customers: string; kb: string; recurringIssues: string; reports: string; settings: string; assets: string; cmdb: string; changeRequests: string; sla: string; contracts: string };
   auth: { logout: string; role: Record<string, string> };
   sidebar: { open: string; close: string; language: string };
   ticket: {

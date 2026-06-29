@@ -10,6 +10,11 @@ const en = {
     recurringIssues: 'Recurring Issues',
     reports: 'Reports',
     settings: 'Settings',
+    assets: 'Assets',
+    cmdb: 'CMDB',
+    changeRequests: 'Change Requests',
+    sla: 'SLA',
+    contracts: 'Contracts',
   },
   auth: {
     logout: 'Log out',

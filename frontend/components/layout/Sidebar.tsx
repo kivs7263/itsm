@@ -15,7 +15,11 @@ import {
   RefreshCw,
   Settings,
   Clock,
-
+  Boxes,
+  Network,
+  GitPullRequest,
+  Gauge,
+  FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSlug } from '@/lib/slug';
@@ -33,17 +37,23 @@ function getInitialCollapsed(): boolean {
   return stored === null ? false : stored === 'true';
 }
 
-type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'recurringIssues' | 'reports' | 'settings';
+type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'recurringIssues' | 'reports' | 'settings' | 'assets' | 'cmdb' | 'changeRequests' | 'sla' | 'contracts';
 type NavItem = { key: NavKey; href: string; icon: React.ElementType };
 
 // SHELL-7 항목 ③: 아이콘 17px 통일
 const ENGINEER_ITEMS: NavItem[] = [
-  { key: 'dashboard',       href: '/home',             icon: Home      },
-  { key: 'tickets',         href: '/tickets',          icon: LifeBuoy  },
-  { key: 'workLogs',        href: '/work-logs',        icon: Clock     },
-  { key: 'customers',       href: '/customers',        icon: Users     },
-  { key: 'kb',              href: '/kb',               icon: BookOpen  },
-  { key: 'recurringIssues', href: '/recurring-alerts', icon: RefreshCw },
+  { key: 'dashboard',       href: '/home',             icon: Home           },
+  { key: 'tickets',         href: '/tickets',          icon: LifeBuoy       },
+  { key: 'workLogs',        href: '/work-logs',        icon: Clock          },
+  { key: 'customers',       href: '/customers',        icon: Users          },
+  { key: 'kb',              href: '/kb',               icon: BookOpen       },
+  { key: 'recurringIssues', href: '/recurring-alerts', icon: RefreshCw      },
+  // CA-5: 운영 관리 메뉴 — page.tsx 실재 확인된 라우트만 등록
+  { key: 'assets',          href: '/assets',           icon: Boxes          },
+  { key: 'cmdb',            href: '/cmdb',             icon: Network        },
+  { key: 'changeRequests',  href: '/change-requests',  icon: GitPullRequest },
+  { key: 'sla',             href: '/sla',              icon: Gauge          },
+  { key: 'contracts',       href: '/contracts',        icon: FileText       },
 ];
 
 const TEAM_LEAD_ITEMS: NavItem[] = [

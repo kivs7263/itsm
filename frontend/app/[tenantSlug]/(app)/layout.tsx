@@ -46,9 +46,14 @@ import {
   Settings,
   LogOut,
   Languages,
+  MoreHorizontal,
+  X,
+  BarChart2,
+  Home as HomeIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import * as Dialog from '@radix-ui/react-dialog';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -69,9 +74,114 @@ const SEG_LABELS: Record<string, string> = {
   contracts: '계약', notifications: '알림', home: '대시보드', sla: 'SLA',
 };
 
+// -----------------------------------------------------------------------
+// MobileMoreSheet — 모바일 더보기 바텀시트 (CA-6: 로그아웃 유일 모바일 진입점)
+// Topbar UserMenu는 hidden md:block — 모바일에서 도달 불가이므로 여기서 제공.
+// -----------------------------------------------------------------------
+const MOBILE_MORE_LINKS = [
+  { label: '홈',      href: '/home',          icon: HomeIcon   },
+  { label: '알림',    href: '/notifications', icon: Bell       },
+  { label: '리포트',  href: '/reports',       icon: BarChart2  },
+  { label: '설정',    href: '/settings',      icon: Settings   },
+] as const;
+
+interface MobileMoreSheetProps {
+  open: boolean;
+  onClose: () => void;
+  slug: (href: string) => string;
+  logout: () => void;
+}
+
+function MobileMoreSheet({ open, onClose, slug, logout }: MobileMoreSheetProps) {
+  const pathname = usePathname();
+  return (
+    <Dialog.Root open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay
+          className={cn(
+            'fixed inset-0 z-50',
+            'data-[state=open]:animate-in data-[state=closed]:animate-out',
+            'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0',
+          )}
+          style={{ background: 'rgba(14,14,12,0.45)' }}
+        />
+        <Dialog.Content
+          className={cn(
+            'fixed bottom-0 inset-x-0 z-50',
+            'bg-surface rounded-t-2xl border-t border-border-default',
+            'pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4 px-4',
+            'data-[state=open]:animate-in data-[state=closed]:animate-out',
+            'data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom',
+            'duration-200',
+          )}
+          aria-label="더보기 메뉴"
+        >
+          {/* 드래그 핸들 */}
+          <div className="flex justify-center mb-4">
+            <div className="w-10 h-1 rounded-full bg-border-default" />
+          </div>
+          {/* 닫기 버튼 */}
+          <Dialog.Close asChild>
+            <button
+              type="button"
+              className="absolute top-4 right-4 p-1.5 rounded-md hover:bg-surface-hover text-text-secondary transition-colors"
+              aria-label="닫기"
+            >
+              <X size={18} />
+            </button>
+          </Dialog.Close>
+          <Dialog.Title className="text-sm font-semibold text-text-primary mb-3">
+            더보기
+          </Dialog.Title>
+          {/* 링크 목록 */}
+          <div className="flex flex-col gap-1">
+            {MOBILE_MORE_LINKS.map(({ label, href, icon: Icon }) => {
+              const fullHref = slug(href);
+              const isActive = pathname?.startsWith(fullHref);
+              return (
+                <Link
+                  key={href}
+                  href={fullHref}
+                  onClick={onClose}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors',
+                    isActive
+                      ? 'bg-surface-raised text-[#129B8E]'
+                      : 'hover:bg-surface-hover text-text-secondary',
+                  )}
+                >
+                  <Icon size={18} />
+                  <span className="text-sm">{label}</span>
+                </Link>
+              );
+            })}
+          </div>
+          {/* 로그아웃 — 모바일 유일 진입점 */}
+          <div className="mt-3 border-t border-border-default pt-3">
+            <button
+              type="button"
+              onClick={() => { onClose(); logout(); }}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl',
+                'hover:bg-error/10 active:bg-error/10 transition-colors',
+                'text-sm font-medium text-error',
+              )}
+            >
+              <LogOut size={18} />
+              로그아웃
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 function BottomNav() {
   const slug = useSlug();
   const pathname = usePathname();
+  const { logout } = useAuth();
+  const [moreOpen, setMoreOpen] = useState(false);
 
   return (
     <nav
@@ -97,7 +207,26 @@ function BottomNav() {
             </Link>
           );
         })}
+        {/* 더보기 — 설정·리포트·알림·로그아웃 접근 (CA-6) */}
+        <button
+          type="button"
+          onClick={() => setMoreOpen(true)}
+          className={cn(
+            'flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-md',
+            'text-[10px] transition-colors duration-fast text-text-secondary',
+          )}
+          aria-label="더보기"
+        >
+          <MoreHorizontal size={18} />
+          <span>더보기</span>
+        </button>
       </div>
+      <MobileMoreSheet
+        open={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        slug={slug}
+        logout={logout}
+      />
     </nav>
   );
 }
