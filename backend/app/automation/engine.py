@@ -325,7 +325,9 @@ async def _execute_rule(
             action_type = action.get("type", "")
             action_params = action.get("params", {})
             try:
-                result = await execute_action(action_type, action_params, payload, db)
+                # depth 전달: cross-product 액션(create_itsm_ticket 등)이
+                # 내부에서 dispatch 재호출 시 depth+1을 넘겨 무한루프를 차단한다.
+                result = await execute_action(action_type, action_params, payload, db, depth=depth)
                 actions_result.append({"type": action_type, **result})
             except ActionError as exc:
                 logger.warning("automation action %s 실패 (격리): %s", action_type, exc)
