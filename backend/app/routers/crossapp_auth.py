@@ -39,8 +39,11 @@ router = APIRouter(
     tags=["crossapp-auth"],
 )
 
-# CrossApp 토큰을 발급할 수 있는 신뢰 발급자
-_ALLOWED_ISS = {"sa", "gw"}
+# CrossApp 토큰을 발급할 수 있는 신뢰 발급자.
+# "phone" 추가 (MA-5): phone-bff가 SERVICE_BUS_SECRET HMAC 서명으로 발급한 crossapp 토큰을
+# ITSM /redeem으로 교환해 모바일 세션을 획득한다. crossapp 토큰 자체가 SERVICE_BUS_SECRET
+# HMAC-SHA256으로 서명되므로 시크릿 보유자(phone-bff 정당 보유)만 위조 불가 — iss 추가는 안전.
+_ALLOWED_ISS = {"sa", "gw", "phone"}
 
 
 # ------------------------------------------------------------------
