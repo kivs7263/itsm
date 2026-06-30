@@ -18,11 +18,12 @@ export function PortalNav({ tenantSlug }: PortalNavProps) {
   const { locale, setLocale, t } = useLocale();
 
   const NAV_ITEMS = [
-    { href: `/portal/${tenantSlug}`,          label: locale === 'ko' ? '홈' : 'Home',     exact: true  },
-    { href: `/portal/${tenantSlug}/tickets`,   label: t.nav.tickets,                       exact: false },
-    { href: `/portal/${tenantSlug}/knowledge`, label: t.nav.kb,                            exact: false },
-    { href: `/portal/${tenantSlug}/assets`,    label: locale === 'ko' ? '자산' : 'Assets', exact: false },
-    { href: `/portal/${tenantSlug}/contracts`, label: locale === 'ko' ? '계약' : 'Contracts', exact: false },
+    { href: `/portal/${tenantSlug}`,          label: locale === 'ko' ? '홈' : 'Home',              exact: true  },
+    { href: `/portal/${tenantSlug}/catalog`,   label: locale === 'ko' ? '서비스 요청' : 'Services', exact: false },
+    { href: `/portal/${tenantSlug}/tickets`,   label: t.nav.tickets,                                exact: false },
+    { href: `/portal/${tenantSlug}/knowledge`, label: t.nav.kb,                                     exact: false },
+    { href: `/portal/${tenantSlug}/assets`,    label: locale === 'ko' ? '자산' : 'Assets',          exact: false },
+    { href: `/portal/${tenantSlug}/contracts`, label: locale === 'ko' ? '계약' : 'Contracts',       exact: false },
   ];
 
   const handleLogout = async () => {

@@ -3,7 +3,7 @@
 import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Ticket, BookOpen, ChevronRight, Search } from 'lucide-react';
+import { Plus, Ticket, BookOpen, ChevronRight, Search, LayoutGrid } from 'lucide-react';
 import api from '@/lib/api';
 import { usePortalAuth } from '@/hooks/usePortalAuth';
 import { Button } from '@/components/ui/button';
@@ -228,6 +228,25 @@ export default function PortalHomePage() {
       <div className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-text-primary">빠른 액션</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* 서비스 요청 — 카탈로그 우선 CTA */}
+          <button
+            type="button"
+            onClick={() => router.push(`/portal/${tenantSlug}/catalog`)}
+            className="flex items-center gap-3 rounded-xl border border-border-default bg-surface p-4 text-left hover:border-border-strong hover:shadow-sm transition-all duration-fast"
+          >
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
+              style={{ background: 'rgba(18, 155, 142, 0.12)' }}
+            >
+              <LayoutGrid size={20} style={{ color: '#129B8E' }} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-text-primary">서비스 요청</p>
+              <p className="text-xs text-text-secondary">서비스 카탈로그에서 선택</p>
+            </div>
+          </button>
+
+          {/* 자유 양식 티켓 접수 (기존 진입 유지) */}
           <button
             type="button"
             onClick={() => router.push(`/portal/${tenantSlug}/tickets/new`)}
@@ -240,8 +259,8 @@ export default function PortalHomePage() {
               <Plus size={20} style={{ color: '#129B8E' }} />
             </div>
             <div>
-              <p className="text-sm font-medium text-text-primary">새 티켓 접수</p>
-              <p className="text-xs text-text-secondary">IT 지원 요청하기</p>
+              <p className="text-sm font-medium text-text-primary">직접 접수</p>
+              <p className="text-xs text-text-secondary">자유 양식으로 요청</p>
             </div>
           </button>
 

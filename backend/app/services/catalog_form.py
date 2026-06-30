@@ -85,8 +85,10 @@ def validate_form_data(
             errors.append({"field": fid, "message": f"'{label}' 필드는 필수입니다."})
             continue  # 값이 없으므로 타입 검사 불필요
 
-        # 값이 없고 required 아니면 이후 검사 건너뜀
-        if value is None:
+        # 값이 없고(None·""·[]) required 아니면 이후 타입 검사 건너뜀
+        # (reviewer 🟡1: required=False 필드에 ""/[] 제출 시 number/date/boolean
+        #  타입 검사로 falling through 해 불필요한 422 발생 → empty 전체로 skip)
+        if empty:
             continue
 
         # ── 타입별 검사 ──────────────────────────────────────────────
@@ -158,7 +160,8 @@ def validate_form_data(
                     "message": f"'{label}' 필드는 ISO 날짜 문자열이어야 합니다.",
                 })
                 continue
-            if not re.match(r"^\d{4}-\d{2}-\d{2}", value):
+            # reviewer 🟡2: re.match는 시작만 매칭("2026-06-30GARBAGE" 통과) → fullmatch
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
                 errors.append({
                     "field": fid,
                     "message": f"'{label}' 필드는 YYYY-MM-DD 형식이어야 합니다.",

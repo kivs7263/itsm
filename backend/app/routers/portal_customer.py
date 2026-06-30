@@ -1110,6 +1110,12 @@ async def portal_create_catalog_ticket(
             await db.commit()
             await db.refresh(ticket)
         except Exception:
+            # reviewer 🟡3: 2차 commit 실패 시 DB는 1차 상태(gw_approval_status=NULL)인데
+            # 응답이 in-memory "pending"을 반환하면 호출자가 결재 기안됐다고 오인.
+            # 세션 롤백 + in-memory 값을 DB 실제(미저장)로 리셋해 응답 정합.
+            await db.rollback()
+            ticket.gw_approval_status = None
+            ticket.gw_approval_doc_id = None
             _cat_logger.error(
                 "포털 카탈로그 결재 2차 commit 실패 (graceful): ticket=%s", ticket.id
             )
