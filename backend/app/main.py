@@ -135,6 +135,11 @@ async def health_check():
 from app.routers import external_search as external_search_router  # noqa: E402
 app.include_router(external_search_router.router)                # /api/external/search (prefix 없음)
 
+# CA-P2-3: 외부 서비스 KPI 엔드포인트 (service-auth, sa-svc / gw-svc)
+# ⚠️ /{tenant_slug}/... 라우터보다 먼저 등록 필수 (경로 충돌 방지).
+from app.routers import external_kpi as external_kpi_router  # noqa: E402
+app.include_router(external_kpi_router.router)               # /api/external/kpi (prefix 없음)
+
 # ADR-051 Phase 3b: ITSM → GW 글로벌 검색 프록시 (ITSM 유저 인증 → itsm-svc JWT → GW)
 # ⚠️ /{tenant_slug}/search 라우터보다 먼저 등록 필수.
 #    /api/search/global-proxy 가 /api/{tenant_slug}/search 패턴에 흡수되지 않도록.

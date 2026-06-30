@@ -28,7 +28,8 @@ _JWKS_TTL = 3600.0
 _jwks_lock: asyncio.Lock | None = None
 
 # Phase 1 최소 허용 azp. KC service-account client_id 와 일치해야 한다.
-_ALLOWED_AZP: frozenset[str] = frozenset({"gw-svc"})
+# CA-P2-3: sa-svc 추가 — SA Workspace → ITSM external KPI 호출.
+_ALLOWED_AZP: frozenset[str] = frozenset({"gw-svc", "sa-svc"})
 
 
 def _get_jwks_lock() -> asyncio.Lock:
