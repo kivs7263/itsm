@@ -278,3 +278,7 @@ app.include_router(internal_workflow_router.router)          # /api/internal/wor
 # ADR-050: 자동화 룰 엔진 관리자 API (Phase 1a)
 from app.automation.router import router as automation_router  # noqa: E402
 app.include_router(automation_router, prefix="/api")         # /api/{slug}/automation/rules, /api/{slug}/automation/runs
+
+# CA-P1-5 Phase 2: 서비스 카탈로그 관리자(staff) CRUD
+from app.routers import service_catalog as service_catalog_router  # noqa: E402
+app.include_router(service_catalog_router.router, prefix="/api")  # /api/{slug}/service-catalog/categories, /api/{slug}/service-catalog/offerings

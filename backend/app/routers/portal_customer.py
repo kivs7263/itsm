@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -644,3 +644,491 @@ async def portal_ticket_timeline(
         )
 
     return events
+
+
+# ===========================================================================
+# CA-P1-5 Phase 2: 서비스 카탈로그 포털 엔드포인트
+#
+# GET  /portal/{tenant_slug}/catalog           — 활성 카테고리 + offering 트리
+# GET  /portal/{tenant_slug}/catalog/{code}    — 단일 offering + form_schema
+# POST /portal/{tenant_slug}/tickets           — 카탈로그 기반 티켓 생성 (신설)
+# ===========================================================================
+
+import logging as _logging
+
+_cat_logger = _logging.getLogger(__name__)
+
+
+# ------------------------------------------------------------------
+# 카탈로그 스키마
+# ------------------------------------------------------------------
+
+
+class CatalogOfferingCard(BaseModel):
+    """카탈로그 목록용 카드 — form_schema 제외."""
+
+    code: str
+    name: str
+    description: str | None = None
+    icon: str | None = None
+    request_type: str
+    default_priority: str
+
+
+class CatalogCategoryOut(BaseModel):
+    """카테고리 + 소속 offering 트리."""
+
+    id: str
+    name: str
+    slug: str
+    icon: str | None = None
+    display_order: int
+    offerings: list[CatalogOfferingCard] = []
+
+
+class CatalogOfferingDetailOut(BaseModel):
+    """단일 offering 상세 — form_schema 포함 (동적 폼 렌더용)."""
+
+    id: str
+    code: str
+    name: str
+    description: str | None = None
+    icon: str | None = None
+    request_type: str
+    default_priority: str
+    default_sla_grade: str | None = None
+    form_schema: dict
+    category_id: str | None = None
+
+
+class PortalCatalogTicketCreate(BaseModel):
+    """카탈로그 기반 티켓 생성 요청."""
+
+    offering_code: str
+    title: str = Field(..., max_length=500)
+    form_data: dict
+    priority: str | None = None  # offering.default_priority override
+
+
+class PortalCatalogTicketOut(BaseModel):
+    """카탈로그 티켓 생성 응답."""
+
+    id: str
+    ticket_number: str | None
+    title: str
+    status: str
+    priority: str
+    offering_code: str
+    gw_approval_status: str | None = None
+    created_at: datetime
+
+
+# ------------------------------------------------------------------
+# 헬퍼: offering.default_sla_grade 기반 SLA 마감 계산
+# ------------------------------------------------------------------
+
+
+async def _compute_sla_by_grade(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    grade: str,
+    base_time: datetime,
+) -> tuple[datetime | None, datetime | None]:
+    """sla_policies 테이블에서 grade 직접 조회하여 response/resolution 마감 계산."""
+    row = (
+        await db.execute(
+            text("""
+                SELECT response_minutes, resolution_minutes
+                FROM sla_policies
+                WHERE tenant_id = :tid AND grade = :grade
+                LIMIT 1
+            """),
+            {"tid": str(tenant_id), "grade": grade},
+        )
+    ).first()
+    if not row:
+        return None, None
+    return (
+        base_time + timedelta(minutes=row.response_minutes),
+        base_time + timedelta(minutes=row.resolution_minutes),
+    )
+
+
+# ------------------------------------------------------------------
+# GET /portal/{tenant_slug}/catalog — 활성 카테고리 + offering 트리
+# ------------------------------------------------------------------
+
+
+@router.get(
+    "/catalog",
+    response_model=list[CatalogCategoryOut],
+    summary="포털 서비스 카탈로그 목록 (카테고리 트리)",
+)
+async def portal_catalog_list(
+    tenant_slug: str,
+    db: AsyncSession = Depends(get_db),
+    session_token: str | None = Cookie(default=None, alias=_SESSION_COOKIE),
+) -> list[CatalogCategoryOut]:
+    """활성 카테고리별로 그룹화된 서비스 offering 목록을 반환합니다.
+    form_schema는 포함하지 않습니다(목록은 메타만).
+    """
+    tenant = await _get_tenant(db, tenant_slug)
+    customer = await _get_customer_from_session(db, tenant.id, session_token)
+    if not customer:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다.")
+
+    from app.models.service_catalog import ServiceCategory, ServiceOffering
+
+    # 활성 카테고리 (is_active=True, display_order ASC)
+    cat_rows = (
+        await db.execute(
+            select(ServiceCategory)
+            .where(
+                and_(
+                    ServiceCategory.tenant_id == tenant.id,
+                    ServiceCategory.is_active.is_(True),
+                )
+            )
+            .order_by(ServiceCategory.display_order)
+        )
+    ).scalars().all()
+
+    # 활성 offering (is_active=True, display_order ASC)
+    off_rows = (
+        await db.execute(
+            select(ServiceOffering)
+            .where(
+                and_(
+                    ServiceOffering.tenant_id == tenant.id,
+                    ServiceOffering.is_active.is_(True),
+                )
+            )
+            .order_by(ServiceOffering.display_order)
+        )
+    ).scalars().all()
+
+    # offering → category_id 기준 그룹핑
+    cat_to_offerings: dict[uuid.UUID | None, list[CatalogOfferingCard]] = {}
+    for off in off_rows:
+        card = CatalogOfferingCard(
+            code=off.code,
+            name=off.name,
+            description=off.description,
+            icon=off.icon,
+            request_type=off.request_type,
+            default_priority=(
+                off.default_priority
+                if isinstance(off.default_priority, str)
+                else off.default_priority.value
+            ),
+        )
+        cat_to_offerings.setdefault(off.category_id, []).append(card)
+
+    result: list[CatalogCategoryOut] = []
+    cat_ids_seen: set[uuid.UUID] = set()
+
+    for cat in cat_rows:
+        cat_ids_seen.add(cat.id)
+        result.append(
+            CatalogCategoryOut(
+                id=str(cat.id),
+                name=cat.name,
+                slug=cat.slug,
+                icon=cat.icon,
+                display_order=cat.display_order,
+                offerings=cat_to_offerings.get(cat.id, []),
+            )
+        )
+
+    # 카테고리 없는(category_id IS NULL 또는 비활성 카테고리) offering → 기타
+    uncategorized: list[CatalogOfferingCard] = []
+    for cid, cards in cat_to_offerings.items():
+        if cid is None or cid not in cat_ids_seen:
+            uncategorized.extend(cards)
+
+    if uncategorized:
+        result.append(
+            CatalogCategoryOut(
+                id="uncategorized",
+                name="기타",
+                slug="uncategorized",
+                icon=None,
+                display_order=9999,
+                offerings=uncategorized,
+            )
+        )
+
+    return result
+
+
+# ------------------------------------------------------------------
+# GET /portal/{tenant_slug}/catalog/{code} — 단일 offering + form_schema
+# ------------------------------------------------------------------
+
+
+@router.get(
+    "/catalog/{code}",
+    response_model=CatalogOfferingDetailOut,
+    summary="포털 서비스 카탈로그 단일 오퍼링 (form_schema 포함)",
+)
+async def portal_catalog_detail(
+    tenant_slug: str,
+    code: str,
+    db: AsyncSession = Depends(get_db),
+    session_token: str | None = Cookie(default=None, alias=_SESSION_COOKIE),
+) -> CatalogOfferingDetailOut:
+    """단일 서비스 offering을 반환합니다. form_schema를 포함합니다(동적 폼 렌더용)."""
+    tenant = await _get_tenant(db, tenant_slug)
+    customer = await _get_customer_from_session(db, tenant.id, session_token)
+    if not customer:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다.")
+
+    from app.models.service_catalog import ServiceOffering
+
+    offering = (
+        await db.execute(
+            select(ServiceOffering).where(
+                and_(
+                    ServiceOffering.tenant_id == tenant.id,
+                    ServiceOffering.code == code,
+                    ServiceOffering.is_active.is_(True),
+                )
+            )
+        )
+    ).scalar_one_or_none()
+
+    if not offering:
+        raise HTTPException(status_code=404, detail="서비스 항목을 찾을 수 없습니다.")
+
+    return CatalogOfferingDetailOut(
+        id=str(offering.id),
+        code=offering.code,
+        name=offering.name,
+        description=offering.description,
+        icon=offering.icon,
+        request_type=offering.request_type,
+        default_priority=(
+            offering.default_priority
+            if isinstance(offering.default_priority, str)
+            else offering.default_priority.value
+        ),
+        default_sla_grade=(
+            offering.default_sla_grade
+            if isinstance(offering.default_sla_grade, str)
+            else (offering.default_sla_grade.value if offering.default_sla_grade else None)
+        ),
+        form_schema=offering.form_schema or {},
+        category_id=str(offering.category_id) if offering.category_id else None,
+    )
+
+
+# ------------------------------------------------------------------
+# POST /portal/{tenant_slug}/tickets — 카탈로그 기반 티켓 생성 (신설)
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "/tickets",
+    response_model=PortalCatalogTicketOut,
+    status_code=201,
+    summary="포털 서비스 카탈로그 티켓 생성",
+)
+async def portal_create_catalog_ticket(
+    tenant_slug: str,
+    body: PortalCatalogTicketCreate,
+    db: AsyncSession = Depends(get_db),
+    session_token: str | None = Cookie(default=None, alias=_SESSION_COOKIE),
+) -> PortalCatalogTicketOut:
+    """서비스 카탈로그 offering 기반으로 티켓을 생성합니다.
+
+    처리 순서:
+      1. 세션 인증 + offering 조회 (tenant+code, is_active=True)
+      2. form_data → offering.form_schema 서버 검증 (422 + 필드별 에러 반환)
+      3. ticket_number 발번 (기존 _generate_ticket_number 재사용)
+      4. SLA: offering.default_sla_grade 있으면 grade 기반 계산
+      5. Ticket INSERT + ServiceOfferingSubmission INSERT
+      6. 결재 트리거: offering.approval_policy.required == True이면 GW 기안 (graceful)
+    """
+    tenant = await _get_tenant(db, tenant_slug)
+    customer = await _get_customer_from_session(db, tenant.id, session_token)
+    if not customer:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다.")
+
+    # ── 1. Offering 조회 ──────────────────────────────────────────
+    from app.models.service_catalog import ServiceOffering, ServiceOfferingSubmission
+    from app.models.ticket import Ticket, TicketChannel, TicketStatus, TicketPriority
+    from app.services.catalog_form import validate_form_data
+    from app.routers.tickets import _generate_ticket_number
+    from app.services import activity_service
+
+    offering = (
+        await db.execute(
+            select(ServiceOffering).where(
+                and_(
+                    ServiceOffering.tenant_id == tenant.id,
+                    ServiceOffering.code == body.offering_code,
+                    ServiceOffering.is_active.is_(True),
+                )
+            )
+        )
+    ).scalar_one_or_none()
+
+    if not offering:
+        raise HTTPException(status_code=404, detail="서비스 항목을 찾을 수 없습니다.")
+
+    # ── 2. form_data 서버 검증 ────────────────────────────────────
+    ok, form_errors = validate_form_data(
+        form_schema=offering.form_schema or {},
+        form_data=body.form_data,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "폼 데이터 검증에 실패했습니다.", "errors": form_errors},
+        )
+
+    # ── 3. priority 결정 (요청 override 허용) ─────────────────────
+    _valid_priorities = {"low", "medium", "high", "critical"}
+    if body.priority and body.priority in _valid_priorities:
+        priority_val = body.priority
+    else:
+        priority_val = (
+            offering.default_priority
+            if isinstance(offering.default_priority, str)
+            else offering.default_priority.value
+        )
+
+    # ── 4. ticket_number 발번 ──────────────────────────────────────
+    ticket_number = await _generate_ticket_number(db, tenant.id)
+
+    # ── 5. SLA 마감 계산 ─────────────────────────────────────────
+    now = datetime.now(timezone.utc)
+    sla_response_deadline: datetime | None = None
+    sla_resolution_deadline: datetime | None = None
+
+    if offering.default_sla_grade:
+        grade_str = (
+            offering.default_sla_grade
+            if isinstance(offering.default_sla_grade, str)
+            else offering.default_sla_grade.value
+        )
+        sla_response_deadline, sla_resolution_deadline = await _compute_sla_by_grade(
+            db, tenant.id, grade_str, now
+        )
+
+    # ── 6. Ticket INSERT ───────────────────────────────────────────
+    ticket = Ticket(
+        id=uuid.uuid4(),
+        tenant_id=tenant.id,
+        title=body.title,
+        description=None,
+        priority=priority_val,
+        status=TicketStatus.open,
+        channel=TicketChannel.portal,
+        customer_id=customer.id,
+        contract_id=None,
+        assigned_to=None,
+        source="customer_direct",
+        request_type=offering.request_type,
+        ticket_number=ticket_number,
+        sla_response_deadline=sla_response_deadline,
+        sla_resolution_deadline=sla_resolution_deadline,
+        service_offering_id=offering.id,
+    )
+    db.add(ticket)
+
+    await activity_service.record(
+        db,
+        tenant_id=tenant.id,
+        ticket_id=ticket.id,
+        actor_id=None,  # 포털 고객 — 내부 User 없음
+        event_type="created",
+        to_value=ticket.title,
+        meta={
+            "priority": priority_val,
+            "channel": "portal",
+            "source": "customer_direct",
+            "offering_code": offering.code,
+        },
+    )
+
+    # ── 7. ServiceOfferingSubmission INSERT ───────────────────────
+    submission = ServiceOfferingSubmission(
+        id=uuid.uuid4(),
+        tenant_id=tenant.id,
+        ticket_id=ticket.id,
+        offering_id=offering.id,
+        offering_version=1,
+        form_data=body.form_data,
+    )
+    db.add(submission)
+
+    # 1차 commit: 티켓 + 제출 레코드 확정
+    await db.commit()
+    await db.refresh(ticket)
+
+    # ── 8. 결재 트리거 (graceful) ─────────────────────────────────
+    approval_policy = offering.approval_policy or {}
+    if isinstance(approval_policy, dict) and approval_policy.get("required") and customer.email:
+        from app.services import gw_approval_service
+
+        gw_result = None
+        try:
+            gw_result = await gw_approval_service.submit_approval_draft(
+                requester_email=customer.email,
+                title=f"[포털 서비스요청] {offering.name} — {ticket.title}",
+                content_text=(
+                    f"티켓 번호: {ticket.ticket_number}\n"
+                    f"서비스 항목: {offering.name} ({offering.code})\n"
+                    f"요청자: {customer.name} ({customer.email})\n"
+                    f"우선순위: {priority_val}\n"
+                    f"제목: {ticket.title}"
+                ),
+            )
+        except Exception:
+            _cat_logger.exception(
+                "포털 카탈로그 GW 결재 기안 중 예외 (graceful skip): ticket=%s", ticket.id
+            )
+
+        if gw_result:
+            ticket.gw_approval_doc_id = str(gw_result.get("id", ""))
+            ticket.gw_approval_status = "pending"
+            _cat_logger.info(
+                "포털 카탈로그 GW 결재 기안 성공: ticket=%s doc_id=%s",
+                ticket.id, ticket.gw_approval_doc_id,
+            )
+        else:
+            ticket.gw_approval_status = "gw_not_configured"
+            _cat_logger.info(
+                "포털 카탈로그 GW 결재 휴면(env 미설정 또는 기안 실패): ticket=%s offering=%s",
+                ticket.id, offering.code,
+            )
+
+        # 2차 commit: gw_approval_doc_id / gw_approval_status 저장
+        # 실패해도 티켓 자체는 1차 commit으로 이미 확정 — 로그만 남김
+        try:
+            await db.commit()
+            await db.refresh(ticket)
+        except Exception:
+            _cat_logger.error(
+                "포털 카탈로그 결재 2차 commit 실패 (graceful): ticket=%s", ticket.id
+            )
+
+    return PortalCatalogTicketOut(
+        id=str(ticket.id),
+        ticket_number=ticket.ticket_number,
+        title=ticket.title,
+        status=(
+            ticket.status
+            if isinstance(ticket.status, str)
+            else ticket.status.value
+        ),
+        priority=(
+            ticket.priority
+            if isinstance(ticket.priority, str)
+            else ticket.priority.value
+        ),
+        offering_code=offering.code,
+        gw_approval_status=ticket.gw_approval_status,
+        created_at=ticket.created_at,
+    )
