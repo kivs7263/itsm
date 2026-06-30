@@ -13,6 +13,7 @@ const ko = {
     changeRequests: '변경 요청',
     sla: 'SLA',
     contracts: '계약',
+    problems: '문제 관리',
   },
   auth: {
     logout: '로그아웃',
@@ -113,7 +114,7 @@ const ko = {
 };
 
 export interface Messages {
-  nav: { dashboard: string; tickets: string; workLogs: string; customers: string; kb: string; recurringIssues: string; reports: string; settings: string; assets: string; cmdb: string; changeRequests: string; sla: string; contracts: string };
+  nav: { dashboard: string; tickets: string; workLogs: string; customers: string; kb: string; recurringIssues: string; reports: string; settings: string; assets: string; cmdb: string; changeRequests: string; sla: string; contracts: string; problems: string };
   auth: { logout: string; role: Record<string, string> };
   sidebar: { open: string; close: string; language: string };
   ticket: {

@@ -709,3 +709,42 @@ export interface StripeInvoice {
   hosted_invoice_url: string | null;
   invoice_pdf: string | null;
 }
+
+// -----------------------------------------------------------------------
+// Problem Management 타입 (CA-P2-4)
+// -----------------------------------------------------------------------
+export type ProblemStatus = 'new' | 'investigating' | 'known_error' | 'resolved' | 'closed';
+export type ProblemPriority = 'low' | 'medium' | 'high' | 'critical';
+
+export interface Problem {
+  id: string;
+  tenant_id: string;
+  problem_number: string;
+  title: string;
+  description: string | null;
+  status: ProblemStatus;
+  priority: ProblemPriority;
+  is_known_error: boolean;
+  root_cause: string | null;
+  workaround: string | null;
+  assigned_to: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProblemsResponse {
+  items: Problem[];
+  total: number;
+}
+
+export interface ProblemTicketLink {
+  ticket_id: string;
+  ticket_number: string | null;
+  title: string;
+  status: string;
+  priority: string;
+}
+
+export interface ProblemDetail extends Problem {
+  linked_tickets: ProblemTicketLink[];
+}

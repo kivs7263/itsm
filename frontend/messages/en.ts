@@ -15,6 +15,7 @@ const en = {
     changeRequests: 'Change Requests',
     sla: 'SLA',
     contracts: 'Contracts',
+    problems: 'Problem Management',
   },
   auth: {
     logout: 'Log out',

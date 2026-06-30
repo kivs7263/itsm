@@ -20,6 +20,7 @@ import {
   GitPullRequest,
   Gauge,
   FileText,
+  Bug,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSlug } from '@/lib/slug';
@@ -37,7 +38,7 @@ function getInitialCollapsed(): boolean {
   return stored === null ? false : stored === 'true';
 }
 
-type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'recurringIssues' | 'reports' | 'settings' | 'assets' | 'cmdb' | 'changeRequests' | 'sla' | 'contracts';
+type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'recurringIssues' | 'reports' | 'settings' | 'assets' | 'cmdb' | 'changeRequests' | 'sla' | 'contracts' | 'problems';
 type NavItem = { key: NavKey; href: string; icon: React.ElementType };
 
 // SHELL-7 항목 ③: 아이콘 17px 통일
@@ -54,6 +55,8 @@ const ENGINEER_ITEMS: NavItem[] = [
   { key: 'changeRequests',  href: '/change-requests',  icon: GitPullRequest },
   { key: 'sla',             href: '/sla',              icon: Gauge          },
   { key: 'contracts',       href: '/contracts',        icon: FileText       },
+  // CA-P2-4: Problem Management
+  { key: 'problems',        href: '/problems',         icon: Bug            },
 ];
 
 const TEAM_LEAD_ITEMS: NavItem[] = [
