@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import io
 import logging
+import re
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -30,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_roles
 from app.models import (
+    SLABusinessCalendar,
     SLAEvent,
     SLAEventType,
     SLAGrade,
@@ -622,3 +624,179 @@ async def download_sla_report_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": "attachment; filename=sla-report.pdf"},
     )
+
+
+# ------------------------------------------------------------------
+# 업무시간 캘린더 스키마
+# ------------------------------------------------------------------
+
+_HM_RE = re.compile(r"^\d{2}:\d{2}$")
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_VALID_DAYS = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+
+
+def _validate_business_hours(bh: Any) -> str | None:
+    """business_hours_json 유효성 검사. 오류 메시지 반환 (정상이면 None)."""
+    if not isinstance(bh, dict):
+        return "business_hours_json은 dict여야 합니다."
+    for key, intervals in bh.items():
+        if key not in _VALID_DAYS:
+            return f"유효하지 않은 요일 키: '{key}'. 허용값: {sorted(_VALID_DAYS)}"
+        if not isinstance(intervals, list):
+            return f"'{key}'의 값은 리스트여야 합니다."
+        for idx, iv in enumerate(intervals):
+            if not isinstance(iv, list) or len(iv) != 2:
+                return f"'{key}'[{idx}]: 구간은 [시작HH:MM, 종료HH:MM] 형식이어야 합니다."
+            s, e = iv[0], iv[1]
+            if not isinstance(s, str) or not isinstance(e, str):
+                return f"'{key}'[{idx}]: 구간 값은 문자열이어야 합니다."
+            if not _HM_RE.match(s) or not _HM_RE.match(e):
+                return f"'{key}'[{idx}]: HH:MM 형식이 아닙니다 ('{s}', '{e}')."
+            sh, sm = int(s[:2]), int(s[3:])
+            eh, em = int(e[:2]), int(e[3:])
+            if sh * 60 + sm >= eh * 60 + em:
+                return f"'{key}'[{idx}]: 시작({s})이 종료({e}) 이상입니다."
+    return None
+
+
+def _validate_holidays(holidays: Any) -> str | None:
+    """holidays_json 유효성 검사. 오류 메시지 반환 (정상이면 None)."""
+    if not isinstance(holidays, list):
+        return "holidays_json은 리스트여야 합니다."
+    for idx, h in enumerate(holidays):
+        if not isinstance(h, str) or not _DATE_RE.match(h):
+            return f"holidays[{idx}]: YYYY-MM-DD 형식이 아닙니다 ('{h}')."
+    return None
+
+
+class BusinessCalendarIn(BaseModel):
+    business_hours_json: dict = Field(
+        ...,
+        description=(
+            '요일별 영업 구간. 예: {"mon":[["09:00","18:00"]],"sat":[],"sun":[]}'
+        ),
+    )
+    timezone: str = Field(default="Asia/Seoul", description="IANA 타임존 이름")
+    holidays_json: list[str] = Field(
+        default_factory=list,
+        description="공휴일 목록 [YYYY-MM-DD, ...] — 해당일 종일 휴무",
+    )
+
+
+class BusinessCalendarOut(BaseModel):
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    business_hours_json: dict
+    timezone: str
+    holidays_json: list[str]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ------------------------------------------------------------------
+# GET /{tenant_slug}/sla/business-calendar
+# ------------------------------------------------------------------
+
+
+@router.get(
+    "/business-calendar",
+    response_model=BusinessCalendarOut | None,
+    summary="업무시간 캘린더 조회",
+)
+async def get_business_calendar(
+    tenant_slug: str,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> BusinessCalendarOut | None:
+    """현재 테넌트의 업무시간 캘린더를 반환합니다.
+    캘린더 미설정 시 null을 반환합니다 (벽시계 모드 = 기본값).
+    """
+    row = await db.scalar(
+        select(SLABusinessCalendar).where(
+            SLABusinessCalendar.tenant_id == current_user.tenant_id
+        )
+    )
+    if row is None:
+        return None
+    return BusinessCalendarOut.model_validate(row)
+
+
+# ------------------------------------------------------------------
+# PUT /{tenant_slug}/sla/business-calendar
+# ------------------------------------------------------------------
+
+
+@router.put(
+    "/business-calendar",
+    response_model=BusinessCalendarOut,
+    status_code=status.HTTP_200_OK,
+    summary="업무시간 캘린더 저장/갱신 (admin)",
+)
+async def upsert_business_calendar(
+    tenant_slug: str,
+    data: BusinessCalendarIn,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> BusinessCalendarOut:
+    """테넌트 업무시간 캘린더를 저장합니다 (테넌트당 1행 UPSERT).
+
+    business_hours_json 형식:
+        {"mon":[["09:00","18:00"]], ..., "sat":[], "sun":[]}
+        복수 구간 가능: [["09:00","12:00"],["13:00","18:00"]]
+
+    설정 후 신규 티켓부터 업무시간 기반 SLA deadline이 적용됩니다.
+    캘린더 삭제(벽시계 복귀)는 별도 DELETE 엔드포인트로 제공 예정.
+    """
+    # ── 입력 검증 ──────────────────────────────────────────────────
+    bh_err = _validate_business_hours(data.business_hours_json)
+    if bh_err:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"business_hours_json 오류: {bh_err}",
+        )
+
+    hol_err = _validate_holidays(data.holidays_json)
+    if hol_err:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"holidays_json 오류: {hol_err}",
+        )
+
+    # timezone 유효성: ZoneInfo 시도
+    try:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        ZoneInfo(data.timezone)
+    except (KeyError, ZoneInfoNotFoundError, Exception):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"timezone 오류: '{data.timezone}'은 유효한 IANA 타임존이 아닙니다.",
+        )
+
+    # ── UPSERT ─────────────────────────────────────────────────────
+    existing = await db.scalar(
+        select(SLABusinessCalendar).where(
+            SLABusinessCalendar.tenant_id == current_user.tenant_id
+        )
+    )
+
+    if existing:
+        existing.business_hours_json = data.business_hours_json
+        existing.timezone = data.timezone
+        existing.holidays_json = data.holidays_json
+        await db.commit()
+        await db.refresh(existing)
+        return BusinessCalendarOut.model_validate(existing)
+
+    cal = SLABusinessCalendar(
+        id=uuid.uuid4(),
+        tenant_id=current_user.tenant_id,
+        business_hours_json=data.business_hours_json,
+        timezone=data.timezone,
+        holidays_json=data.holidays_json,
+    )
+    db.add(cal)
+    await db.commit()
+    await db.refresh(cal)
+    return BusinessCalendarOut.model_validate(cal)

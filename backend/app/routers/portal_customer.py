@@ -734,7 +734,11 @@ async def _compute_sla_by_grade(
     grade: str,
     base_time: datetime,
 ) -> tuple[datetime | None, datetime | None]:
-    """sla_policies 테이블에서 grade 직접 조회하여 response/resolution 마감 계산."""
+    """sla_policies 테이블에서 grade 직접 조회하여 response/resolution 마감 계산.
+
+    테넌트 업무시간 캘린더가 설정된 경우 working-seconds 누적 방식 사용.
+    캘린더 미설정 또는 파싱 실패 시 기존 벽시계(base+timedelta) 유지(하위호환).
+    """
     row = (
         await db.execute(
             text("""
@@ -748,6 +752,29 @@ async def _compute_sla_by_grade(
     ).first()
     if not row:
         return None, None
+
+    # ── 업무시간 캘린더 분기 ────────────────────────────────────────
+    from app.services.working_hours import _load_business_calendar, compute_working_deadline
+
+    cal = await _load_business_calendar(db, tenant_id)
+    if cal:
+        try:
+            response_dl = compute_working_deadline(
+                base_time, row.response_minutes,
+                cal["business_hours"], cal["timezone"], cal["holidays"],
+            )
+            resolution_dl = compute_working_deadline(
+                base_time, row.resolution_minutes,
+                cal["business_hours"], cal["timezone"], cal["holidays"],
+            )
+            return response_dl, resolution_dl
+        except Exception as exc:
+            _cat_logger.warning(
+                "SLA working-hours 계산 실패 — 벽시계 fallback: tenant=%s err=%s",
+                tenant_id, exc,
+            )
+
+    # 캘린더 없음 또는 계산 실패 → 기존 벽시계
     return (
         base_time + timedelta(minutes=row.response_minutes),
         base_time + timedelta(minutes=row.resolution_minutes),

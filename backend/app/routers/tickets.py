@@ -215,7 +215,11 @@ async def _compute_sla_deadlines(
     contract_id: uuid.UUID | None,
     base_time: datetime,
 ) -> tuple[datetime | None, datetime | None]:
-    """계약 SLA 정책에서 response/resolution 마감 시각 계산."""
+    """계약 SLA 정책에서 response/resolution 마감 시각 계산.
+
+    테넌트 업무시간 캘린더가 설정된 경우 working-seconds 누적 방식 사용.
+    캘린더 미설정 또는 파싱 실패 시 기존 벽시계(base+timedelta) 유지(하위호환).
+    """
     if not contract_id:
         return None, None
     row = await db.execute(
@@ -233,6 +237,29 @@ async def _compute_sla_deadlines(
     policy = row.first()
     if not policy:
         return None, None
+
+    # ── 업무시간 캘린더 분기 ────────────────────────────────────────
+    from app.services.working_hours import _load_business_calendar, compute_working_deadline
+
+    cal = await _load_business_calendar(db, tenant_id)
+    if cal:
+        try:
+            response_dl = compute_working_deadline(
+                base_time, policy.response_minutes,
+                cal["business_hours"], cal["timezone"], cal["holidays"],
+            )
+            resolution_dl = compute_working_deadline(
+                base_time, policy.resolution_minutes,
+                cal["business_hours"], cal["timezone"], cal["holidays"],
+            )
+            return response_dl, resolution_dl
+        except Exception as exc:
+            logger.warning(
+                "SLA working-hours 계산 실패 — 벽시계 fallback: tenant=%s err=%s",
+                tenant_id, exc,
+            )
+
+    # 캘린더 없음 또는 계산 실패 → 기존 벽시계
     return (
         base_time + timedelta(minutes=policy.response_minutes),
         base_time + timedelta(minutes=policy.resolution_minutes),
