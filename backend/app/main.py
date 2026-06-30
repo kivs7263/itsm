@@ -129,6 +129,12 @@ async def health_check():
     )
 
 
+# ADR-051 Phase 2: 외부 서비스 검색 엔드포인트 (service-auth, gw-svc)
+# ⚠️ 반드시 /{tenant_slug}/... 라우터보다 먼저 등록해야 한다.
+#    /api/external/search 가 /api/{tenant_slug}/search 에 먹히지 않도록 경로 특이성 확보.
+from app.routers import external_search as external_search_router  # noqa: E402
+app.include_router(external_search_router.router)                # /api/external/search (prefix 없음)
+
 from app.routers import (
     auth as auth_router,
     crossapp_auth as crossapp_auth_router,

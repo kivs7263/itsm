@@ -138,7 +138,12 @@ async def index_ticket(ticket: TicketDoc) -> None:
     if client is None:
         return
     try:
-        client.index(_ticket_index_name(ticket["tenant_id"])).add_documents([ticket])
+        # primary_key 명시 필수: doc에 'id'·'tenant_id' 2개 *id 필드가 있어
+        # PK 추론이 실패한다(index_primary_key_multiple_candidates_found).
+        # 인덱스가 PK 없이 자동생성된 경우에도 빈 인덱스면 여기서 PK가 설정된다.
+        client.index(_ticket_index_name(ticket["tenant_id"])).add_documents(
+            [ticket], primary_key="id"
+        )
     except Exception as exc:
         logger.warning("티켓 인덱싱 실패 (id=%s): %s", ticket.get("id"), exc)
 
@@ -189,7 +194,10 @@ async def index_kb(doc: KbDoc) -> None:
     if client is None:
         return
     try:
-        client.index(_kb_index_name(doc["tenant_id"])).add_documents([doc])
+        # primary_key 명시 필수 (index_ticket 동일 사유 — 'id'·'tenant_id' 다중 후보).
+        client.index(_kb_index_name(doc["tenant_id"])).add_documents(
+            [doc], primary_key="id"
+        )
     except Exception as exc:
         logger.warning("KB 인덱싱 실패 (id=%s): %s", doc.get("id"), exc)
 
