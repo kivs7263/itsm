@@ -14,6 +14,11 @@ prefix : /{tenant_slug}/cmdb
   POST   /{tenant_slug}/cmdb/cis/{id}/relationships      — 관계 추가
   DELETE /{tenant_slug}/cmdb/cis/{id}/relationships/{rel_id} — 관계 삭제
   GET    /{tenant_slug}/cmdb/cis/{id}/history            — 변경 이력
+
+  [CA-P2-5] Discovery Import:
+  POST   /{tenant_slug}/cmdb/import/csv                  — CSV 파일 일괄 import (admin/team_lead)
+  POST   /{tenant_slug}/cmdb/import/json                 — JSON API 일괄 import (admin/team_lead)
+  GET    /{tenant_slug}/cmdb/import/runs                 — import 이력 목록
 """
 from __future__ import annotations
 
@@ -22,13 +27,13 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.core.database import AsyncSessionLocal, get_db
 from app.core.dependencies import get_current_user, require_roles
 from app.models import (
     CIChangeLog,
@@ -38,10 +43,12 @@ from app.models import (
     CIRelationship,
     CIStatus,
     CIType,
+    CmdbImportRun,
     ConfigurationItem,
     User,
     UserRole,
 )
+from app.services.cmdb_import import ImportResult, parse_csv, upsert_assets, upsert_cis
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +151,34 @@ class ChangeLogOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ImportRunOut(BaseModel):
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    source: str
+    target: str
+    status: str
+    total_rows: int
+    created_count: int
+    updated_count: int
+    skipped_count: int
+    error_count: int
+    errors: list[dict]
+    dedup_key: str | None
+    created_by: uuid.UUID | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# [CA-P2-5] 단일 import 요청 행 수 상한 — 커넥션 풀 고갈/타임아웃 방지
+MAX_IMPORT_ROWS = 5000
+
+
+class JsonImportBody(BaseModel):
+    target: str = Field(..., pattern="^(ci|asset)$")
+    items: list[dict] = Field(..., max_length=MAX_IMPORT_ROWS)
 
 
 # ------------------------------------------------------------------
@@ -614,3 +649,195 @@ async def get_ci_history(
         "page": page,
         "page_size": page_size,
     }
+
+
+# ------------------------------------------------------------------
+# [CA-P2-5] Discovery Import — CSV
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "/import/csv",
+    response_model=ImportRunOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="CMDB Discovery CSV Import (admin/team_lead)",
+)
+async def import_csv(
+    tenant_slug: str,
+    file: UploadFile = File(..., description="text/csv"),
+    target: str = Query(..., pattern="^(ci|asset)$", description="'ci' 또는 'asset'"),
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ImportRunOut:
+    """CSV 파일을 읽어 CI 또는 Asset을 일괄 생성/수정.
+
+    - Content-Type: multipart/form-data
+    - target: 'ci' | 'asset'  (query param)
+    - 부분 성공: 에러 행은 skip, 나머지 반영 후 import_run 기록
+    """
+    content_bytes = await file.read()
+    try:
+        content = content_bytes.decode("utf-8-sig")  # BOM 있는 Excel CSV도 처리
+    except UnicodeDecodeError:
+        try:
+            content = content_bytes.decode("cp949")  # strict — 손상 시 식별자 깨짐 차단
+        except UnicodeDecodeError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="CSV 인코딩을 인식할 수 없습니다 (UTF-8 또는 CP949만 지원).",
+            )
+
+    rows = parse_csv(content, target)
+
+    if len(rows) > MAX_IMPORT_ROWS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"한 번에 import 가능한 행 수는 최대 {MAX_IMPORT_ROWS}건입니다 "
+                   f"(요청 {len(rows)}건). 파일을 분할해 주세요.",
+        )
+
+    if target == "ci":
+        result = await upsert_cis(db, current_user.tenant_id, rows, current_user)
+    else:
+        result = await upsert_assets(db, current_user.tenant_id, rows, current_user)
+
+    # upsert 커밋 (savepoint들 확정)
+    await db.commit()
+
+    # import_run 별도 커밋 — upsert 커밋 이후 독립 세션으로 기록
+    run = await _record_import_run(
+        tenant_id=current_user.tenant_id,
+        source="csv",
+        target=target,
+        result=result,
+        created_by=current_user.id,
+    )
+    return ImportRunOut.model_validate(run)
+
+
+# ------------------------------------------------------------------
+# [CA-P2-5] Discovery Import — JSON API
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "/import/json",
+    response_model=ImportRunOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="CMDB Discovery JSON Import (admin/team_lead)",
+)
+async def import_json(
+    tenant_slug: str,
+    body: JsonImportBody,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead))] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ImportRunOut:
+    """JSON 페이로드로 CI 또는 Asset을 일괄 생성/수정.
+
+    body: {"target": "ci"|"asset", "items": [{...}, ...]}
+    """
+    target = body.target
+    rows = body.items
+
+    if target == "ci":
+        result = await upsert_cis(db, current_user.tenant_id, rows, current_user)
+    else:
+        result = await upsert_assets(db, current_user.tenant_id, rows, current_user)
+
+    await db.commit()
+
+    run = await _record_import_run(
+        tenant_id=current_user.tenant_id,
+        source="json_api",
+        target=target,
+        result=result,
+        created_by=current_user.id,
+    )
+    return ImportRunOut.model_validate(run)
+
+
+# ------------------------------------------------------------------
+# [CA-P2-5] Import 이력 목록
+# ------------------------------------------------------------------
+
+
+@router.get(
+    "/import/runs",
+    response_model=dict,
+    summary="CMDB Import 이력 목록 (최신순)",
+)
+async def list_import_runs(
+    tenant_slug: str,
+    target: str | None = Query(None, pattern="^(ci|asset)$"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    conditions = [CmdbImportRun.tenant_id == current_user.tenant_id]
+    if target:
+        conditions.append(CmdbImportRun.target == target)
+
+    where_clause = and_(*conditions)
+    total = await db.scalar(
+        select(func.count()).select_from(CmdbImportRun).where(where_clause)
+    )
+    run_rows = (
+        await db.execute(
+            select(CmdbImportRun)
+            .where(where_clause)
+            .order_by(CmdbImportRun.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    ).scalars().all()
+
+    return {
+        "items": [ImportRunOut.model_validate(r) for r in run_rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+# ------------------------------------------------------------------
+# 헬퍼 — import_run 기록 (별도 세션, 독립 커밋)
+# ------------------------------------------------------------------
+
+
+async def _record_import_run(
+    *,
+    tenant_id: uuid.UUID,
+    source: str,
+    target: str,
+    result: ImportResult,
+    created_by: uuid.UUID,
+) -> CmdbImportRun:
+    """CmdbImportRun을 별도 AsyncSessionLocal 세션으로 커밋.
+
+    upsert 트랜잭션과 격리 — 이력 기록 실패가 upsert 커밋에 영향 없음.
+    """
+    run = CmdbImportRun(
+        id=uuid.uuid4(),
+        tenant_id=tenant_id,
+        source=source,
+        target=target,
+        status=result.status,
+        total_rows=result.total_rows,
+        created_count=result.created_count,
+        updated_count=result.updated_count,
+        skipped_count=result.skipped_count,
+        error_count=result.error_count,
+        errors=result.errors,
+        dedup_key=result.dedup_key,
+        created_by=created_by,
+    )
+    try:
+        async with AsyncSessionLocal() as run_db:
+            run_db.add(run)
+            await run_db.commit()
+            await run_db.refresh(run)
+    except Exception as exc:
+        logger.error("import_run 기록 실패 (upsert는 이미 커밋됨): %s", exc)
+        # 이력 기록 실패 시 run 객체는 id만 있어도 응답 가능 (graceful)
+    return run

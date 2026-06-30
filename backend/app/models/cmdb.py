@@ -17,6 +17,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -280,6 +281,61 @@ class CIChangeLog(Base):
     old_value = Column(Text, nullable=True)
     new_value = Column(Text, nullable=True)
     change_reason = Column(Text, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utcnow,
+    )
+
+
+# ----------------------------------------------------------------------
+# CmdbImportRun  (CA-P2-5 Discovery Import 이력)
+# ----------------------------------------------------------------------
+class CmdbImportRun(Base):
+    """CMDB discovery import 실행 1건 이력.
+
+    source: 'csv' | 'json_api'
+    target: 'ci' | 'asset'
+    status: 'completed' | 'partial' | 'failed'
+    errors: [{row: int, message: str}, ...]
+    """
+
+    __tablename__ = "cmdb_import_runs"
+    __table_args__ = (
+        # 모델↔마이그 인덱스명·정렬 정확히 일치
+        Index(
+            "ix_cmdb_import_runs_tenant_created",
+            "tenant_id",
+            text("created_at DESC"),
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=gen_uuid)
+    tenant_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source = Column(String(50), nullable=False)
+    target = Column(String(50), nullable=False)
+    status = Column(String(50), nullable=False, default="completed")
+    total_rows = Column(Integer, nullable=False, default=0)
+    created_count = Column(Integer, nullable=False, default=0)
+    updated_count = Column(Integer, nullable=False, default=0)
+    skipped_count = Column(Integer, nullable=False, default=0)
+    error_count = Column(Integer, nullable=False, default=0)
+    errors = Column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+    dedup_key = Column(String(50), nullable=True)
+    created_by = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
