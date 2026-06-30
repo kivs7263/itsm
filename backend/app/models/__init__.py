@@ -77,6 +77,11 @@ from app.models.external_notification_log import (  # noqa: F401
     ExtNotifStatus,
 )
 from app.models.email_inbound_config import EmailInboundConfig  # noqa: F401
+from app.models.service_catalog import (  # noqa: F401
+    ServiceCategory,
+    ServiceOffering,
+    ServiceOfferingSubmission,
+)
 
 __all__ = [
     "Base",
@@ -172,4 +177,8 @@ __all__ = [
     "ExternalNotificationLog",
     "ExtNotifChannel",
     "ExtNotifStatus",
+    # service catalog (CA-P1-5)
+    "ServiceCategory",
+    "ServiceOffering",
+    "ServiceOfferingSubmission",
 ]

@@ -113,6 +113,12 @@ class Ticket(Base):
     # WF-1: 결재 선행 티켓 유형 (license_request/budget_request/access_request) — ADR-048
     gw_approval_doc_id = Column(String(128), nullable=True)   # GW 결재 doc_id, NULL=비대상 또는 미생성
     gw_approval_status = Column(String(30), nullable=True)    # pending/approved/rejected/gw_not_configured
+    # CA-P1-5: 서비스 카탈로그 연결 (service_offerings.id, SET NULL)
+    service_offering_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("service_offerings.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
 
 class TicketComment(Base):
