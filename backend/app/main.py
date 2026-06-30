@@ -287,3 +287,7 @@ app.include_router(automation_router, prefix="/api")         # /api/{slug}/autom
 # CA-P1-5 Phase 2: 서비스 카탈로그 관리자(staff) CRUD
 from app.routers import service_catalog as service_catalog_router  # noqa: E402
 app.include_router(service_catalog_router.router, prefix="/api")  # /api/{slug}/service-catalog/categories, /api/{slug}/service-catalog/offerings
+
+# CA-P2-4 Problem Management (ITIL RCA / Known Error)
+from app.routers import problems as problems_router  # noqa: E402
+app.include_router(problems_router.router, prefix="/api")          # /api/{slug}/problems

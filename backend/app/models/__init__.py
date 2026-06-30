@@ -83,6 +83,7 @@ from app.models.service_catalog import (  # noqa: F401
     ServiceOffering,
     ServiceOfferingSubmission,
 )
+from app.models.problem import Problem, ProblemTicket  # noqa: F401
 
 __all__ = [
     "Base",
@@ -183,4 +184,7 @@ __all__ = [
     "ServiceCategory",
     "ServiceOffering",
     "ServiceOfferingSubmission",
+    # problem management (CA-P2-4)
+    "Problem",
+    "ProblemTicket",
 ]
