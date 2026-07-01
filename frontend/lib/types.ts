@@ -748,3 +748,73 @@ export interface ProblemTicketLink {
 export interface ProblemDetail extends Problem {
   linked_tickets: ProblemTicketLink[];
 }
+
+// -----------------------------------------------------------------------
+// CMDB Import 타입 (FRP-3d-A2)
+// -----------------------------------------------------------------------
+export interface ImportRun {
+  id: string;
+  tenant_id: string;
+  source: string;          // 'csv' | 'json_api'
+  target: string;          // 'ci' | 'asset'
+  status: string;          // 'success' | 'partial' | 'failed'
+  total_rows: number;
+  created_count: number;
+  updated_count: number;
+  skipped_count: number;
+  error_count: number;
+  errors: Array<{ row?: number; message?: string; [key: string]: unknown }>;
+  dedup_key: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface ImportRunsResponse {
+  items: ImportRun[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+// -----------------------------------------------------------------------
+// SLA 이벤트 타입 (FRP-3d-A2)
+// -----------------------------------------------------------------------
+export type SlaEventType = 'breach_warning' | 'breached' | 'resolved';
+
+export interface SlaEvent {
+  id: string;
+  tenant_id: string;
+  ticket_id: string;
+  event_type: SlaEventType;
+  fired_at: string;
+}
+
+export interface SlaEventsResponse {
+  items: SlaEvent[];
+  total: number;
+}
+
+// -----------------------------------------------------------------------
+// SLA 업무시간 캘린더 타입 (FRP-3d-A2)
+// -----------------------------------------------------------------------
+export interface BusinessCalendar {
+  id: string;
+  tenant_id: string;
+  /** 요일별 구간 {"mon":[["09:00","18:00"]], ...} */
+  business_hours_json: Record<string, string[][]>;
+  timezone: string;
+  holidays_json: string[];  // YYYY-MM-DD[]
+  created_at: string;
+  updated_at: string;
+}
+
+// -----------------------------------------------------------------------
+// 사용자(User) 요약 타입 — 배정 모달에서 사용
+// -----------------------------------------------------------------------
+export interface UserSummary {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  is_active: boolean;
+}

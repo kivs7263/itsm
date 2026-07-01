@@ -3,15 +3,30 @@
 import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Inbox, UserPlus, RotateCcw, Info } from 'lucide-react';
+import { Inbox, UserPlus, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
-import { isTeamLeadOrAbove, type UserRole } from '@/lib/auth';
+import { isTeamLeadOrAbove, isAdminRole, type UserRole } from '@/lib/auth';
+import type { UserSummary } from '@/lib/types';
 
 // -----------------------------------------------------------------------
 // 타입
@@ -56,6 +71,103 @@ const REQUEST_TYPE_LABELS: Record<string, string> = {
   technical_inquiry: '기술 문의',
   maintenance:       '유지보수',
 };
+
+// -----------------------------------------------------------------------
+// 배정 모달 (admin 전용 — user list는 admin만 조회 가능)
+// -----------------------------------------------------------------------
+interface AssignModalProps {
+  open: boolean;
+  onClose: () => void;
+  tenantSlug: string;
+  ticketId: string;
+  ticketNumber: string | null;
+}
+
+interface UsersResponse {
+  items: UserSummary[];
+  total: number;
+}
+
+function AssignModal({ open, onClose, tenantSlug, ticketId, ticketNumber }: AssignModalProps) {
+  const queryClient = useQueryClient();
+  const [selectedEngineerId, setSelectedEngineerId] = useState('');
+
+  const { data: usersData, isLoading: usersLoading } = useQuery<UsersResponse>({
+    queryKey: ['queue-users', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/settings/users`).then((r) => r.data),
+    enabled: open && !!tenantSlug,
+    staleTime: 60_000,
+  });
+
+  const users: UserSummary[] = Array.isArray(usersData?.items)
+    ? usersData.items.filter((u) => u.is_active)
+    : [];
+
+  const assignMutation = useMutation({
+    mutationFn: () =>
+      api
+        .post(`/${tenantSlug}/queue/${ticketId}/assign`, { engineer_id: selectedEngineerId })
+        .then((r) => r.data),
+    onSuccess: (ticket) => {
+      toast.success(`티켓 ${ticketNumber ?? ticketId.slice(0, 8)} 배정 완료`);
+      queryClient.invalidateQueries({ queryKey: ['queue', tenantSlug] });
+      queryClient.invalidateQueries({ queryKey: ['tickets', tenantSlug] });
+      onClose();
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err));
+    },
+  });
+
+  function handleClose() {
+    setSelectedEngineerId('');
+    onClose();
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>엔지니어 배정</DialogTitle>
+        </DialogHeader>
+        <div className="py-2 space-y-3">
+          <p className="text-sm text-text-secondary">
+            티켓 <span className="font-mono font-medium text-text-primary">{ticketNumber ?? ticketId.slice(0, 8)}</span>에 담당 엔지니어를 배정합니다.
+          </p>
+          {usersLoading ? (
+            <Skeleton className="h-9 w-full rounded-md" />
+          ) : users.length === 0 ? (
+            <p className="text-sm text-text-disabled">활성 사용자가 없습니다.</p>
+          ) : (
+            <Select value={selectedEngineerId} onValueChange={setSelectedEngineerId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="담당자 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                {users.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.name} ({u.role})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={handleClose} disabled={assignMutation.isPending}>취소</Button>
+          <Button
+            onClick={() => assignMutation.mutate()}
+            isLoading={assignMutation.isPending}
+            disabled={!selectedEngineerId || assignMutation.isPending}
+            leftIcon={<UserPlus size={14} />}
+          >
+            배정
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 // -----------------------------------------------------------------------
 // 스켈레톤
@@ -110,6 +222,9 @@ export default function QueuePage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isManager = isTeamLeadOrAbove(user?.role as UserRole);
+  const isAdmin = isAdminRole(user?.role as UserRole);
+
+  const [assignTarget, setAssignTarget] = useState<{ id: string; ticket_number: string | null } | null>(null);
 
   const { data, isLoading } = useQuery<QueueResponse>({
     queryKey: ['queue', tenantSlug],
@@ -203,12 +318,23 @@ export default function QueuePage() {
                   <td className="px-4 py-3 text-text-secondary text-xs">
                     {formatRelativeTime(t.created_at)}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-2">
+                      {/* 관리자 전용: 엔지니어 직접 배정 */}
+                      {isAdmin && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          leftIcon={<UserPlus size={13} />}
+                          onClick={() => setAssignTarget({ id: t.id, ticket_number: t.ticket_number })}
+                        >
+                          배정
+                        </Button>
+                      )}
+                      {/* 선착순 접수 */}
                       <Button
                         size="sm"
                         variant="ghost"
-                        leftIcon={<UserPlus size={13} />}
                         onClick={() => claimMutation.mutate(t.id)}
                         isLoading={claimMutation.isPending && claimMutation.variables === t.id}
                         disabled={claimMutation.isPending}
@@ -223,6 +349,17 @@ export default function QueuePage() {
           </tbody>
         </table>
       </div>
+
+      {/* 배정 모달 (admin 전용) */}
+      {assignTarget && (
+        <AssignModal
+          open={!!assignTarget}
+          onClose={() => setAssignTarget(null)}
+          tenantSlug={tenantSlug}
+          ticketId={assignTarget.id}
+          ticketNumber={assignTarget.ticket_number}
+        />
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Search, Server } from 'lucide-react';
+import { Plus, Search, Server, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { CI, CIType, CIStatus, CIEnvironment, CICriticality, CIsResponse } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CreateCIModal } from '@/components/cmdb/CreateCIModal';
+import { CMDBImportModal } from '@/components/cmdb/CMDBImportModal';
 
 // -----------------------------------------------------------------------
 // 상수 매핑
@@ -213,6 +214,7 @@ export default function CMDBPage() {
     search: '',
   });
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data, isLoading } = useQuery<CIsResponse>({
     queryKey: ['cmdb-cis', tenantSlug, filters, page],
@@ -250,9 +252,14 @@ export default function CMDBPage() {
       {/* 페이지 헤더 */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border-default bg-surface shrink-0">
         <h1 className="text-xl font-semibold text-text-primary">CMDB</h1>
-        <Button size="sm" onClick={() => setCreateOpen(true)} leftIcon={<Plus size={14} />}>
-          새 CI
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={() => setImportOpen(true)} leftIcon={<Upload size={14} />}>
+            가져오기
+          </Button>
+          <Button size="sm" onClick={() => setCreateOpen(true)} leftIcon={<Plus size={14} />}>
+            새 CI
+          </Button>
+        </div>
       </div>
 
       {/* 필터 바 */}
@@ -401,6 +408,13 @@ export default function CMDBPage() {
       <CreateCIModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
+        tenantSlug={tenantSlug}
+      />
+
+      {/* Import 모달 */}
+      <CMDBImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
         tenantSlug={tenantSlug}
       />
     </div>
