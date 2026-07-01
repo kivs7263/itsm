@@ -28,6 +28,9 @@ interface KbCreatePayload {
   tags: string[];
   linked_ticket_id: string | null;
   is_published: boolean;
+  is_known_issue: boolean;
+  ki_severity: string | null;
+  ki_status: string | null;
 }
 
 export function CreateKbModal({ open, onClose, tenantSlug, editId, prefill }: CreateKbModalProps) {
@@ -38,6 +41,9 @@ export function CreateKbModal({ open, onClose, tenantSlug, editId, prefill }: Cr
   const [tagsInput, setTagsInput] = useState('');
   const [isPublished, setIsPublished] = useState(true);
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [isKnownIssue, setIsKnownIssue] = useState(false);
+  const [kiSeverity, setKiSeverity] = useState('');
+  const [kiStatus, setKiStatus] = useState('open');
 
   // prefill 적용 (모달 열릴 때마다)
   useEffect(() => {
@@ -46,6 +52,9 @@ export function CreateKbModal({ open, onClose, tenantSlug, editId, prefill }: Cr
       setContent(prefill?.content ?? '');
       setTagsInput('');
       setIsPublished(true);
+      setIsKnownIssue(false);
+      setKiSeverity('');
+      setKiStatus('open');
     }
   }, [open, prefill]);
 
@@ -125,6 +134,9 @@ export function CreateKbModal({ open, onClose, tenantSlug, editId, prefill }: Cr
       tags,
       linked_ticket_id: prefill?.linkedTicketId ?? null,
       is_published: isPublished,
+      is_known_issue: isKnownIssue,
+      ki_severity: isKnownIssue && kiSeverity ? kiSeverity : null,
+      ki_status: isKnownIssue ? kiStatus : null,
     };
     if (editId) {
       updateMutation.mutate(payload);
@@ -251,6 +263,61 @@ export function CreateKbModal({ open, onClose, tenantSlug, editId, prefill }: Cr
             <span className="text-sm text-text-primary">
               {isPublished ? '즉시 게시' : '초안으로 저장'}
             </span>
+          </div>
+
+          {/* 알려진 이슈(Known Issue) 마킹 */}
+          <div className="flex flex-col gap-3 pt-1 border-t border-border-subtle">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isKnownIssue}
+                onClick={() => setIsKnownIssue((v) => !v)}
+                className={cn(
+                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
+                  isKnownIssue ? 'bg-warning' : 'bg-border-default',
+                )}
+              >
+                <span
+                  className={cn(
+                    'pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200',
+                    isKnownIssue ? 'translate-x-4' : 'translate-x-0',
+                  )}
+                />
+              </button>
+              <span className="text-sm text-text-primary">알려진 이슈(Known Issue)로 마킹</span>
+            </div>
+
+            {isKnownIssue && (
+              <div className="grid grid-cols-2 gap-3 pl-1">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-text-secondary">심각도</label>
+                  <select
+                    value={kiSeverity}
+                    onChange={(e) => setKiSeverity(e.target.value)}
+                    className="h-8 w-full rounded-md border border-border-default bg-surface px-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-500"
+                  >
+                    <option value="">선택 안함</option>
+                    <option value="critical">긴급(Critical)</option>
+                    <option value="high">높음(High)</option>
+                    <option value="medium">보통(Medium)</option>
+                    <option value="low">낮음(Low)</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-text-secondary">이슈 상태</label>
+                  <select
+                    value={kiStatus}
+                    onChange={(e) => setKiStatus(e.target.value)}
+                    className="h-8 w-full rounded-md border border-border-default bg-surface px-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-500"
+                  >
+                    <option value="open">미해결(Open)</option>
+                    <option value="in_progress">진행중(In Progress)</option>
+                    <option value="resolved">해결됨(Resolved)</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
 
           {prefill?.linkedTicketId && (

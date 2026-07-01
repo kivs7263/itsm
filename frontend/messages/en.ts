@@ -16,6 +16,7 @@ const en = {
     sla: 'SLA',
     contracts: 'Contracts',
     problems: 'Problem Management',
+    queue: 'Ticket Pool',
   },
   auth: {
     logout: 'Log out',

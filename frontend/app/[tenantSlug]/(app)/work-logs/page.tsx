@@ -109,6 +109,8 @@ interface WorkLogItem {
   completion_status: string | null;
   next_action: string | null;
   logged_at: string;
+  approved_at: string | null;
+  approved_by: string | null;
 }
 
 interface Summary {
@@ -152,6 +154,7 @@ function WorkLogDetailModal({
   router,
   onClose,
   onDelete,
+  onApprove,
 }: {
   log: WorkLogItem;
   isManager: boolean;
@@ -159,6 +162,7 @@ function WorkLogDetailModal({
   router: ReturnType<typeof useRouter>;
   onClose: () => void;
   onDelete: (log: WorkLogItem) => void;
+  onApprove?: (log: WorkLogItem) => void;
 }) {
   // ESC key close
   React.useEffect(() => {
@@ -289,12 +293,27 @@ function WorkLogDetailModal({
             <Trash2 size={12} />
             삭제
           </button>
-          <button
-            onClick={onClose}
-            className="h-8 px-4 rounded-md border border-border-default text-sm text-text-primary hover:bg-surface-hover transition-colors"
-          >
-            닫기
-          </button>
+          <div className="flex items-center gap-2">
+            {isManager && !log.approved_at && onApprove && (
+              <button
+                onClick={() => onApprove(log)}
+                className="h-8 px-4 rounded-md bg-success-bg text-success-text text-sm font-medium hover:opacity-80 transition-opacity"
+              >
+                승인
+              </button>
+            )}
+            {log.approved_at && (
+              <span className="text-xs text-success-text font-medium">
+                승인됨
+              </span>
+            )}
+            <button
+              onClick={onClose}
+              className="h-8 px-4 rounded-md border border-border-default text-sm text-text-primary hover:bg-surface-hover transition-colors"
+            >
+              닫기
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -373,6 +392,16 @@ export default function WorkLogsPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  const approveMutation = useMutation({
+    mutationFn: ({ logId, ticketId }: { logId: string; ticketId: string }) =>
+      api.post(`/${tenantSlug}/tickets/${ticketId}/work-logs/${logId}/approve`).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['all-work-logs', tenantSlug] });
+      toast.success('공수가 승인되었습니다.');
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 1;
   const summary = data?.summary;
 
@@ -397,6 +426,7 @@ export default function WorkLogsPage() {
         router={router}
         onClose={() => setDetailLog(null)}
         onDelete={(log) => deleteMutation.mutate({ logId: log.id, ticketId: log.ticket_id })}
+        onApprove={(log) => approveMutation.mutate({ logId: log.id, ticketId: log.ticket_id })}
       />
     )}
     <div className="flex flex-col h-full gap-0">

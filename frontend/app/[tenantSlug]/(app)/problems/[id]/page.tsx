@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Bug, Search, X, Link as LinkIcon } from 'lucide-react';
+import { ArrowLeft, Bug, Search, X, Link as LinkIcon, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type {
@@ -24,6 +24,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 // -----------------------------------------------------------------------
 // 상수 매핑
@@ -238,6 +245,7 @@ export default function ProblemDetailPage() {
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<TabKey>('info');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // RCA/workaround 편집 상태
   const [rootCause, setRootCause] = useState<string | null>(null);
@@ -276,6 +284,16 @@ export default function ProblemDetailPage() {
       toast.success('저장되었습니다.');
       queryClient.invalidateQueries({ queryKey: ['problem', tenantSlug, id] });
       queryClient.invalidateQueries({ queryKey: ['problems', tenantSlug] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  // Problem 삭제
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/${tenantSlug}/problems/${id}`),
+    onSuccess: () => {
+      toast.success('Problem이 삭제되었습니다.');
+      router.push(`/${tenantSlug}/problems`);
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -401,6 +419,15 @@ export default function ProblemDetailPage() {
             {transitionButtons}
           </div>
         )}
+        <Button
+          size="sm"
+          variant="ghost"
+          leftIcon={<Trash2 size={13} />}
+          onClick={() => setDeleteDialogOpen(true)}
+          className="text-red-500 hover:text-red-600 hover:bg-red-50"
+        >
+          삭제
+        </Button>
       </div>
 
       {/* 본문 — 2컬럼 */}
@@ -679,6 +706,35 @@ export default function ProblemDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* 삭제 확인 다이얼로그 */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Problem 삭제</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 pb-0">
+            <p className="text-sm text-text-secondary">
+              이 Problem을 삭제합니다. 연결된 인시던트 링크도 함께 제거됩니다. 이 작업은 되돌릴 수 없습니다.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)} disabled={deleteMutation.isPending}>
+              취소
+            </Button>
+            <Button
+              isLoading={deleteMutation.isPending}
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                deleteMutation.mutate();
+              }}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              삭제
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

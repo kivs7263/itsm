@@ -61,6 +61,10 @@ class KbArticleCreate(BaseModel):
     tags: list[str] = Field(default_factory=list)
     linked_ticket_id: uuid.UUID | None = None
     is_published: bool = True
+    # Known Issue 마킹 필드 (FRP-3d-A1 item 6)
+    is_known_issue: bool = False
+    ki_severity: str | None = None
+    ki_status: str | None = None
 
 
 class KbArticleUpdate(BaseModel):
@@ -69,6 +73,10 @@ class KbArticleUpdate(BaseModel):
     tags: list[str] | None = None
     linked_ticket_id: uuid.UUID | None = None
     is_published: bool | None = None
+    # Known Issue 마킹 필드 (FRP-3d-A1 item 6)
+    is_known_issue: bool | None = None
+    ki_severity: str | None = None
+    ki_status: str | None = None
 
 
 class KbArticleResponse(BaseModel):
@@ -223,6 +231,9 @@ async def create_kb_article(
         author_id=current_user.id,
         author_name=current_user.name,
         is_published=data.is_published,
+        is_known_issue=data.is_known_issue,
+        ki_severity=data.ki_severity,
+        ki_status=data.ki_status if data.is_known_issue else None,
     )
     db.add(article)
     await db.commit()

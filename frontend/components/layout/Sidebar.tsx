@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import {
   LifeBuoy,
   Users,
@@ -21,6 +22,7 @@ import {
   Gauge,
   FileText,
   Bug,
+  Inbox,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSlug } from '@/lib/slug';
@@ -29,6 +31,7 @@ import { isTeamLeadOrAbove, isSales, isCLevel, isAdminRole, type UserRole } from
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { getInitials } from '@/lib/utils';
 import { useLocale } from '@/lib/locale';
+import { api } from '@/lib/api';
 
 const STORAGE_KEY = 'itsm.sidebar.collapsed';
 
@@ -38,7 +41,7 @@ function getInitialCollapsed(): boolean {
   return stored === null ? false : stored === 'true';
 }
 
-type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'recurringIssues' | 'reports' | 'settings' | 'assets' | 'cmdb' | 'changeRequests' | 'sla' | 'contracts' | 'problems';
+type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'recurringIssues' | 'reports' | 'settings' | 'assets' | 'cmdb' | 'changeRequests' | 'sla' | 'contracts' | 'problems' | 'queue';
 type NavItem = { key: NavKey; href: string; icon: React.ElementType };
 
 // SHELL-7 항목 ③: 아이콘 17px 통일
@@ -57,6 +60,8 @@ const ENGINEER_ITEMS: NavItem[] = [
   { key: 'contracts',       href: '/contracts',        icon: FileText       },
   // CA-P2-4: Problem Management
   { key: 'problems',        href: '/problems',         icon: Bug            },
+  // FRP-3d-A1: 티켓 풀 (미배정 티켓)
+  { key: 'queue',           href: '/queue',            icon: Inbox          },
 ];
 
 const TEAM_LEAD_ITEMS: NavItem[] = [
@@ -94,6 +99,22 @@ export function Sidebar() {
   const slug = useSlug();
   const { user, logout } = useAuth();
   const { t } = useLocale();
+
+  // 미배정 티켓 카운트 (queue 배지용)
+  const tenantSlug = useMemo(() => {
+    if (!pathname) return null;
+    const match = pathname.match(/^\/([^/]+)/);
+    return match?.[1] ?? null;
+  }, [pathname]);
+
+  const { data: queueCountData } = useQuery<{ count: number }>({
+    queryKey: ['queue-count', tenantSlug],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/queue/count`).then((r) => r.data),
+    enabled: !!tenantSlug,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
 
   // SHELL-7 항목 ⑤: collapsed hover float 패널 추가 (GW/SA 패턴 통일)
   const [hoverExpanded, setHoverExpanded] = useState(false);
@@ -198,7 +219,15 @@ export function Sidebar() {
                 className={cn('shrink-0', isActive ? '' : 'text-white/40')}
                 style={isActive ? { color: 'var(--color-brand)' } : undefined}
               />
-              {effectivelyExpanded && <span className="truncate">{label}</span>}
+              {effectivelyExpanded && <span className="truncate flex-1">{label}</span>}
+              {key === 'queue' && (queueCountData?.count ?? 0) > 0 && (
+                <span
+                  className="shrink-0 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1.5 min-w-4 h-4"
+                  style={{ background: 'var(--color-error, #D2553F)' }}
+                >
+                  {queueCountData?.count}
+                </span>
+              )}
             </Link>
           );
         })}

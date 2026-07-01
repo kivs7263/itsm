@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, GitMerge, RefreshCw } from 'lucide-react';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { ArrowLeft, GitMerge, RefreshCw, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type { ChangeRequest, CRStatus, CRRiskLevel, CRPriority } from '@/lib/types';
@@ -187,6 +187,27 @@ export default function CRDetailPage() {
 
   const isPrivileged = isTeamLeadOrAbove(user?.role);
 
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/${tenantSlug}/change-requests/${crId}`),
+    onSuccess: () => {
+      toast.success('변경 요청이 삭제되었습니다.');
+      router.push(`/${tenantSlug}/change-requests`);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const removeCiLinkMutation = useMutation({
+    mutationFn: (ciId: string) =>
+      api.delete(`/${tenantSlug}/change-requests/${crId}/ci-links/${ciId}`),
+    onSuccess: () => {
+      toast.success('CI 연결이 해제되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['change-request', tenantSlug, crId] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
   const { data: cr, isLoading } = useQuery<ChangeRequest>({
     queryKey: ['change-request', tenantSlug, crId],
     queryFn: () => api.get(`/${tenantSlug}/change-requests/${crId}`).then((r) => r.data),
@@ -359,6 +380,17 @@ export default function CRDetailPage() {
             {actionButtons}
           </div>
         )}
+        {cr.status === 'draft' && isPrivileged && (
+          <Button
+            size="sm"
+            variant="ghost"
+            leftIcon={<Trash2 size={13} />}
+            onClick={() => setDeleteDialogOpen(true)}
+            className="text-red-500 hover:text-red-600 hover:bg-red-50"
+          >
+            삭제
+          </Button>
+        )}
       </div>
 
       {/* 본문 — 2컬럼 */}
@@ -505,6 +537,7 @@ export default function CRDetailPage() {
                           <tr className="border-b border-border-default">
                             <th className="text-left text-xs font-medium text-text-secondary py-2 pr-3">CI 이름</th>
                             <th className="text-left text-xs font-medium text-text-secondary py-2">비고</th>
+                            {isPrivileged && <th className="py-2 w-8" />}
                           </tr>
                         </thead>
                         <tbody>
@@ -516,6 +549,19 @@ export default function CRDetailPage() {
                               <td className="py-2.5 text-text-secondary text-xs">
                                 {typeof item.notes === 'string' && item.notes ? item.notes : '-'}
                               </td>
+                              {isPrivileged && (
+                                <td className="py-2.5">
+                                  <button
+                                    type="button"
+                                    title="CI 연결 해제"
+                                    disabled={removeCiLinkMutation.isPending}
+                                    onClick={() => removeCiLinkMutation.mutate(item.ci_id)}
+                                    className="flex items-center justify-center w-6 h-6 rounded hover:bg-error-bg hover:text-error-text text-text-disabled transition-colors"
+                                  >
+                                    <X size={13} />
+                                  </button>
+                                </td>
+                              )}
                             </tr>
                           ))}
                         </tbody>
@@ -529,6 +575,35 @@ export default function CRDetailPage() {
         </div>
       </div>
     </div>
+
+    {/* 삭제 확인 다이얼로그 */}
+    <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>변경 요청 삭제</DialogTitle>
+        </DialogHeader>
+        <div className="px-6 pb-0">
+          <p className="text-sm text-text-secondary">
+            초안 변경 요청을 삭제합니다. 이 작업은 되돌릴 수 없습니다.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)} disabled={deleteMutation.isPending}>
+            취소
+          </Button>
+          <Button
+            isLoading={deleteMutation.isPending}
+            onClick={() => {
+              setDeleteDialogOpen(false);
+              deleteMutation.mutate();
+            }}
+            className="bg-red-500 hover:bg-red-600 text-white"
+          >
+            삭제
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     {/* 일정 확정 다이얼로그 */}
     <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>

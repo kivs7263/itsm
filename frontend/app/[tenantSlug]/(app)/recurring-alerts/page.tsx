@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, CheckCircle2, BellOff } from 'lucide-react';
+import { RefreshCw, CheckCircle2, BellOff, Bug } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -62,6 +62,7 @@ function EmptyState() {
 export default function RecurringAlertsPage() {
   const params = useParams();
   const tenantSlug = params?.tenantSlug as string;
+  const router = useRouter();
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery<RecurringAlertsResponse>({
@@ -77,6 +78,22 @@ export default function RecurringAlertsPage() {
     onSuccess: () => {
       toast.success('알림을 인지 처리했습니다.');
       queryClient.invalidateQueries({ queryKey: ['recurring-alerts', tenantSlug] });
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err));
+    },
+  });
+
+  const createProblemMutation = useMutation({
+    mutationFn: (alertId: string) =>
+      api.post(`/${tenantSlug}/recurring-alerts/${alertId}/create-problem`).then((r) => r.data),
+    onSuccess: (problem) => {
+      toast.success('Problem이 생성되었습니다. Problem 페이지로 이동합니다.');
+      queryClient.invalidateQueries({ queryKey: ['recurring-alerts', tenantSlug] });
+      queryClient.invalidateQueries({ queryKey: ['problems', tenantSlug] });
+      if (problem?.id) {
+        router.push(`/${tenantSlug}/problems/${problem.id}`);
+      }
     },
     onError: (err) => {
       toast.error(getErrorMessage(err));
@@ -176,26 +193,42 @@ export default function RecurringAlertsPage() {
 
                   {/* 액션 */}
                   <td className="px-4 py-3 text-right">
-                    {alert.is_acknowledged ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-success-text">
-                        <CheckCircle2 size={12} />
-                        인지됨
-                      </span>
-                    ) : (
+                    <div className="flex items-center justify-end gap-2">
+                      {alert.is_acknowledged ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-success-text">
+                          <CheckCircle2 size={12} />
+                          인지됨
+                        </span>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          leftIcon={<BellOff size={13} />}
+                          onClick={() => acknowledgeMutation.mutate(alert.id)}
+                          isLoading={
+                            acknowledgeMutation.isPending &&
+                            acknowledgeMutation.variables === alert.id
+                          }
+                          disabled={acknowledgeMutation.isPending || createProblemMutation.isPending}
+                        >
+                          인지
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
-                        leftIcon={<BellOff size={13} />}
-                        onClick={() => acknowledgeMutation.mutate(alert.id)}
+                        leftIcon={<Bug size={13} />}
+                        onClick={() => createProblemMutation.mutate(alert.id)}
                         isLoading={
-                          acknowledgeMutation.isPending &&
-                          acknowledgeMutation.variables === alert.id
+                          createProblemMutation.isPending &&
+                          createProblemMutation.variables === alert.id
                         }
-                        disabled={acknowledgeMutation.isPending}
+                        disabled={createProblemMutation.isPending || acknowledgeMutation.isPending}
+                        title="반복 장애에서 Problem 생성 (멱등 — 이미 있으면 기존 반환)"
                       >
-                        인지
+                        Problem 생성
                       </Button>
-                    )}
+                    </div>
                   </td>
                 </tr>
               ))
