@@ -70,6 +70,12 @@ class ProblemUpdate(BaseModel):
     assigned_to: uuid.UUID | None = None
 
 
+class AssigneeOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    email: str
+
+
 class TicketLinkRequest(BaseModel):
     ticket_id: uuid.UUID
 
@@ -200,7 +206,32 @@ async def _fetch_linked_tickets(
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-# ⚠️ /known-errors 는 /{problem_id} 보다 먼저 등록해야 경로 충돌 없음.
+# ⚠️ /known-errors, /assignees 는 /{problem_id} 보다 먼저 등록해야 경로 충돌 없음.
+@router.get(
+    "/assignees",
+    response_model=list[AssigneeOut],
+    summary="Problem 담당자 후보 목록 (활성 테넌트 멤버)",
+)
+async def list_assignees(
+    tenant_slug: str,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> list[AssigneeOut]:
+    rows = (
+        await db.execute(
+            select(User)
+            .where(
+                and_(
+                    User.tenant_id == current_user.tenant_id,
+                    User.is_active.is_(True),
+                )
+            )
+            .order_by(User.name)
+        )
+    ).scalars().all()
+    return [AssigneeOut(id=u.id, name=u.name, email=u.email) for u in rows]
+
+
 @router.get(
     "/known-errors",
     response_model=list[ProblemOut],
@@ -339,7 +370,7 @@ async def update_problem(
         problem.root_cause = body.root_cause
     if body.workaround is not None:
         problem.workaround = body.workaround
-    if body.assigned_to is not None:
+    if "assigned_to" in body.model_fields_set:
         problem.assigned_to = body.assigned_to
 
     # status 전이 — 사이드이펙트

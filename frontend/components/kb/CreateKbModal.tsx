@@ -12,7 +12,9 @@ interface CreateKbModalProps {
   open: boolean;
   onClose: () => void;
   tenantSlug: string;
-  /** 티켓에서 "KB로 저장" 시 prefill */
+  /** 수정 모드: 기존 문서 ID — 있으면 PATCH, 없으면 POST */
+  editId?: string;
+  /** 티켓에서 "KB로 저장" 시 또는 수정 시 prefill */
   prefill?: {
     title?: string;
     content?: string;
@@ -28,7 +30,7 @@ interface KbCreatePayload {
   is_published: boolean;
 }
 
-export function CreateKbModal({ open, onClose, tenantSlug, prefill }: CreateKbModalProps) {
+export function CreateKbModal({ open, onClose, tenantSlug, editId, prefill }: CreateKbModalProps) {
   const queryClient = useQueryClient();
 
   const [title, setTitle] = useState('');
@@ -54,6 +56,20 @@ export function CreateKbModal({ open, onClose, tenantSlug, prefill }: CreateKbMo
       toast.success('KB 문서가 등록되었습니다.');
       queryClient.invalidateQueries({ queryKey: ['kb-list', tenantSlug] });
       queryClient.invalidateQueries({ queryKey: ['kb-keyword', tenantSlug] });
+      onClose();
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  // 수정 모드: editId 있으면 PATCH /{tenantSlug}/kb/{editId}
+  const updateMutation = useMutation({
+    mutationFn: (payload: KbCreatePayload) =>
+      api.patch(`/${tenantSlug}/kb/${editId}`, payload).then((r) => r.data),
+    onSuccess: () => {
+      toast.success('KB 문서가 수정되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['kb-list', tenantSlug] });
+      queryClient.invalidateQueries({ queryKey: ['kb-keyword', tenantSlug] });
+      queryClient.invalidateQueries({ queryKey: ['kb-article', tenantSlug, editId] });
       onClose();
     },
     onError: (err) => toast.error(getErrorMessage(err)),
@@ -91,6 +107,8 @@ export function CreateKbModal({ open, onClose, tenantSlug, prefill }: CreateKbMo
     }
   }
 
+  const isSubmitting = editId ? updateMutation.isPending : mutation.isPending;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
@@ -101,13 +119,18 @@ export function CreateKbModal({ open, onClose, tenantSlug, prefill }: CreateKbMo
       toast.error('내용을 입력해주세요.');
       return;
     }
-    mutation.mutate({
+    const payload: KbCreatePayload = {
       title: title.trim(),
       content: content.trim(),
       tags,
       linked_ticket_id: prefill?.linkedTicketId ?? null,
       is_published: isPublished,
-    });
+    };
+    if (editId) {
+      updateMutation.mutate(payload);
+    } else {
+      mutation.mutate(payload);
+    }
   };
 
   return (
@@ -125,7 +148,9 @@ export function CreateKbModal({ open, onClose, tenantSlug, prefill }: CreateKbMo
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-default shrink-0">
           <div className="flex items-center gap-2">
             <BookOpen size={16} className="text-brand" />
-            <h2 className="text-base font-semibold text-text-primary">새 KB 문서</h2>
+            <h2 className="text-base font-semibold text-text-primary">
+              {editId ? 'KB 문서 수정' : '새 KB 문서'}
+            </h2>
           </div>
           {prefill?.linkedTicketId && (
             <button
@@ -237,15 +262,15 @@ export function CreateKbModal({ open, onClose, tenantSlug, prefill }: CreateKbMo
 
         {/* 푸터 */}
         <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border-default shrink-0">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={mutation.isPending}>
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>
             취소
           </Button>
           <Button
             size="sm"
             onClick={handleSubmit as unknown as () => void}
-            disabled={mutation.isPending || !title.trim() || !content.trim()}
+            disabled={isSubmitting || !title.trim() || !content.trim()}
           >
-            {mutation.isPending ? '저장 중...' : '저장'}
+            {isSubmitting ? '저장 중...' : editId ? '수정' : '저장'}
           </Button>
         </div>
       </div>

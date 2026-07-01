@@ -261,6 +261,7 @@ export default function KbArticlePage() {
           open={editOpen}
           onClose={() => setEditOpen(false)}
           tenantSlug={tenantSlug}
+          editId={articleId}
           prefill={{
             title: article.title,
             content: article.content,

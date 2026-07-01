@@ -242,8 +242,15 @@ export default function ProblemDetailPage() {
   // RCA/workaround 편집 상태
   const [rootCause, setRootCause] = useState<string | null>(null);
   const [workaround, setWorkaround] = useState<string | null>(null);
-  const [assignedTo, setAssignedTo] = useState<string | null>(null);
+  const [assignedTo, setAssignedTo] = useState<string>('');
   const [rcaInitialized, setRcaInitialized] = useState(false);
+
+  // 담당자 후보 목록 (UUID 선택 드롭다운용)
+  const { data: assignees = [] } = useQuery<{ id: string; name: string; email: string }[]>({
+    queryKey: ['problem-assignees', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/problems/assignees`).then((r) => r.data),
+    staleTime: 60_000,
+  });
 
   const { data: problem, isLoading } = useQuery<ProblemDetail>({
     queryKey: ['problem', tenantSlug, id],
@@ -256,7 +263,7 @@ export default function ProblemDetailPage() {
     if (problem && !rcaInitialized) {
       setRootCause(problem.root_cause ?? '');
       setWorkaround(problem.workaround ?? '');
-      setAssignedTo(problem.assigned_to ?? '');
+      setAssignedTo(problem.assigned_to ?? '');  // UUID 문자열 또는 ''
       setRcaInitialized(true);
     }
   }, [problem, rcaInitialized]);
@@ -432,8 +439,13 @@ export default function ProblemDetailPage() {
                   )}
                 </InfoRow>
                 <InfoRow label="담당자">
-                  {typeof problem.assigned_to === 'string' && problem.assigned_to
-                    ? problem.assigned_to
+                  {problem.assigned_to
+                    ? (() => {
+                        const found = assignees.find((u) => u.id === problem.assigned_to);
+                        return found
+                          ? <span className="text-xs">{found.name}</span>
+                          : <span className="text-xs text-text-secondary">{problem.assigned_to}</span>;
+                      })()
                     : <span className="text-text-disabled text-xs">미지정</span>}
                 </InfoRow>
                 <InfoRow label="인시던트">
@@ -552,14 +564,27 @@ export default function ProblemDetailPage() {
 
                     {/* 담당자 */}
                     <div className="flex flex-col gap-1.5">
-                      <span className="text-xs font-medium text-text-secondary">담당자 (이메일 또는 이름)</span>
-                      <input
-                        type="text"
-                        value={assignedTo ?? ''}
-                        onChange={(e) => setAssignedTo(e.target.value)}
-                        placeholder="담당자를 입력하세요"
-                        className="h-9 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
-                      />
+                      <span className="text-xs font-medium text-text-secondary">담당자</span>
+                      <Select
+                        value={assignedTo}
+                        onValueChange={(v) => setAssignedTo(v)}
+                      >
+                        <SelectTrigger className="h-9 w-full">
+                          <SelectValue placeholder="담당자 선택">
+                            {assignedTo
+                              ? assignees.find((u) => u.id === assignedTo)?.name ?? '담당자 선택'
+                              : '미지정'}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">미지정</SelectItem>
+                          {assignees.map((u) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.name} ({u.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     {/* 저장 */}
