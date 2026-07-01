@@ -646,6 +646,124 @@ async def portal_ticket_timeline(
     return events
 
 
+# ------------------------------------------------------------------
+# /assets — 내 자산 목록
+# ------------------------------------------------------------------
+
+
+class PortalAssetOut(BaseModel):
+    id: str
+    asset_tag: str
+    model: str
+    asset_type: str
+    warranty_end: str | None = None
+
+
+@router.get("/assets", response_model=list[PortalAssetOut], summary="포털 내 자산 목록")
+async def portal_assets(
+    tenant_slug: str,
+    db: AsyncSession = Depends(get_db),
+    session_token: str | None = Cookie(default=None, alias=_SESSION_COOKIE),
+) -> list[PortalAssetOut]:
+    """세션 쿠키로 인증된 고객의 자산 목록을 반환합니다.
+
+    스코프: tenant_id == 세션 테넌트 AND customer_id == 세션 고객.
+    다른 고객의 자산은 절대 노출되지 않습니다.
+    """
+    tenant = await _get_tenant(db, tenant_slug)
+    customer = await _get_customer_from_session(db, tenant.id, session_token)
+    if not customer:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다.")
+
+    from app.models.asset import Asset
+
+    rows = (
+        await db.execute(
+            select(Asset)
+            .where(
+                and_(
+                    Asset.tenant_id == tenant.id,
+                    Asset.customer_id == customer.id,
+                )
+            )
+            .order_by(Asset.created_at.desc())
+        )
+    ).scalars().all()
+
+    return [
+        PortalAssetOut(
+            id=str(r.id),
+            asset_tag=r.asset_tag,
+            model=r.model,
+            asset_type=r.asset_type if isinstance(r.asset_type, str) else r.asset_type.value,
+            warranty_end=r.warranty_end.isoformat() if r.warranty_end else None,
+        )
+        for r in rows
+    ]
+
+
+# ------------------------------------------------------------------
+# /contracts — 내 계약 목록
+# ------------------------------------------------------------------
+
+
+class PortalContractOut(BaseModel):
+    id: str
+    name: str
+    type: str
+    sla_grade: str | None = None
+    end_date: str | None = None
+
+
+@router.get("/contracts", response_model=list[PortalContractOut], summary="포털 내 계약 목록")
+async def portal_contracts(
+    tenant_slug: str,
+    db: AsyncSession = Depends(get_db),
+    session_token: str | None = Cookie(default=None, alias=_SESSION_COOKIE),
+) -> list[PortalContractOut]:
+    """세션 쿠키로 인증된 고객의 계약 목록을 반환합니다.
+
+    스코프: tenant_id == 세션 테넌트 AND customer_id == 세션 고객.
+    컬럼 매핑: contracts.name→name, contracts.type(enum)→type,
+               contracts.sla_grade(enum,nullable)→sla_grade,
+               contracts.end_date(Date)→end_date(ISO-8601 문자열).
+    """
+    tenant = await _get_tenant(db, tenant_slug)
+    customer = await _get_customer_from_session(db, tenant.id, session_token)
+    if not customer:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다.")
+
+    from app.models.contract import Contract
+
+    rows = (
+        await db.execute(
+            select(Contract)
+            .where(
+                and_(
+                    Contract.tenant_id == tenant.id,
+                    Contract.customer_id == customer.id,
+                )
+            )
+            .order_by(Contract.end_date.asc())
+        )
+    ).scalars().all()
+
+    return [
+        PortalContractOut(
+            id=str(r.id),
+            name=r.name,
+            type=r.type if isinstance(r.type, str) else r.type.value,
+            sla_grade=(
+                r.sla_grade
+                if isinstance(r.sla_grade, str)
+                else (r.sla_grade.value if r.sla_grade else None)
+            ),
+            end_date=r.end_date.isoformat() if r.end_date else None,
+        )
+        for r in rows
+    ]
+
+
 # ===========================================================================
 # CA-P1-5 Phase 2: 서비스 카탈로그 포털 엔드포인트
 #
