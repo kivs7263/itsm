@@ -346,7 +346,7 @@ export default function TicketsPage() {
   }, [searchParams]);
 
   // 티켓 목록 조회
-  const { data, isLoading } = useQuery<TicketsResponse | Ticket[]>({
+  const { data, isLoading } = useQuery<TicketsResponse>({
     queryKey: ['tickets', tenantSlug, filters],
     queryFn: () =>
       api
@@ -361,12 +361,7 @@ export default function TicketsPage() {
     enabled: !!tenantSlug,
   });
 
-  // paginated vs plain array 모두 지원
-  const tickets: Ticket[] = Array.isArray(data)
-    ? data
-    : Array.isArray((data as TicketsResponse)?.items)
-      ? (data as TicketsResponse).items
-      : [];
+  const tickets: Ticket[] = data?.items ?? [];
 
   // 전체 선택
   const allChecked = tickets.length > 0 && selectedIds.length === tickets.length;

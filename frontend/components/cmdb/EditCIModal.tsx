@@ -142,17 +142,13 @@ export function EditCIModal({ open, onClose, tenantSlug, ci }: EditCIModalProps)
   const customerId  = watch('customer_id');
 
   // 고객 목록 조회
-  const { data: customerData } = useQuery<CustomersResponse | Customer[]>({
+  const { data: customerData } = useQuery<CustomersResponse>({
     queryKey: ['customers', tenantSlug],
     queryFn: () => api.get(`/${tenantSlug}/customers`).then((r) => r.data),
     enabled: open && !!tenantSlug,
   });
 
-  const customers: Customer[] = Array.isArray(customerData)
-    ? customerData
-    : Array.isArray((customerData as CustomersResponse)?.items)
-      ? (customerData as CustomersResponse).items
-      : [];
+  const customers: Customer[] = customerData?.items ?? [];
 
   function handleClose() {
     reset();

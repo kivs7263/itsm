@@ -223,12 +223,7 @@ function KeywordTab({
     queryFn: () =>
       api
         .get(`/${tenantSlug}/kb/search`, { params: { q } })
-        .then((r) => {
-          const d = r.data;
-          if (Array.isArray(d)) return d as KbArticle[];
-          if (Array.isArray(d?.items)) return d.items as KbArticle[];
-          return [];
-        }),
+        .then((r) => (r.data?.items ?? []) as KbArticle[]),
     enabled: !!tenantSlug && isSearching,
     staleTime: 30_000,
   });

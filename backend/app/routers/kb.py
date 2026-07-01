@@ -179,7 +179,7 @@ async def list_kb_articles(
 
 @router.get(
     "/search",
-    response_model=list[dict],
+    response_model=dict,
     summary="KB 전문 검색 (Meilisearch)",
 )
 async def search_kb_articles(
@@ -187,10 +187,11 @@ async def search_kb_articles(
     q: str = Query(..., min_length=1, description="검색어"),
     limit: int = Query(20, ge=1, le=100),
     current_user: Annotated[User, Depends(get_current_user)] = None,
-) -> list[dict]:
-    return await search_service.search_kb(
+) -> dict:
+    results = await search_service.search_kb(
         str(current_user.tenant_id), q, limit
     )
+    return {"items": results, "total": len(results)}
 
 
 # ------------------------------------------------------------------

@@ -29,7 +29,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, select, text
+from sqlalchemy import and_, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -260,30 +260,43 @@ async def list_known_errors(
 
 @router.get(
     "",
-    response_model=list[ProblemOut],
+    response_model=dict,
     summary="Problem 목록 (status·is_known_error 필터)",
 )
 async def list_problems(
     tenant_slug: str,
     status_filter: str | None = Query(None, alias="status"),
     is_known_error: bool | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db),
-) -> list[ProblemOut]:
+) -> dict:
     conditions = [Problem.tenant_id == current_user.tenant_id]
     if status_filter:
         conditions.append(Problem.status == status_filter)
     if is_known_error is not None:
         conditions.append(Problem.is_known_error.is_(is_known_error))
 
+    where_clause = and_(*conditions)
+    total = await db.scalar(
+        select(func.count()).select_from(Problem).where(where_clause)
+    )
     rows = (
         await db.execute(
             select(Problem)
-            .where(and_(*conditions))
+            .where(where_clause)
             .order_by(Problem.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
         )
     ).scalars().all()
-    return [ProblemOut.model_validate(r) for r in rows]
+    return {
+        "items": [ProblemOut.model_validate(r) for r in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 @router.get(

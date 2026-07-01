@@ -214,7 +214,7 @@ export default function CMDBPage() {
   });
   const [createOpen, setCreateOpen] = useState(false);
 
-  const { data, isLoading } = useQuery<CIsResponse | CI[]>({
+  const { data, isLoading } = useQuery<CIsResponse>({
     queryKey: ['cmdb-cis', tenantSlug, filters, page],
     queryFn: () =>
       api
@@ -233,12 +233,8 @@ export default function CMDBPage() {
     enabled: !!tenantSlug,
   });
 
-  const cis: CI[] = Array.isArray(data)
-    ? data
-    : Array.isArray((data as CIsResponse)?.items)
-      ? (data as CIsResponse).items
-      : [];
-  const total = Array.isArray(data) ? cis.length : ((data as CIsResponse)?.total ?? 0);
+  const cis: CI[] = data?.items ?? [];
+  const total = data?.total ?? 0;
 
   function handleFilterChange(key: keyof Filters, value: string) {
     setFilters((prev) => ({ ...prev, [key]: value === 'all' ? '' : value }));

@@ -25,7 +25,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -79,14 +79,14 @@ class ReplyTemplateOut(BaseModel):
 
 @router.get(
     "/{tenant_slug}/reply-templates",
-    response_model=list[ReplyTemplateOut],
+    response_model=dict,
 )
 async def list_reply_templates(
     tenant_slug: str,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     category: str | None = Query(None, description="카테고리 필터"),
-):
+) -> dict:
     """답변 템플릿 목록 조회.
 
     is_shared=True 또는 본인이 작성한(author_id) 템플릿만 반환.
@@ -101,12 +101,16 @@ async def list_reply_templates(
     if category is not None:
         filters.append(ReplyTemplate.category == category)
 
+    total = await db.scalar(
+        select(func.count()).select_from(ReplyTemplate).where(*filters)
+    )
     result = await db.execute(
         select(ReplyTemplate)
         .where(*filters)
         .order_by(ReplyTemplate.name)
     )
-    return result.scalars().all()
+    rows = result.scalars().all()
+    return {"items": [ReplyTemplateOut.model_validate(r) for r in rows], "total": total}
 
 
 @router.post(

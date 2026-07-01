@@ -114,7 +114,7 @@ export function AddRelationshipModal({
   const toCiId   = watch('to_ci_id');
 
   // CI 검색
-  const { data: ciData, isLoading: ciLoading } = useQuery<CIsResponse | CI[]>({
+  const { data: ciData, isLoading: ciLoading } = useQuery<CIsResponse>({
     queryKey: ['cmdb-cis-search', tenantSlug, ciSearch],
     queryFn: () =>
       api.get(`/${tenantSlug}/cmdb/cis`, {
@@ -123,11 +123,7 @@ export function AddRelationshipModal({
     enabled: open && !!tenantSlug,
   });
 
-  const ciList: CI[] = Array.isArray(ciData)
-    ? ciData
-    : Array.isArray((ciData as CIsResponse)?.items)
-      ? (ciData as CIsResponse).items
-      : [];
+  const ciList: CI[] = ciData?.items ?? [];
 
   // 현재 CI 자신 제외
   const filteredCIs = ciList.filter((c) => c.id !== ciId);

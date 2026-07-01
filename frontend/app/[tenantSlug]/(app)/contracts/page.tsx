@@ -96,7 +96,7 @@ export default function ContractsPage() {
 
   const [search, setSearch] = useState('');
 
-  const { data, isLoading } = useQuery<ContractsResponse | Contract[]>({
+  const { data, isLoading } = useQuery<ContractsResponse>({
     queryKey: ['contracts', tenantSlug, search],
     queryFn: () =>
       api.get(`/${tenantSlug}/contracts`, {
@@ -105,11 +105,7 @@ export default function ContractsPage() {
     enabled: !!tenantSlug,
   });
 
-  const contracts: Contract[] = Array.isArray(data)
-    ? data
-    : Array.isArray((data as ContractsResponse)?.items)
-      ? (data as ContractsResponse).items
-      : [];
+  const contracts: Contract[] = data?.items ?? [];
 
   return (
     <div className="flex flex-col h-full">

@@ -360,7 +360,7 @@ export default function TicketDetailPage() {
   });
 
   // 공수 (work-logs)
-  const { data: workLogsData } = useQuery<{ items: WorkLog[] } | WorkLog[]>({
+  const { data: workLogsData } = useQuery<{ items: WorkLog[]; total: number }>({
     queryKey: ['work-logs', tenantSlug, ticketId],
     queryFn: () =>
       api.get(`/${tenantSlug}/tickets/${ticketId}/work-logs`).then((r) => r.data),
@@ -387,9 +387,7 @@ export default function TicketDetailPage() {
     [];
 
   // 공수 배열 정규화
-  const workLogs: WorkLog[] = Array.isArray(workLogsData)
-    ? workLogsData
-    : workLogsData?.items ?? [];
+  const workLogs: WorkLog[] = workLogsData?.items ?? [];
 
   // 총 공수 합산
   const totalHours = workLogs.reduce((acc, l) => acc + l.hours, 0);

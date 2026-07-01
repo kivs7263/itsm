@@ -732,7 +732,7 @@ async def _sync_primary_to_customer(
 
 @router.get(
     "/{customer_id}/contacts",
-    response_model=list[ContactOut],
+    response_model=dict,
     summary="고객 연락처 목록",
 )
 async def list_contacts(
@@ -740,21 +740,23 @@ async def list_contacts(
     customer_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db),
-) -> list[ContactOut]:
+) -> dict:
     await _get_or_404(db, current_user.tenant_id, customer_id)
+    where_clause = and_(
+        CustomerContact.customer_id == customer_id,
+        CustomerContact.tenant_id == current_user.tenant_id,
+    )
+    total = await db.scalar(
+        select(func.count()).select_from(CustomerContact).where(where_clause)
+    )
     rows = (
         await db.execute(
             select(CustomerContact)
-            .where(
-                and_(
-                    CustomerContact.customer_id == customer_id,
-                    CustomerContact.tenant_id == current_user.tenant_id,
-                )
-            )
+            .where(where_clause)
             .order_by(CustomerContact.is_primary.desc(), CustomerContact.created_at.asc())
         )
     ).scalars().all()
-    return [ContactOut.model_validate(r) for r in rows]
+    return {"items": [ContactOut.model_validate(r) for r in rows], "total": total}
 
 
 # ------------------------------------------------------------------

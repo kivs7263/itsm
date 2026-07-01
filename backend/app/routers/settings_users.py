@@ -109,14 +109,17 @@ async def _get_user_or_404(
 
 @router.get(
     "",
-    response_model=list[UserOut],
+    response_model=dict,
     summary="테넌트 사용자 목록 (admin)",
 )
 async def list_users(
     tenant_slug: str,
     current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
     db: AsyncSession = Depends(get_db),
-) -> list[UserOut]:
+) -> dict:
+    total = await db.scalar(
+        select(func.count()).select_from(User).where(User.tenant_id == current_user.tenant_id)
+    )
     rows = (
         await db.execute(
             select(User)
@@ -124,7 +127,7 @@ async def list_users(
             .order_by(User.created_at)
         )
     ).scalars().all()
-    return [UserOut.model_validate(u) for u in rows]
+    return {"items": [UserOut.model_validate(u) for u in rows], "total": total}
 
 
 # ------------------------------------------------------------------

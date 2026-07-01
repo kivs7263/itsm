@@ -226,7 +226,10 @@ export function ActivityTab({ ticketId, tenantSlug }: ActivityTabProps) {
   const { data: workLogs, isLoading: logsLoading } = useQuery<WorkLog[]>({
     queryKey: ['work-logs', tenantSlug, ticketId],
     queryFn: () =>
-      api.get(`/${tenantSlug}/tickets/${ticketId}/work-logs`).then((r) => r.data),
+      api.get(`/${tenantSlug}/tickets/${ticketId}/work-logs`).then((r) => {
+        const d = r.data;
+        return Array.isArray(d) ? d : (d?.items ?? []);
+      }),
     enabled: !!ticketId,
     refetchInterval: 30000,
   });

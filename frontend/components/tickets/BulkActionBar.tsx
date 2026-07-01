@@ -48,8 +48,8 @@ export function BulkActionBar({ selectedIds, onClear, tenantSlug }: BulkActionBa
     }
     setIsSubmitting(true);
     try {
-      await api.patch(`/${tenantSlug}/tickets/bulk-status`, {
-        ids: selectedIds,
+      await api.post(`/${tenantSlug}/tickets/bulk-status`, {
+        ticket_ids: selectedIds,
         status: targetStatus,
       });
       toast.success(`${selectedIds.length}개 티켓의 상태가 변경되었습니다.`);

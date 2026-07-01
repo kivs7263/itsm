@@ -233,7 +233,7 @@ export default function AssetsPage() {
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
 
-  const { data, isLoading } = useQuery<AssetsResponse | Asset[]>({
+  const { data, isLoading } = useQuery<AssetsResponse>({
     queryKey: ['assets', tenantSlug, search],
     queryFn: () =>
       api.get(`/${tenantSlug}/assets`, {
@@ -242,11 +242,7 @@ export default function AssetsPage() {
     enabled: !!tenantSlug,
   });
 
-  const assets: Asset[] = Array.isArray(data)
-    ? data
-    : Array.isArray((data as AssetsResponse)?.items)
-      ? (data as AssetsResponse).items
-      : [];
+  const assets: Asset[] = data?.items ?? [];
 
   return (
     <div className="flex flex-col h-full">

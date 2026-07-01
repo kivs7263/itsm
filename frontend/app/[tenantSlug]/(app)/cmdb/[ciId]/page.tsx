@@ -293,7 +293,7 @@ export default function CIDetailPage() {
   });
 
   // 변경 이력 조회
-  const { data: historyData } = useQuery<CIHistory[]>({
+  const { data: historyData } = useQuery<{ items: CIHistory[]; total: number }>({
     queryKey: ['cmdb-ci-history', tenantSlug, ciId],
     queryFn: () => api.get(`/${tenantSlug}/cmdb/cis/${ciId}/history`).then((r) => r.data),
     enabled: !!tenantSlug && !!ciId && activeTab === 'history',
@@ -370,7 +370,7 @@ export default function CIDetailPage() {
     ? detailResponse.relationships
     : [];
 
-  const history: CIHistory[] = Array.isArray(historyData) ? historyData : [];
+  const history: CIHistory[] = historyData?.items ?? [];
 
   const descriptionAttr = ci.attributes?.description;
   const descriptionText = typeof descriptionAttr === 'string' ? descriptionAttr : undefined;

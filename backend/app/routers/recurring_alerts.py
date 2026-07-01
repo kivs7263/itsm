@@ -18,7 +18,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -64,27 +64,29 @@ class RecurringAlertOut(BaseModel):
 
 @router.get(
     "",
-    response_model=list[RecurringAlertOut],
+    response_model=dict,
     summary="미인지 반복 장애 알림 목록",
 )
 async def list_recurring_alerts(
     tenant_slug: str,
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db),
-) -> list[RecurringAlertOut]:
+) -> dict:
+    where_clause = and_(
+        RecurringAlert.tenant_id == current_user.tenant_id,
+        RecurringAlert.is_acknowledged.is_(False),
+    )
+    total = await db.scalar(
+        select(func.count()).select_from(RecurringAlert).where(where_clause)
+    )
     rows = (
         await db.execute(
             select(RecurringAlert)
-            .where(
-                and_(
-                    RecurringAlert.tenant_id == current_user.tenant_id,
-                    RecurringAlert.is_acknowledged.is_(False),
-                )
-            )
+            .where(where_clause)
             .order_by(RecurringAlert.detected_at.desc())
         )
     ).scalars().all()
-    return [RecurringAlertOut.model_validate(r) for r in rows]
+    return {"items": [RecurringAlertOut.model_validate(r) for r in rows], "total": total}
 
 
 @router.post(

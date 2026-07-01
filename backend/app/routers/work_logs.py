@@ -218,16 +218,22 @@ async def create_work_log(
 
 @router.get(
     "/{tenant_slug}/tickets/{ticket_id}/work-logs",
-    response_model=list[WorkLogOut],
+    response_model=dict,
 )
 async def list_work_logs(
     tenant_slug: str,
     ticket_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-):
+) -> dict:
     await _assert_ticket_access(db, ticket_id, current_user)
 
+    total = await db.scalar(
+        select(func.count()).select_from(TicketWorkLog).where(
+            TicketWorkLog.tenant_id == current_user.tenant_id,
+            TicketWorkLog.ticket_id == ticket_id,
+        )
+    )
     result = await db.execute(
         select(TicketWorkLog, User)
         .outerjoin(User, TicketWorkLog.user_id == User.id)
@@ -238,7 +244,7 @@ async def list_work_logs(
         .order_by(TicketWorkLog.logged_at.desc())
     )
     rows = result.all()
-    return [_serialize(log, user) for log, user in rows]
+    return {"items": [_serialize(log, user) for log, user in rows], "total": total}
 
 
 @router.delete(
