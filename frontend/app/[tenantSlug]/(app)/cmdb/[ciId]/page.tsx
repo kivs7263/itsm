@@ -65,8 +65,7 @@ const CI_ENV_LABELS: Record<string, string> = {
   production:  '운영',
   staging:     '스테이징',
   development: '개발',
-  testing:     '테스트',
-  dr:          'DR',
+  test:        '테스트',
 };
 
 const REL_TYPE_LABELS: Record<RelType, string> = {

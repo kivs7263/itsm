@@ -13,6 +13,13 @@ import type { Asset, AssetsResponse } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -87,11 +94,11 @@ function EmptyState({ onNew }: { onNew: () => void }) {
 // 새 자산 모달 스키마
 // -----------------------------------------------------------------------
 const createAssetSchema = z.object({
-  asset_tag:          z.string().optional(),
-  model:              z.string().optional(),
-  asset_type:         z.string().optional(),
-  customer_id:        z.string().optional(),
-  installed_at:       z.string().optional(),
+  asset_tag:    z.string().min(1, '자산 태그를 입력하세요'),
+  model:        z.string().min(1, '모델명을 입력하세요'),
+  asset_type:   z.enum(['hw', 'sw'], { required_error: '유형을 선택하세요' }),
+  customer_id:  z.string().uuid('고객을 선택하세요').min(1, '고객을 선택하세요'),
+  installed_at: z.string().optional(),
   warranty_end: z.string().optional(),
 });
 
@@ -136,10 +143,24 @@ function CreateAssetModal({
     register,
     handleSubmit,
     reset,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<CreateAssetValues>({
     resolver: zodResolver(createAssetSchema),
   });
+
+  const assetTypeValue = watch('asset_type');
+  const customerIdValue = watch('customer_id');
+
+  // 고객 목록 조회
+  const { data: customersData } = useQuery<{ items: { id: string; name: string }[] }>({
+    queryKey: ['customers-select', tenantSlug],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/customers`, { params: { page_size: 200 } }).then((r) => r.data),
+    enabled: open && !!tenantSlug,
+  });
+  const customers = customersData?.items ?? [];
 
   function handleClose() {
     reset();
@@ -149,11 +170,11 @@ function CreateAssetModal({
   async function onSubmit(values: CreateAssetValues) {
     try {
       await api.post(`/${tenantSlug}/assets`, {
-        asset_tag:           values.asset_tag || null,
-        model:               values.model || null,
-        asset_type:          values.asset_type || null,
-        customer_id:         values.customer_id || null,
-        installed_at:        values.installed_at || null,
+        asset_tag:    values.asset_tag,
+        model:        values.model,
+        asset_type:   values.asset_type,
+        customer_id:  values.customer_id,
+        installed_at: values.installed_at || null,
         warranty_end: values.warranty_end || null,
       });
       toast.success('자산이 생성되었습니다.');
@@ -172,26 +193,49 @@ function CreateAssetModal({
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="px-6 pb-0">
           <div className="flex flex-col gap-4">
+            {/* 고객 선택 */}
+            <FormField label="고객 *" error={errors.customer_id?.message}>
+              <Select
+                value={customerIdValue ?? ''}
+                onValueChange={(v) => setValue('customer_id', v, { shouldValidate: true })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="고객 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customers.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
             <div className="grid grid-cols-2 gap-3">
-              <FormField label="자산 태그" error={errors.asset_tag?.message}>
+              <FormField label="자산 태그 *" error={errors.asset_tag?.message}>
                 <input
                   {...register('asset_tag')}
                   placeholder="AST-001"
                   className="h-9 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
                 />
               </FormField>
-              <FormField label="유형" error={errors.asset_type?.message}>
-                <input
-                  {...register('asset_type')}
-                  placeholder="노트북, 서버 등"
-                  className="h-9 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
-                />
+              <FormField label="유형 *" error={errors.asset_type?.message}>
+                <Select
+                  value={assetTypeValue ?? ''}
+                  onValueChange={(v) => setValue('asset_type', v as 'hw' | 'sw', { shouldValidate: true })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hw">하드웨어</SelectItem>
+                    <SelectItem value="sw">소프트웨어</SelectItem>
+                  </SelectContent>
+                </Select>
               </FormField>
             </div>
-            <FormField label="모델" error={errors.model?.message}>
+            <FormField label="모델 *" error={errors.model?.message}>
               <input
                 {...register('model')}
-                placeholder="모델명 (선택)"
+                placeholder="모델명"
                 className="h-9 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
               />
             </FormField>

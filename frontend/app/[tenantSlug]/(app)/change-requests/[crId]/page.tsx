@@ -11,6 +11,13 @@ import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { isTeamLeadOrAbove } from '@/lib/auth';
 
@@ -174,6 +181,9 @@ export default function CRDetailPage() {
 
   const [activeTab, setActiveTab] = useState<TabKey>('info');
   const [actionLoading, setActionLoading] = useState(false);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [scheduledStart, setScheduledStart] = useState('');
+  const [scheduledEnd, setScheduledEnd] = useState('');
 
   const isPrivileged = isTeamLeadOrAbove(user?.role);
 
@@ -271,7 +281,11 @@ export default function CRDetailPage() {
         key="schedule"
         size="sm"
         isLoading={actionLoading}
-        onClick={() => handleAction('schedule', undefined, '일정이 확정되었습니다.')}
+        onClick={() => {
+          setScheduledStart('');
+          setScheduledEnd('');
+          setScheduleDialogOpen(true);
+        }}
       >
         일정 확정
       </Button>,
@@ -320,6 +334,7 @@ export default function CRDetailPage() {
   }
 
   return (
+    <>
     <div className="flex flex-col h-full">
       {/* 헤더 */}
       <div className="flex items-center gap-3 px-6 py-4 border-b border-border-default bg-surface shrink-0">
@@ -514,5 +529,55 @@ export default function CRDetailPage() {
         </div>
       </div>
     </div>
+
+    {/* 일정 확정 다이얼로그 */}
+    <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>일정 확정</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 px-6 pb-0">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-text-primary">시작 일시</label>
+            <input
+              type="datetime-local"
+              value={scheduledStart}
+              onChange={(e) => setScheduledStart(e.target.value)}
+              className="h-9 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-text-primary">종료 일시</label>
+            <input
+              type="datetime-local"
+              value={scheduledEnd}
+              onChange={(e) => setScheduledEnd(e.target.value)}
+              className="h-9 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setScheduleDialogOpen(false)} disabled={actionLoading}>
+            취소
+          </Button>
+          <Button
+            isLoading={actionLoading}
+            disabled={!scheduledStart || !scheduledEnd}
+            onClick={async () => {
+              if (!scheduledStart || !scheduledEnd) return;
+              setScheduleDialogOpen(false);
+              await handleAction(
+                'schedule',
+                { planned_start: scheduledStart, planned_end: scheduledEnd },
+                '일정이 확정되었습니다.',
+              );
+            }}
+          >
+            확정
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

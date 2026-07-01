@@ -36,6 +36,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models import User
 from app.models.problem import Problem, ProblemTicket
+from app.models.ticket import Ticket
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,10 @@ class TicketLinkRequest(BaseModel):
 
 class LinkedTicketOut(BaseModel):
     ticket_id: uuid.UUID
+    ticket_number: str | None = None
+    title: str | None = None
+    status: str | None = None
+    priority: str | None = None
     linked_at: datetime
 
     model_config = {"from_attributes": True}
@@ -193,12 +198,30 @@ async def _fetch_linked_tickets(
 ) -> list[LinkedTicketOut]:
     rows = (
         await db.execute(
-            select(ProblemTicket)
+            select(
+                ProblemTicket.ticket_id,
+                ProblemTicket.linked_at,
+                Ticket.ticket_number,
+                Ticket.title,
+                Ticket.status,
+                Ticket.priority,
+            )
+            .join(Ticket, Ticket.id == ProblemTicket.ticket_id, isouter=True)
             .where(ProblemTicket.problem_id == problem_id)
             .order_by(ProblemTicket.linked_at)
         )
-    ).scalars().all()
-    return [LinkedTicketOut.model_validate(r) for r in rows]
+    ).all()
+    return [
+        LinkedTicketOut(
+            ticket_id=r.ticket_id,
+            linked_at=r.linked_at,
+            ticket_number=r.ticket_number,
+            title=r.title,
+            status=str(r.status) if r.status else None,
+            priority=str(r.priority) if r.priority else None,
+        )
+        for r in rows
+    ]
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -267,6 +290,7 @@ async def list_problems(
     tenant_slug: str,
     status_filter: str | None = Query(None, alias="status"),
     is_known_error: bool | None = Query(None),
+    search: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     current_user: Annotated[User, Depends(get_current_user)] = None,
@@ -277,6 +301,8 @@ async def list_problems(
         conditions.append(Problem.status == status_filter)
     if is_known_error is not None:
         conditions.append(Problem.is_known_error.is_(is_known_error))
+    if search:
+        conditions.append(Problem.title.ilike(f"%{search}%"))
 
     where_clause = and_(*conditions)
     total = await db.scalar(

@@ -227,8 +227,7 @@ export function EditCIModal({ open, onClose, tenantSlug, ci }: EditCIModalProps)
                     <SelectItem value="production">운영</SelectItem>
                     <SelectItem value="staging">스테이징</SelectItem>
                     <SelectItem value="development">개발</SelectItem>
-                    <SelectItem value="testing">테스트</SelectItem>
-                    <SelectItem value="dr">DR</SelectItem>
+                    <SelectItem value="test">테스트</SelectItem>
                   </SelectContent>
                 </Select>
               </FormField>
