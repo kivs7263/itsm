@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Users,
@@ -2180,8 +2180,10 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
                 </Button>
               )}
               {plan === 'professional' && (
-                <Button size="sm" variant="outline" onClick={() => toast.info('영업팀에 문의하세요: sales@apistech.io')}>
-                  Enterprise 문의
+                <Button size="sm" variant="outline" asChild>
+                  <a href="mailto:sales@apistech.io?subject=Enterprise%20%EB%AC%B8%EC%9D%98">
+                    Enterprise 문의
+                  </a>
                 </Button>
               )}
             </div>
@@ -2357,8 +2359,13 @@ function GeneralTab({ tenantSlug }: { tenantSlug: string }) {
 export default function SettingsPage() {
   const params = useParams();
   const tenantSlug = params?.tenantSlug as string;
+  const searchParams = useSearchParams();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabId>('users');
+  const tabParam = searchParams?.get('tab');
+  const initialTab: TabId = TABS.some((t) => t.id === tabParam)
+    ? (tabParam as TabId)
+    : 'users';
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
 
   const isAdmin = isAdminRole(user?.role as UserRole);
 

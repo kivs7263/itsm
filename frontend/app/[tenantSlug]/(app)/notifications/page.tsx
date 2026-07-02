@@ -250,7 +250,7 @@ function InboxItem({
       className={cn(
         'flex items-start gap-3 px-4 py-3 border-b border-border-subtle transition-colors duration-micro',
         (item.action_url || !item.is_read) && 'cursor-pointer hover:bg-surface-hover',
-        !item.is_read && 'bg-[rgba(18, 155, 142,0.04)]',
+        !item.is_read && 'bg-[rgba(18,155,142,0.04)]',
       )}
     >
       {/* 미읽음 점 */}

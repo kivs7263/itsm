@@ -306,7 +306,7 @@ function CustomerPanel({
               <div
                 key={t.id}
                 className="flex items-center justify-between rounded-lg border border-border-subtle bg-surface px-3 py-2.5 hover:bg-surface-hover transition-colors cursor-pointer"
-                onClick={() => router.push(`/${tenantSlug}/customers/${customerId}`)}
+                onClick={() => router.push(`/${tenantSlug}/tickets/${t.id}`)}
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-text-primary truncate">{t.title}</p>

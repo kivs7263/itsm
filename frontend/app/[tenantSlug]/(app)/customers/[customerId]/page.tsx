@@ -993,7 +993,8 @@ const STATUS_LEFT_BORDER: Record<string, string> = {
   closed: 'border-l-4 border-l-green-500',
 };
 
-function SupportHistoryCard({ item }: { item: SupportHistoryItem }) {
+function SupportHistoryCard({ item, tenantSlug }: { item: SupportHistoryItem; tenantSlug: string }) {
+  const router = useRouter();
   const borderClass = STATUS_LEFT_BORDER[item.status] ?? 'border-l-4 border-l-gray-300';
   const requestBadge = REQUEST_TYPE_BADGE[item.request_type ?? ''] ?? 'bg-gray-100 text-gray-600';
   const requestLabel = REQUEST_TYPE_LABEL[item.request_type ?? ''] ?? item.request_type ?? '';
@@ -1008,7 +1009,13 @@ function SupportHistoryCard({ item }: { item: SupportHistoryItem }) {
     : `${fmtDate(item.created_at)} → 진행 중`;
 
   return (
-    <div className={cn('bg-surface-raised rounded-lg p-4', borderClass)}>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => router.push(`/${tenantSlug}/tickets/${item.id}`)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') router.push(`/${tenantSlug}/tickets/${item.id}`); }}
+      className={cn('bg-surface-raised rounded-lg p-4 cursor-pointer hover:bg-surface-hover transition-colors', borderClass)}
+    >
       {/* 상단 행: 뱃지들 + 티켓 번호 */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -1145,7 +1152,7 @@ function TicketsTab({ tenantSlug, customerId }: { tenantSlug: string; customerId
       ) : (
         <div className="space-y-2">
           {filteredItems.map((item) => (
-            <SupportHistoryCard key={item.id} item={item} />
+            <SupportHistoryCard key={item.id} item={item} tenantSlug={tenantSlug} />
           ))}
         </div>
       )}

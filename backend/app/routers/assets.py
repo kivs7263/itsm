@@ -68,6 +68,7 @@ class AssetOut(BaseModel):
     id: uuid.UUID
     tenant_id: uuid.UUID
     customer_id: uuid.UUID
+    customer_name: str | None = None
     asset_tag: str
     model: str
     serial: str | None
@@ -142,16 +143,23 @@ async def list_assets(
     )
     rows = (
         await db.execute(
-            select(Asset)
+            select(Asset, Customer.name)
+            .outerjoin(Customer, Customer.id == Asset.customer_id)
             .where(where_clause)
             .order_by(Asset.created_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
-    ).scalars().all()
+    ).all()
+
+    items = []
+    for asset, customer_name in rows:
+        out = AssetOut.model_validate(asset)
+        out.customer_name = customer_name
+        items.append(out)
 
     return {
-        "items": [AssetOut.model_validate(r) for r in rows],
+        "items": items,
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -221,7 +229,15 @@ async def get_asset(
     db: AsyncSession = Depends(get_db),
 ) -> AssetOut:
     asset = await _get_or_404(db, current_user.tenant_id, asset_id)
-    return AssetOut.model_validate(asset)
+    out = AssetOut.model_validate(asset)
+    if asset.customer_id:
+        out.customer_name = await db.scalar(
+            select(Customer.name).where(
+                Customer.id == asset.customer_id,
+                Customer.tenant_id == current_user.tenant_id,
+            )
+        )
+    return out
 
 
 # ------------------------------------------------------------------
