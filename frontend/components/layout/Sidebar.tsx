@@ -202,8 +202,8 @@ export function Sidebar() {
                 isActive
                   ? {
                       background: 'var(--sidebar-active-bg)',
-                      boxShadow: 'inset 2px 0 0 var(--color-brand)',
-                      color: 'var(--sidebar-nav-active-text, #16181D)',
+                      boxShadow: 'inset 2px 0 0 var(--sidebar-active-border)',
+                      color: 'var(--sidebar-active-text, #16181D)',
                       fontSize: '13.5px',
                     }
                   : {

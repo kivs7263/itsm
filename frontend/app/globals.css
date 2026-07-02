@@ -121,6 +121,13 @@
   --shadow-lg:    0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
   --shadow-xl:    0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
   --shadow-brand: 0 0 0 3px rgba(18, 155, 142, 0.32);
+
+  /* Glass 토큰 — 앱 스위처 등 createPortal 오버레이 패널(ui-shell). SA와 통일해 밝게(라이트 전용) — 미정의 시 컴포넌트가 다크 #1e1e1e로 폴백해 가독성 저하 */
+  --glass-bg:       rgba(255, 255, 255, 0.90);
+  --glass-bg-dense: rgba(255, 255, 255, 0.97);
+  --glass-border:   rgba(22, 24, 29, 0.10);
+  --glass-backdrop: blur(18px) saturate(1.20);
+  --shadow-glass:   0 4px 24px rgba(16, 24, 40, 0.10), 0 2px 8px rgba(16, 24, 40, 0.06);
   /* GW_LESSONS §2 soft 2단 카드 그림자 — E4 */
   --shadow-card:  0 1px 4px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.06);
   /* 카드 radius primitive — radius-lg(16px) 사용 */
@@ -130,9 +137,11 @@
   --sidebar-bg:               #17181C;
   --sidebar-border:           #24262B;
   --sidebar-nav-text:         #9A96A4;
-  /* D1: 밝은 pill 정본 — active 텍스트 다크(#16181D) */
-  --sidebar-nav-active-text:  #16181D;
+  /* D1: 정본 트라이어드 — 밝은 pill(#F2F4F6)+다크텍스트(#16181D)+제품 accent inset */
   --sidebar-active-bg:        #F2F4F6;
+  --sidebar-active-border:    var(--color-brand);
+  --sidebar-active-text:      #16181D;
+  --sidebar-nav-active-text:  var(--sidebar-active-text); /* 별칭(하위호환) */
   --sidebar-user-name:        #EDEBF0;
   --sidebar-user-meta:        #6E6B79;
 
@@ -243,9 +252,11 @@
   --sidebar-bg:               #17181C;
   --sidebar-border:           #24262B;
   --sidebar-nav-text:         #9A96A4;
-  /* D1: 밝은 pill 정본 — active 텍스트 다크(#16181D) */
-  --sidebar-nav-active-text:  #16181D;
+  /* D1: 정본 트라이어드 — 밝은 pill(#F2F4F6)+다크텍스트(#16181D)+제품 accent inset */
   --sidebar-active-bg:        #F2F4F6;
+  --sidebar-active-border:    var(--color-brand);
+  --sidebar-active-text:      #16181D;
+  --sidebar-nav-active-text:  var(--sidebar-active-text); /* 별칭(하위호환) */
   --sidebar-user-name:        #EDEBF0;
   --sidebar-user-meta:        #6E6B79;
 
