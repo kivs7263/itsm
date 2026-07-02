@@ -5,8 +5,7 @@ prefix : /{tenant_slug}/problems
 격리   : 모든 쿼리 tenant_id == current_user.tenant_id (명시 필터)
 
 엔드포인트:
-  GET    /{tenant_slug}/problems                           — 목록 (status·is_known_error 필터)
-  GET    /{tenant_slug}/problems/known-errors              — Known Error DB (is_known_error+workaround)
+  GET    /{tenant_slug}/problems                           — 목록 (status·is_known_error 필터. Known Error DB = ?is_known_error=true)
   GET    /{tenant_slug}/problems/{id}                      — 상세 (linked tickets 포함)
   POST   /{tenant_slug}/problems                           — 생성 (PRB-YYYYMMDD-NNNN 발번)
   PATCH  /{tenant_slug}/problems/{id}                      — 수정 (status 전이 사이드이펙트)
@@ -15,7 +14,7 @@ prefix : /{tenant_slug}/problems
   DELETE /{tenant_slug}/problems/{id}/tickets/{ticket_id}  — 인시던트 언링크
 
 주의:
-- /known-errors는 /{problem_id} 보다 먼저 등록 (경로 충돌 방지).
+- /assignees는 /{problem_id} 보다 먼저 등록 (경로 충돌 방지).
 - status='known_error' → is_known_error=True 자동 설정.
 - status in ('resolved','closed') → resolved_at=now() 자동 설정.
 - _generate_problem_number, _link_tickets_bulk : recurring_alerts.py에서 재사용.
@@ -229,7 +228,7 @@ async def _fetch_linked_tickets(
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-# ⚠️ /known-errors, /assignees 는 /{problem_id} 보다 먼저 등록해야 경로 충돌 없음.
+# ⚠️ /assignees 는 /{problem_id} 보다 먼저 등록해야 경로 충돌 없음.
 @router.get(
     "/assignees",
     response_model=list[AssigneeOut],
@@ -253,32 +252,6 @@ async def list_assignees(
         )
     ).scalars().all()
     return [AssigneeOut(id=u.id, name=u.name, email=u.email) for u in rows]
-
-
-@router.get(
-    "/known-errors",
-    response_model=list[ProblemOut],
-    summary="Known Error DB (workaround 있는 알려진 오류 목록)",
-)
-async def list_known_errors(
-    tenant_slug: str,
-    current_user: Annotated[User, Depends(get_current_user)] = None,
-    db: AsyncSession = Depends(get_db),
-) -> list[ProblemOut]:
-    rows = (
-        await db.execute(
-            select(Problem)
-            .where(
-                and_(
-                    Problem.tenant_id == current_user.tenant_id,
-                    Problem.is_known_error.is_(True),
-                    Problem.workaround.isnot(None),
-                )
-            )
-            .order_by(Problem.updated_at.desc())
-        )
-    ).scalars().all()
-    return [ProblemOut.model_validate(r) for r in rows]
 
 
 @router.get(
