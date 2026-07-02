@@ -145,6 +145,45 @@ async def list_known_issues(
 # ------------------------------------------------------------------
 
 
+@router_ticket.get(
+    "",
+    response_model=list[KnownIssueOut],
+    summary="티켓에 연결된 알려진 이슈 목록",
+)
+async def list_ticket_known_issues(
+    tenant_slug: str,
+    ticket_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> list[KnownIssueOut]:
+    # 티켓 tenant 격리 확인
+    ticket = await db.scalar(
+        select(Ticket).where(
+            and_(
+                Ticket.id == ticket_id,
+                Ticket.tenant_id == current_user.tenant_id,
+            )
+        )
+    )
+    if ticket is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="티켓을 찾을 수 없습니다.")
+
+    rows = (
+        await db.execute(
+            select(KbArticle)
+            .join(TicketKnownIssue, TicketKnownIssue.article_id == KbArticle.id)
+            .where(
+                and_(
+                    TicketKnownIssue.ticket_id == ticket_id,
+                    KbArticle.tenant_id == current_user.tenant_id,
+                )
+            )
+            .order_by(TicketKnownIssue.linked_at.desc())
+        )
+    ).scalars().all()
+    return [KnownIssueOut.model_validate(r) for r in rows]
+
+
 @router_ticket.post(
     "",
     response_model=TicketKnownIssueOut,
