@@ -1,5 +1,9 @@
 # ITSM Failure Log
 
+> 업무 종료 시 이번 세션에서 실패·재작업이 있었으면 아래 표에 1줄 추가.
+> `방지 패턴` 컬럼 기준: `없음`(예측 불가 외부 요인) / `신규: [패턴명]`(새 패턴 등록 필요) / `[agents/xxx.md#패턴명]`(기존 패턴 미적용 — session_close 시 해당 패턴 검증# +1)
+> (구 `.claude/agents/failure_log.md` 스텁 병합, 2026-07-03 — project-switch 커맨드가 이 경로를 읽음)
+
 | 날짜 | 오류 | 원인 | 수정 | 방지 패턴 |
 |---|---|---|---|---|
 | 2026-06-19 | ITSM 백엔드 전 라우트 500 (`'_IncludedRouter' object has no attribute 'path'`) + 재기동 시 `ModuleNotFoundError: app.models.api_key` | env 주입 위해 `docker compose up` 사용 → docker-cp 오버레이 소실 + stale 이미지 회귀, 재빌드로 `fastapi>=0.115`가 0.137로 점프(`_IncludedRouter`가 prometheus route 해석 파괴) | requirements.txt `fastapi==0.136.3`+`starlette==1.2.1` 고정(blessed 워커 이미지 버전) 후 재빌드 | [skill/backend_fastapi.md#FastAPI 버전 점프 회귀] / [runbooks/infra_docker_not_applied.md#compose up 함정] |
@@ -8,3 +12,8 @@
 | 2026-06-18 | `ValueError: Duplicated param name tenant_slug at path /{tenant_slug}/tickets/{tenant_slug}/tickets/{ticket_id}/activities` | `router`에 `prefix="/{tenant_slug}/tickets"` 있는데 `@router.get("/{tenant_slug}/tickets/{ticket_id}/activities")`로 prefix params 재선언 | `@router.get("/{ticket_id}/activities")` — prefix 파라미터 제외 | [backend.md#FastAPI 라우터 prefix param 재선언 금지] |
 | 2026-06-18 | TypeScript `Type '"Dashboard"' is not assignable to type '"대시보드"'` (en.ts i18n) | `type Messages = typeof ko` 시 Messages 타입이 ko의 리터럴 타입(`'대시보드'`)으로 추론됨 → en 파일이 해당 리터럴 만족 불가 | Messages를 명시적 interface로 선언 + en.ts에서 `: Messages` 대신 `satisfies Messages` 사용 | [frontend.md#TypeScript satisfies] |
 | 2026-06-19 | (잠재) SA 사업카드 크로스테넌트 라우팅 — 전역 `SA_TENANT_ID`로 모든 ITSM 테넌트가 동일 SA 테넌트 조회 → 2번째 테넌트 온보딩 시 1번 고객 데이터 노출 | per-request 테넌트 종속값을 전역 env 단일값으로 둠 (`businesses.py` `settings.SA_TENANT_ID or tenant_id`) | `tenants.sa_tenant_id` 컬럼화(migration 045) + NULL시 자기 tenant_id fallback + 기존 테넌트 env값 backfill | [backend.md#테넌트 종속값은 전역 env 단일값 금지] |
+
+## 관찰 패턴 (3회 이상 반복 → 에이전트 파일 승격)
+
+| 패턴 | 반복 | 승격 위치 |
+|---|---|---|
