@@ -3,7 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, Search, AlertTriangle, Plus } from 'lucide-react';
+import { BookOpen, Search, AlertTriangle, Plus, AlertCircle, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import type {
   KbArticle,
@@ -36,7 +36,7 @@ function SkeletonCards() {
   return (
     <>
       {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 space-y-2">
+        <div key={i} className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 space-y-2">
           <Skeleton className="h-4 w-3/4" />
           <Skeleton className="h-3 w-full" />
           <Skeleton className="h-3 w-2/3" />
@@ -107,7 +107,7 @@ function KbArticleCard({
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 hover:bg-surface-hover hover:border-border-default transition-all duration-fast"
+      className="w-full text-left bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 hover:bg-surface-hover hover:border-border-default transition-all duration-fast"
     >
       <div className="flex items-start justify-between gap-2 min-w-0">
         <p className="font-medium text-text-primary line-clamp-1 text-sm">
@@ -161,7 +161,7 @@ function SemanticResultCard({
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 hover:bg-surface-hover hover:border-border-default transition-all duration-fast"
+      className="w-full text-left bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 hover:bg-surface-hover hover:border-border-default transition-all duration-fast"
     >
       <div className="flex items-start justify-between gap-2 min-w-0">
         <p className="font-medium text-text-primary line-clamp-1 text-sm flex-1">
@@ -230,6 +230,21 @@ function KeywordTab({
 
   if (isSearching) {
     if (searchQuery.isLoading) return <SkeletonCards />;
+    if (searchQuery.isError) {
+      return (
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <AlertCircle size={28} className="text-error" />
+          <p className="text-sm text-text-secondary">검색 중 오류가 발생했습니다.</p>
+          <button
+            onClick={() => searchQuery.refetch()}
+            className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+          >
+            <RefreshCw size={12} />
+            다시 시도
+          </button>
+        </div>
+      );
+    }
     const results = searchQuery.data ?? [];
     if (results.length === 0) {
       return <EmptyState message={`"${q}"에 대한 검색 결과가 없습니다.`} />;
@@ -248,6 +263,21 @@ function KeywordTab({
   }
 
   if (listQuery.isLoading) return <SkeletonCards />;
+  if (listQuery.isError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3">
+        <AlertCircle size={28} className="text-error" />
+        <p className="text-sm text-text-secondary">데이터를 불러오지 못했습니다.</p>
+        <button
+          onClick={() => listQuery.refetch()}
+          className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+        >
+          <RefreshCw size={12} />
+          다시 시도
+        </button>
+      </div>
+    );
+  }
   const items = listQuery.data?.items ?? [];
   if (items.length === 0) {
     return (
@@ -285,7 +315,7 @@ function SemanticTab({
 }) {
   const enabled = !!tenantSlug && q.trim().length >= 2;
 
-  const { data, isLoading, error } = useQuery<SemanticSearchResult[]>({
+  const { data, isLoading, error, refetch } = useQuery<SemanticSearchResult[]>({
     queryKey: ['kb-semantic', tenantSlug, q],
     queryFn: () =>
       api
@@ -321,9 +351,18 @@ function SemanticTab({
 
   if (error) {
     return (
-      <div className="flex items-start gap-3 rounded-lg border border-error-border bg-error-bg px-4 py-3 text-sm text-error-text">
-        <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-        <span>검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</span>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start gap-3 rounded-lg border border-error-border bg-error-bg px-4 py-3 text-sm text-error-text">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <span>검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</span>
+        </div>
+        <button
+          onClick={() => refetch()}
+          className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+        >
+          <RefreshCw size={12} />
+          다시 시도
+        </button>
       </div>
     );
   }

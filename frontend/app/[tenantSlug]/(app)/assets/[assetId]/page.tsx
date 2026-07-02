@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Package, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Package, AlertTriangle, Pencil, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type { Asset } from '@/lib/types';
@@ -86,7 +86,7 @@ export default function AssetDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const { data: asset, isLoading, isError, error: queryError } = useQuery<Asset>({
+  const { data: asset, isLoading, isError, error: queryError, refetch } = useQuery<Asset>({
     queryKey: ['asset-detail', tenantSlug, assetId],
     queryFn: () => api.get(`/${tenantSlug}/assets/${assetId}`).then((r) => r.data),
     enabled: !!tenantSlug && !!assetId,
@@ -119,6 +119,13 @@ export default function AssetDetailPage() {
         {queryError instanceof Error && (
           <p className="text-xs text-text-disabled max-w-xs text-center">{queryError.message}</p>
         )}
+        <button
+          onClick={() => refetch()}
+          className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+        >
+          <RefreshCw size={12} />
+          다시 시도
+        </button>
         <Button size="sm" variant="ghost" onClick={() => router.back()}>
           돌아가기
         </Button>
@@ -189,7 +196,7 @@ export default function AssetDetailPage() {
       {/* 본문 */}
       <div className="flex-1 overflow-auto min-h-0 p-6">
         <div className="max-w-2xl mx-auto">
-          <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-5">
+          <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-5">
             {/* 카드 아이콘 + 타이틀 */}
             <div className="flex items-center gap-3 mb-4">
               <div

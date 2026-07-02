@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Bell, Layers } from 'lucide-react';
+import { Bell, Layers, AlertCircle, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import type {
   NotifLog,
@@ -364,7 +364,7 @@ export default function NotificationsPage() {
     });
 
   // 알림 로그 쿼리 (로컬 ITSM)
-  const { data, isLoading } = useQuery<NotifLogsResponse>({
+  const { data, isLoading, isError, refetch } = useQuery<NotifLogsResponse>({
     queryKey: ['notification-logs', tenantSlug, channelFilter, page],
     queryFn: () =>
       api
@@ -520,6 +520,20 @@ export default function NotificationsPage() {
           <tbody>
             {isLoading ? (
               <SkeletonRows />
+            ) : isError ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-16 text-center">
+                  <AlertCircle size={32} className="mx-auto mb-3 text-error" />
+                  <p className="text-sm text-text-secondary mb-3">데이터를 불러오지 못했습니다.</p>
+                  <button
+                    onClick={() => refetch()}
+                    className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+                  >
+                    <RefreshCw size={12} />
+                    다시 시도
+                  </button>
+                </td>
+              </tr>
             ) : items.length === 0 ? (
               <EmptyState />
             ) : (

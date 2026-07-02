@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Package } from 'lucide-react';
+import { Plus, Search, Package, AlertCircle, RefreshCw } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -277,7 +277,7 @@ export default function AssetsPage() {
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
 
-  const { data, isLoading } = useQuery<AssetsResponse>({
+  const { data, isLoading, isError, refetch } = useQuery<AssetsResponse>({
     queryKey: ['assets', tenantSlug, search],
     queryFn: () =>
       api.get(`/${tenantSlug}/assets`, {
@@ -326,7 +326,21 @@ export default function AssetsPage() {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
+            {isError ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-16 text-center">
+                  <AlertCircle size={32} className="mx-auto mb-3 text-error" />
+                  <p className="text-sm text-text-secondary mb-3">데이터를 불러오지 못했습니다.</p>
+                  <button
+                    onClick={() => refetch()}
+                    className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+                  >
+                    <RefreshCw size={12} />
+                    다시 시도
+                  </button>
+                </td>
+              </tr>
+            ) : isLoading ? (
               <SkeletonRows />
             ) : assets.length === 0 ? (
               <EmptyState onNew={() => setCreateOpen(true)} />

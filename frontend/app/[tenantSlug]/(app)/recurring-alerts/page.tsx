@@ -3,7 +3,7 @@
 import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, CheckCircle2, BellOff, Bug } from 'lucide-react';
+import { RefreshCw, CheckCircle2, BellOff, Bug, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -65,7 +65,7 @@ export default function RecurringAlertsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery<RecurringAlertsResponse>({
+  const { data, isLoading, isError, refetch } = useQuery<RecurringAlertsResponse>({
     queryKey: ['recurring-alerts', tenantSlug],
     queryFn: () =>
       api.get(`/${tenantSlug}/recurring-alerts`).then((r) => r.data),
@@ -151,6 +151,20 @@ export default function RecurringAlertsPage() {
           <tbody>
             {isLoading ? (
               <SkeletonRows />
+            ) : isError ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-16 text-center">
+                  <AlertCircle size={32} className="mx-auto mb-3 text-error" />
+                  <p className="text-sm text-text-secondary mb-3">데이터를 불러오지 못했습니다.</p>
+                  <button
+                    onClick={() => refetch()}
+                    className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+                  >
+                    <RefreshCw size={12} />
+                    다시 시도
+                  </button>
+                </td>
+              </tr>
             ) : alerts.length === 0 ? (
               <EmptyState />
             ) : (

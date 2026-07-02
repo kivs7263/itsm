@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { ArrowLeft, GitMerge, RefreshCw, Trash2, X } from 'lucide-react';
+import { ArrowLeft, GitMerge, RefreshCw, Trash2, X, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type { ChangeRequest, CRStatus, CRRiskLevel, CRPriority } from '@/lib/types';
@@ -208,7 +208,7 @@ export default function CRDetailPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  const { data: cr, isLoading } = useQuery<ChangeRequest>({
+  const { data: cr, isLoading, isError, refetch } = useQuery<ChangeRequest>({
     queryKey: ['change-request', tenantSlug, crId],
     queryFn: () => api.get(`/${tenantSlug}/change-requests/${crId}`).then((r) => r.data),
     enabled: !!tenantSlug && !!crId,
@@ -234,6 +234,21 @@ export default function CRDetailPage() {
   }
 
   if (isLoading) return <PageSkeleton />;
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3">
+        <AlertCircle size={32} className="text-error" />
+        <p className="text-sm text-text-secondary">데이터를 불러오지 못했습니다.</p>
+        <button
+          onClick={() => refetch()}
+          className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+        >
+          <RefreshCw size={12} />
+          다시 시도
+        </button>
+      </div>
+    );
+  }
   if (!cr) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3">
@@ -398,7 +413,7 @@ export default function CRDetailPage() {
         <div className="grid grid-cols-3 gap-6 h-full">
           {/* 좌측: 기본 요약 카드 */}
           <div className="col-span-1">
-            <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4">
+            <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div
                   className="flex h-8 w-8 items-center justify-center rounded-lg"
@@ -440,7 +455,7 @@ export default function CRDetailPage() {
 
           {/* 우측: 탭 */}
           <div className="col-span-2">
-            <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 h-full flex flex-col">
+            <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 h-full flex flex-col">
               {/* 탭 헤더 */}
               <div className="flex border-b border-border-subtle mb-4">
                 {([

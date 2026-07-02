@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Eye, ThumbsUp, ThumbsDown, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Eye, ThumbsUp, ThumbsDown, Pencil, Trash2, AlertCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type { KbArticle } from '@/lib/types';
@@ -58,7 +58,7 @@ export default function KbArticlePage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [voted, setVoted] = useState<'helpful' | 'not_helpful' | null>(null);
 
-  const { data: article, isLoading } = useQuery<KbArticleDetail>({
+  const { data: article, isLoading, isError, refetch } = useQuery<KbArticleDetail>({
     queryKey: ['kb-article', tenantSlug, articleId],
     queryFn: () =>
       api.get(`/${tenantSlug}/kb/${articleId}`).then((r) => r.data),
@@ -95,6 +95,22 @@ export default function KbArticlePage() {
   }
 
   if (isLoading) return <PageSkeleton />;
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <AlertCircle size={32} className="text-error" />
+        <p className="text-sm text-text-secondary">문서를 불러오지 못했습니다.</p>
+        <button
+          onClick={() => refetch()}
+          className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+        >
+          <RefreshCw size={12} />
+          다시 시도
+        </button>
+      </div>
+    );
+  }
 
   if (!article) {
     return (

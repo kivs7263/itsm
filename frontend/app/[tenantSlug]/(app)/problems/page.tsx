@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Bug, AlertCircle } from 'lucide-react';
+import { Plus, Search, Bug, AlertCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type { Problem, ProblemStatus, ProblemPriority, ProblemsResponse } from '@/lib/types';
@@ -168,7 +168,7 @@ function CreateProblemModal({ open, onClose, tenantSlug }: CreateProblemModalPro
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+      <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
         <h2 className="text-base font-semibold text-text-primary mb-4">새 Problem 등록</h2>
 
         <div className="flex flex-col gap-4">
@@ -292,7 +292,7 @@ export default function ProblemsPage() {
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
 
-  const { data, isLoading } = useQuery<ProblemsResponse>({
+  const { data, isLoading, isError, refetch } = useQuery<ProblemsResponse>({
     queryKey: ['problems', tenantSlug, statusFilter, knownErrorOnly, search, page],
     queryFn: () =>
       api
@@ -431,7 +431,21 @@ export default function ProblemsPage() {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
+            {isError ? (
+              <tr>
+                <td colSpan={knownErrorOnly ? 7 : 6} className="px-4 py-16 text-center">
+                  <AlertCircle size={32} className="mx-auto mb-3 text-error" />
+                  <p className="text-sm text-text-secondary mb-3">데이터를 불러오지 못했습니다.</p>
+                  <button
+                    onClick={() => refetch()}
+                    className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+                  >
+                    <RefreshCw size={12} />
+                    다시 시도
+                  </button>
+                </td>
+              </tr>
+            ) : isLoading ? (
               <SkeletonRows />
             ) : items.length === 0 ? (
               <EmptyState onNew={() => setCreateOpen(true)} knownErrorOnly={knownErrorOnly} />

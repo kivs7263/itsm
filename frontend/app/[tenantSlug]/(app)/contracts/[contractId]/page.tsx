@@ -3,7 +3,7 @@
 import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, FileText, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, FileText, AlertTriangle, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { Contract, ContractTier } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -92,7 +92,7 @@ export default function ContractDetailPage() {
   const tenantSlug = params?.tenantSlug as string;
   const contractId = params?.contractId as string;
 
-  const { data: contract, isLoading, isError, error: queryError } = useQuery<Contract>({
+  const { data: contract, isLoading, isError, error: queryError, refetch } = useQuery<Contract>({
     queryKey: ['contract-detail', tenantSlug, contractId],
     queryFn: () => api.get(`/${tenantSlug}/contracts/${contractId}`).then((r) => r.data),
     enabled: !!tenantSlug && !!contractId,
@@ -110,6 +110,13 @@ export default function ContractDetailPage() {
         {queryError instanceof Error && (
           <p className="text-xs text-text-disabled max-w-xs text-center">{queryError.message}</p>
         )}
+        <button
+          onClick={() => refetch()}
+          className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+        >
+          <RefreshCw size={12} />
+          다시 시도
+        </button>
         <Button size="sm" variant="ghost" onClick={() => router.back()}>
           돌아가기
         </Button>
@@ -159,7 +166,7 @@ export default function ContractDetailPage() {
       {/* 본문 */}
       <div className="flex-1 overflow-auto min-h-0 p-6">
         <div className="max-w-2xl mx-auto">
-          <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-5">
+          <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-5">
             {/* 카드 아이콘 + 타이틀 */}
             <div className="flex items-center gap-3 mb-4">
               <div

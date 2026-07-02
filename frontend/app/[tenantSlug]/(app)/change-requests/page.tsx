@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Search, GitMerge } from 'lucide-react';
+import { Plus, Search, GitMerge, AlertCircle, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import type {
   ChangeRequest,
@@ -227,7 +227,7 @@ export default function ChangeRequestsPage() {
 
   const canCreate = isTeamLeadOrAbove(user?.role);
 
-  const { data, isLoading } = useQuery<ChangeRequestsResponse>({
+  const { data, isLoading, isError, refetch } = useQuery<ChangeRequestsResponse>({
     queryKey: ['change-requests', tenantSlug, filters, page],
     queryFn: () =>
       api
@@ -352,7 +352,21 @@ export default function ChangeRequestsPage() {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
+            {isError ? (
+              <tr>
+                <td colSpan={8} className="px-4 py-16 text-center">
+                  <AlertCircle size={32} className="mx-auto mb-3 text-error" />
+                  <p className="text-sm text-text-secondary mb-3">데이터를 불러오지 못했습니다.</p>
+                  <button
+                    onClick={() => refetch()}
+                    className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+                  >
+                    <RefreshCw size={12} />
+                    다시 시도
+                  </button>
+                </td>
+              </tr>
+            ) : isLoading ? (
               <SkeletonRows />
             ) : items.length === 0 ? (
               <EmptyState onNew={() => setCreateOpen(true)} canCreate={canCreate} />

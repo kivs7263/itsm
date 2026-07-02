@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Inbox, UserPlus, Info } from 'lucide-react';
+import { Inbox, UserPlus, Info, AlertCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -226,7 +226,7 @@ export default function QueuePage() {
 
   const [assignTarget, setAssignTarget] = useState<{ id: string; ticket_number: string | null } | null>(null);
 
-  const { data, isLoading } = useQuery<QueueResponse>({
+  const { data, isLoading, isError, refetch } = useQuery<QueueResponse>({
     queryKey: ['queue', tenantSlug],
     queryFn: () => api.get(`/${tenantSlug}/queue`).then((r) => r.data),
     enabled: !!tenantSlug,
@@ -293,6 +293,20 @@ export default function QueuePage() {
           <tbody>
             {isLoading ? (
               <SkeletonRows />
+            ) : isError ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-16 text-center">
+                  <AlertCircle size={32} className="mx-auto mb-3 text-error" />
+                  <p className="text-sm text-text-secondary mb-3">데이터를 불러오지 못했습니다.</p>
+                  <button
+                    onClick={() => refetch()}
+                    className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+                  >
+                    <RefreshCw size={12} />
+                    다시 시도
+                  </button>
+                </td>
+              </tr>
             ) : tickets.length === 0 ? (
               <EmptyState />
             ) : (
