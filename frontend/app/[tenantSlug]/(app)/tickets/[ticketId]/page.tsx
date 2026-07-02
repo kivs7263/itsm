@@ -304,7 +304,7 @@ export default function TicketDetailPage() {
   const prevStatusRef = React.useRef<string | null>(null);
 
   // 티켓 상세 조회
-  const { data: ticketDetail, isLoading: ticketLoading } = useQuery<{
+  const { data: ticketDetail, isLoading: ticketLoading, isError: ticketError, refetch: refetchTicket } = useQuery<{
     ticket: Ticket;
     comments: TicketComment[];
   }>({
@@ -571,6 +571,25 @@ export default function TicketDetailPage() {
   });
 
   if (ticketLoading) return <PageSkeleton />;
+
+  if (ticketError) { /* AS-W1 */
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+        <AlertTriangle size={24} className="text-error-text" />
+        <p className="text-sm text-text-secondary">티켓을 불러오지 못했습니다.</p>
+        <button
+          onClick={() => refetchTicket()}
+          className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+        >
+          <RefreshCw size={12} />
+          다시 시도
+        </button>
+        <Link href={`/${tenantSlug}/tickets`} className="text-sm text-text-secondary hover:text-text-primary">
+          목록으로 돌아가기
+        </Link>
+      </div>
+    );
+  }
 
   if (!ticket) {
     return (

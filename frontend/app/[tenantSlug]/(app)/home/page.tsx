@@ -14,6 +14,7 @@ import {
   BarChart2,
   Play,
   Plus,
+  RefreshCw,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { ReportSummary, Ticket } from '@/lib/types';
@@ -358,7 +359,7 @@ function KpiCard({
 function EngineerDashboard({ tenantSlug }: { tenantSlug: string }) {
   const router = useRouter();
 
-  const { data: report, isLoading } = useQuery<ReportSummary>({
+  const { data: report, isLoading, isError: reportError, refetch: refetchReport } = useQuery<ReportSummary>({
     queryKey: ['report', tenantSlug],
     queryFn: () => api.get(`/${tenantSlug}/reports/summary`).then((r) => r.data),
   });
@@ -392,6 +393,18 @@ function EngineerDashboard({ tenantSlug }: { tenantSlug: string }) {
       {isLoading ? (
         <div className="grid grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 w-full" />)}
+        </div>
+      ) : reportError ? ( /* AS-W1 */
+        <div className="flex items-center justify-center gap-2 py-6 text-text-secondary">
+          <AlertTriangle size={14} className="text-error-text shrink-0" />
+          <span className="text-sm">데이터를 불러오지 못했습니다.</span>
+          <button
+            onClick={() => refetchReport()}
+            className="inline-flex items-center gap-1 text-xs text-brand hover:underline font-medium"
+          >
+            <RefreshCw size={10} />
+            재시도
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-4">
@@ -645,7 +658,7 @@ function WeeklyHoursWidget({ tenantSlug }: { tenantSlug: string }) {
 function TeamDashboard({ tenantSlug }: { tenantSlug: string }) {
   const router = useRouter();
 
-  const { data: report, isLoading } = useQuery<ReportSummary>({
+  const { data: report, isLoading, isError: reportError, refetch: refetchReport } = useQuery<ReportSummary>({
     queryKey: ['report', tenantSlug],
     queryFn: () => api.get(`/${tenantSlug}/reports/summary`).then((r) => r.data),
   });
@@ -721,6 +734,18 @@ function TeamDashboard({ tenantSlug }: { tenantSlug: string }) {
       {/* 4-메트릭 sparkline 스트립 */}
       {isLoading ? (
         <Skeleton className="h-[100px] w-full rounded-lg" />
+      ) : reportError ? ( /* AS-W1 */
+        <div className="flex items-center justify-center gap-2 py-6 text-text-secondary rounded-lg border border-border-subtle">
+          <AlertTriangle size={14} className="text-error-text shrink-0" />
+          <span className="text-sm">데이터를 불러오지 못했습니다.</span>
+          <button
+            onClick={() => refetchReport()}
+            className="inline-flex items-center gap-1 text-xs text-brand hover:underline font-medium"
+          >
+            <RefreshCw size={10} />
+            재시도
+          </button>
+        </div>
       ) : (
         <SparklineStrip metrics={metrics} />
       )}
@@ -763,7 +788,7 @@ function TeamDashboard({ tenantSlug }: { tenantSlug: string }) {
 function SalesDashboard({ tenantSlug }: { tenantSlug: string }) {
   const router = useRouter();
 
-  const { data: customers, isLoading } = useQuery({
+  const { data: customers, isLoading, isError: customersError, refetch: refetchCustomers } = useQuery({
     queryKey: ['customers', tenantSlug],
     queryFn: () => api.get(`/${tenantSlug}/customers`).then((r) => r.data),
   });
@@ -785,6 +810,19 @@ function SalesDashboard({ tenantSlug }: { tenantSlug: string }) {
         </button>
       </div>
 
+      {customersError ? ( /* AS-W1 */
+        <div className="flex items-center justify-center gap-2 py-6 text-text-secondary rounded-lg border border-border-subtle">
+          <AlertTriangle size={14} className="text-error-text shrink-0" />
+          <span className="text-sm">데이터를 불러오지 못했습니다.</span>
+          <button
+            onClick={() => refetchCustomers()}
+            className="inline-flex items-center gap-1 text-xs text-brand hover:underline font-medium"
+          >
+            <RefreshCw size={10} />
+            재시도
+          </button>
+        </div>
+      ) : (
       <div className="grid grid-cols-2 gap-4">
         <KpiCard
           label="전체 고객"
@@ -799,6 +837,7 @@ function SalesDashboard({ tenantSlug }: { tenantSlug: string }) {
           accent="success"
         />
       </div>
+      )}
     </div>
   );
 }
@@ -809,7 +848,7 @@ function SalesDashboard({ tenantSlug }: { tenantSlug: string }) {
 function CLevelDashboard({ tenantSlug }: { tenantSlug: string }) {
   const router = useRouter();
 
-  const { data: report, isLoading } = useQuery<ReportSummary>({
+  const { data: report, isLoading, isError: reportError, refetch: refetchReport } = useQuery<ReportSummary>({
     queryKey: ['report', tenantSlug],
     queryFn: () => api.get(`/${tenantSlug}/reports/summary`).then((r) => r.data),
   });
@@ -836,6 +875,18 @@ function CLevelDashboard({ tenantSlug }: { tenantSlug: string }) {
       {isLoading ? (
         <div className="grid grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 w-full" />)}
+        </div>
+      ) : reportError ? ( /* AS-W1 */
+        <div className="flex items-center justify-center gap-2 py-6 text-text-secondary rounded-lg border border-border-subtle">
+          <AlertTriangle size={14} className="text-error-text shrink-0" />
+          <span className="text-sm">데이터를 불러오지 못했습니다.</span>
+          <button
+            onClick={() => refetchReport()}
+            className="inline-flex items-center gap-1 text-xs text-brand hover:underline font-medium"
+          >
+            <RefreshCw size={10} />
+            재시도
+          </button>
         </div>
       ) : (
         <>

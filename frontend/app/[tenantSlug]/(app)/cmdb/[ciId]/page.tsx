@@ -285,7 +285,7 @@ export default function CIDetailPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   // CI 상세 조회 — 백엔드 응답: { ci: CIOut, relationships: [...] }
-  const { data: detailResponse, isLoading, isError, error: queryError } = useQuery<CIDetailResponse>({
+  const { data: detailResponse, isLoading, isError, error: queryError, refetch } = useQuery<CIDetailResponse>({
     queryKey: ['cmdb-ci-detail', tenantSlug, ciId],
     queryFn: () => api.get(`/${tenantSlug}/cmdb/cis/${ciId}`).then((r) => r.data),
     enabled: !!tenantSlug && !!ciId,
@@ -344,9 +344,14 @@ export default function CIDetailPage() {
         {queryError instanceof Error && (
           <p className="text-xs text-text-disabled max-w-xs text-center">{queryError.message}</p>
         )}
-        <Button size="sm" variant="ghost" onClick={() => router.back()}>
-          돌아가기
-        </Button>
+        <div className="flex gap-2"> {/* AS-W1 */}
+          <Button size="sm" variant="ghost" onClick={() => refetch()}>
+            다시 시도
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => router.back()}>
+            돌아가기
+          </Button>
+        </div>
       </div>
     );
   }
@@ -418,7 +423,7 @@ export default function CIDetailPage() {
         <div className="grid grid-cols-3 gap-6 h-full">
           {/* 좌측: 기본 정보 카드 */}
           <div className="col-span-1">
-            <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4">
+            <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div
                   className="flex h-8 w-8 items-center justify-center rounded-lg"
@@ -475,7 +480,7 @@ export default function CIDetailPage() {
 
           {/* 우측: 탭 */}
           <div className="col-span-2">
-            <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 h-full flex flex-col">
+            <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 h-full flex flex-col">
               {/* 탭 헤더 */}
               <div className="flex border-b border-border-subtle mb-4">
                 {([

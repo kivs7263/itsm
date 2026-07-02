@@ -13,6 +13,7 @@ import {
   TicketIcon,
   Trash2,
   Save,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
@@ -177,7 +178,7 @@ function DashboardTab({ tenantSlug }: { tenantSlug: string }) {
     }
   }
 
-  const { data: dashboard, isLoading: dashLoading } = useQuery<SlaDashboard>({
+  const { data: dashboard, isLoading: dashLoading, isError: dashError, refetch: dashRefetch } = useQuery<SlaDashboard>({
     queryKey: ['sla-dashboard', tenantSlug],
     queryFn: () => api.get(`/${tenantSlug}/sla/dashboard`).then((r) => r.data),
     enabled: !!tenantSlug,
@@ -206,12 +207,26 @@ function DashboardTab({ tenantSlug }: { tenantSlug: string }) {
       </div>
 
       {/* KPI */}
+      {dashError ? ( /* AS-W1 */
+        <div className="flex items-center justify-center gap-2 py-6 text-text-secondary rounded-lg border border-border-subtle">
+          <AlertTriangle size={14} className="text-error-text shrink-0" />
+          <span className="text-sm">데이터를 불러오지 못했습니다.</span>
+          <button
+            onClick={() => dashRefetch()}
+            className="inline-flex items-center gap-1 text-xs text-brand hover:underline font-medium"
+          >
+            <RefreshCw size={10} />
+            재시도
+          </button>
+        </div>
+      ) : (
       <div className="grid grid-cols-4 gap-4">
         <KpiCard label="활성 티켓" value={dashboard?.active_tickets ?? 0} icon={<TicketIcon size={20} />} color={COLOR_INFO} isLoading={dashLoading} />
         <KpiCard label="SLA 위반" value={dashboard?.sla_violations ?? 0} icon={<AlertTriangle size={20} />} color={COLOR_ERROR} isLoading={dashLoading} />
         <KpiCard label="경고" value={dashboard?.sla_warnings ?? 0} icon={<Clock size={20} />} color={COLOR_WARNING} isLoading={dashLoading} />
         <KpiCard label="준수율" value={`${(dashboard?.compliance_rate ?? 0).toFixed(1)}%`} icon={<CheckCircle size={20} />} color={COLOR_SUCCESS} isLoading={dashLoading} />
       </div>
+      )}
 
       {/* 정책 요약 + 게이지 */}
       <div className="grid grid-cols-3 gap-6">
@@ -276,7 +291,7 @@ function PoliciesTab({ tenantSlug }: { tenantSlug: string }) {
   const [policyModalOpen, setPolicyModalOpen] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState<SlaPolicy | null>(null);
 
-  const { data: policies, isLoading } = useQuery<SlaPolicy[]>({
+  const { data: policies, isLoading, isError: policiesError, refetch: policiesRefetch } = useQuery<SlaPolicy[]>({
     queryKey: ['sla-policies', tenantSlug],
     queryFn: () => api.get(`/${tenantSlug}/sla/policies`).then((r) => r.data),
     enabled: !!tenantSlug,
@@ -318,6 +333,20 @@ function PoliciesTab({ tenantSlug }: { tenantSlug: string }) {
                   <td className="px-5 py-3" />
                 </tr>
               ))
+            ) : policiesError ? ( /* AS-W1 */
+              <tr>
+                <td colSpan={5} className="px-5 py-12 text-center">
+                  <AlertTriangle size={24} className="mx-auto mb-2 text-error-text" />
+                  <p className="text-sm text-text-secondary mb-2">데이터를 불러오지 못했습니다.</p>
+                  <button
+                    onClick={() => policiesRefetch()}
+                    className="inline-flex items-center gap-1 text-xs text-brand hover:underline font-medium"
+                  >
+                    <RefreshCw size={11} />
+                    다시 시도
+                  </button>
+                </td>
+              </tr>
             ) : policyList.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-5 py-12 text-center text-sm text-text-secondary">
@@ -385,7 +414,7 @@ function EventsTab({ tenantSlug }: { tenantSlug: string }) {
   const [filterType, setFilterType] = useState<string>('all');
   const [since, setSince] = useState('');
 
-  const { data, isLoading } = useQuery<SlaEventsResp>({
+  const { data, isLoading, isError: eventsError, refetch: eventsRefetch } = useQuery<SlaEventsResp>({
     queryKey: ['sla-events', tenantSlug, page, filterType, since],
     queryFn: () =>
       api.get(`/${tenantSlug}/sla/events`, {
@@ -449,6 +478,20 @@ function EventsTab({ tenantSlug }: { tenantSlug: string }) {
                   <td className="px-5 py-3"><Skeleton className="h-4 w-36" /></td>
                 </tr>
               ))
+            ) : eventsError ? ( /* AS-W1 */
+              <tr>
+                <td colSpan={3} className="px-5 py-12 text-center">
+                  <AlertTriangle size={24} className="mx-auto mb-2 text-error-text" />
+                  <p className="text-sm text-text-secondary mb-2">데이터를 불러오지 못했습니다.</p>
+                  <button
+                    onClick={() => eventsRefetch()}
+                    className="inline-flex items-center gap-1 text-xs text-brand hover:underline font-medium"
+                  >
+                    <RefreshCw size={11} />
+                    다시 시도
+                  </button>
+                </td>
+              </tr>
             ) : events.length === 0 ? (
               <tr>
                 <td colSpan={3} className="px-5 py-12 text-center text-sm text-text-secondary">
@@ -516,7 +559,7 @@ const TIMEZONES = [
 function CalendarTab({ tenantSlug }: { tenantSlug: string }) {
   const queryClient = useQueryClient();
 
-  const { data: cal, isLoading } = useQuery<BusinessCalendar | null>({
+  const { data: cal, isLoading, isError: calError, refetch: calRefetch } = useQuery<BusinessCalendar | null>({
     queryKey: ['sla-business-calendar', tenantSlug],
     queryFn: () => api.get(`/${tenantSlug}/sla/business-calendar`).then((r) => r.data),
     enabled: !!tenantSlug,
@@ -598,6 +641,22 @@ function CalendarTab({ tenantSlug }: { tenantSlug: string }) {
     return (
       <div className="space-y-3">
         {Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
+      </div>
+    );
+  }
+
+  if (calError) { /* AS-W1 */
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3 text-text-secondary">
+        <AlertTriangle size={24} className="text-error-text" />
+        <p className="text-sm">업무시간 캘린더를 불러오지 못했습니다.</p>
+        <button
+          onClick={() => calRefetch()}
+          className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+        >
+          <RefreshCw size={11} />
+          다시 시도
+        </button>
       </div>
     );
   }

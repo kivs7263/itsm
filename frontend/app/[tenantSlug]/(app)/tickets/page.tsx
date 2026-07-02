@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, LifeBuoy, Inbox, UserPlus, Info, RotateCcw } from 'lucide-react';
+import { Plus, Search, LifeBuoy, Inbox, UserPlus, Info, RotateCcw, AlertCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type { Ticket, TicketStatus, TicketPriority, TicketsResponse } from '@/lib/types';
@@ -177,7 +177,7 @@ function QueueTab({ tenantSlug }: { tenantSlug: string }) {
   const { user } = useAuth();
   const _isManager = isTeamLeadOrAbove(user?.role as UserRole);
 
-  const { data, isLoading } = useQuery<QueueResponse>({
+  const { data, isLoading, isError, refetch } = useQuery<QueueResponse>({
     queryKey: ['queue', tenantSlug],
     queryFn: () => api.get(`/${tenantSlug}/queue`).then((r) => r.data),
     enabled: !!tenantSlug,
@@ -247,6 +247,20 @@ function QueueTab({ tenantSlug }: { tenantSlug: string }) {
                   </tr>
                 ))}
               </>
+            ) : isError ? ( /* AS-W1 */
+              <tr>
+                <td colSpan={6} className="px-4 py-16 text-center">
+                  <AlertCircle size={32} className="mx-auto mb-3 text-error" />
+                  <p className="text-sm text-text-secondary mb-3">데이터를 불러오지 못했습니다.</p>
+                  <button
+                    onClick={() => refetch()}
+                    className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+                  >
+                    <RefreshCw size={12} />
+                    다시 시도
+                  </button>
+                </td>
+              </tr>
             ) : tickets.length === 0 ? (
               <tr>
                 <td colSpan={6}>
@@ -346,7 +360,7 @@ export default function TicketsPage() {
   }, [searchParams]);
 
   // 티켓 목록 조회
-  const { data, isLoading } = useQuery<TicketsResponse>({
+  const { data, isLoading, isError, refetch } = useQuery<TicketsResponse>({
     queryKey: ['tickets', tenantSlug, filters],
     queryFn: () =>
       api
@@ -525,6 +539,20 @@ export default function TicketsPage() {
           <tbody>
             {isLoading ? (
               <SkeletonRows />
+            ) : isError ? ( /* AS-W1 */
+              <tr>
+                <td colSpan={10} className="px-4 py-16 text-center">
+                  <AlertCircle size={32} className="mx-auto mb-3 text-error" />
+                  <p className="text-sm text-text-secondary mb-3">데이터를 불러오지 못했습니다.</p>
+                  <button
+                    onClick={() => refetch()}
+                    className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+                  >
+                    <RefreshCw size={12} />
+                    다시 시도
+                  </button>
+                </td>
+              </tr>
             ) : tickets.length === 0 ? (
               <EmptyState onNew={() => setCreateOpen(true)} />
             ) : (

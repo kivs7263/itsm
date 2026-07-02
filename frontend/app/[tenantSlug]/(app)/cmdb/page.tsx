@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Search, Server, Upload } from 'lucide-react';
+import { Plus, Search, Server, Upload, AlertCircle, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { CI, CIType, CIStatus, CIEnvironment, CICriticality, CIsResponse } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -216,7 +216,7 @@ export default function CMDBPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
-  const { data, isLoading } = useQuery<CIsResponse>({
+  const { data, isLoading, isError, refetch } = useQuery<CIsResponse>({
     queryKey: ['cmdb-cis', tenantSlug, filters, page],
     queryFn: () =>
       api
@@ -358,6 +358,20 @@ export default function CMDBPage() {
           <tbody>
             {isLoading ? (
               <SkeletonRows />
+            ) : isError ? ( /* AS-W1 */
+              <tr>
+                <td colSpan={8} className="px-4 py-16 text-center">
+                  <AlertCircle size={32} className="mx-auto mb-3 text-error" />
+                  <p className="text-sm text-text-secondary mb-3">데이터를 불러오지 못했습니다.</p>
+                  <button
+                    onClick={() => refetch()}
+                    className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+                  >
+                    <RefreshCw size={12} />
+                    다시 시도
+                  </button>
+                </td>
+              </tr>
             ) : cis.length === 0 ? (
               <EmptyState onNew={() => setCreateOpen(true)} />
             ) : (

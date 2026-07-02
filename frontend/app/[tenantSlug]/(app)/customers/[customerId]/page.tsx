@@ -27,6 +27,8 @@ import {
   AppWindow,
   Database,
   Layers,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
@@ -325,7 +327,7 @@ function InfoTab({
   return (
     <div className="p-6 flex flex-col gap-6 max-w-2xl">
       {/* ---- 고객 기본 정보 카드 ---- */}
-      <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-5">
+      <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-5">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-base text-text-primary">{customer.name}</span>
@@ -471,7 +473,7 @@ function InfoTab({
 
         {/* 추가 폼 */}
         {showAddForm && (
-          <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-3 mb-3">
+          <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-3 mb-3">
             <p className="text-sm font-medium text-text-primary">새 연락처</p>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
@@ -571,7 +573,7 @@ function InfoTab({
           {contacts.map((contact) => (
             <div
               key={contact.id}
-              className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4"
+              className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4"
             >
               {editingId === contact.id ? (
                 <div className="flex flex-col gap-3">
@@ -1450,7 +1452,7 @@ function NotesTab({
     <div className="p-6 flex flex-col gap-4">
       {/* 새 메모 폼 */}
       {showForm && (
-        <div className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-3">
+        <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-3">
           <input
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
@@ -1496,7 +1498,7 @@ function NotesTab({
       )}
 
       {notes.map((note) => (
-        <div key={note.id} className="bg-white border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4">
+        <div key={note.id} className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4">
           {editingNote?.id === note.id ? (
             <div className="flex flex-col gap-3">
               <input
@@ -1605,7 +1607,7 @@ export default function CustomerDetailPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  const { data: customer, isLoading: customerLoading } = useQuery<Customer>({
+  const { data: customer, isLoading: customerLoading, isError: customerError, refetch: refetchCustomer } = useQuery<Customer>({
     queryKey: ['customer', tenantSlug, customerId],
     queryFn: () =>
       api.get(`/${tenantSlug}/customers/${customerId}`).then((r) => r.data),
@@ -1644,6 +1646,22 @@ export default function CustomerDetailPage() {
         <div className="flex-1 p-6">
           <Skeleton className="h-full w-full" />
         </div>
+      </div>
+    );
+  }
+
+  if (customerError) { /* AS-W1 */
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
+        <AlertCircle size={32} className="text-error" />
+        <p className="text-sm text-text-secondary">고객 정보를 불러오지 못했습니다.</p>
+        <button
+          onClick={() => refetchCustomer()}
+          className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+        >
+          <RefreshCw size={12} />
+          다시 시도
+        </button>
       </div>
     );
   }
