@@ -10,9 +10,10 @@ import {
   CirclePlus, RefreshCw, UserCheck, AlertTriangle,
   MessageSquare, Clock, TrendingUp, CheckCircle2, XCircle,
   RotateCcw, FileText, Play,
+  X, Link2, UserMinus,
 } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
-import type { Ticket, TicketComment, EscalationOut, TicketPriority, TicketStatus } from '@/lib/types';
+import type { Ticket, TicketComment, EscalationOut, TicketPriority, TicketStatus, KnownIssue } from '@/lib/types';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { SlaBadge } from '@/components/tickets/SlaBadge';
 import { EscalationEventCard } from '@/components/tickets/EscalationEventCard';
@@ -299,6 +300,7 @@ export default function TicketDetailPage() {
   const [isInternal, setIsInternal] = React.useState(false);
   const [showStopModal, setShowStopModal] = React.useState(false);
   const [showOtherTimerModal, setShowOtherTimerModal] = React.useState(false);
+  const [kiLinkOpen, setKiLinkOpen] = React.useState(false);
   const prevStatusRef = React.useRef<string | null>(null);
 
   // 티켓 상세 조회
@@ -366,6 +368,30 @@ export default function TicketDetailPage() {
       api.get(`/${tenantSlug}/tickets/${ticketId}/work-logs`).then((r) => r.data),
     enabled: !!ticketId,
     staleTime: 30 * 1000,
+  });
+
+  // 알려진 이슈 — 티켓에 연결된 목록 (bare list)
+  const { data: linkedKisRaw = [] } = useQuery<KnownIssue[]>({
+    queryKey: ['ticket-known-issues', tenantSlug, ticketId],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/tickets/${ticketId}/known-issues`).then((r) => {
+        const d = r.data;
+        return Array.isArray(d) ? d : (d?.items ?? []);
+      }),
+    enabled: !!ticketId,
+    staleTime: 30 * 1000,
+  });
+
+  // 알려진 이슈 — 전체 목록 (연결 모달용, 모달 열릴 때만 fetch)
+  const { data: allKisRaw = [], isLoading: allKisLoading } = useQuery<KnownIssue[]>({
+    queryKey: ['all-known-issues', tenantSlug],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/kb/known-issues`).then((r) => {
+        const d = r.data;
+        return Array.isArray(d) ? d : (d?.items ?? []);
+      }),
+    enabled: kiLinkOpen,
+    staleTime: 60 * 1000,
   });
 
   const ticket = ticketDetail?.ticket;
@@ -494,6 +520,55 @@ export default function TicketDetailPage() {
     }
     startTimerMutation.mutate();
   }
+
+  // KI 연결
+  const linkKiMutation = useMutation({
+    mutationFn: (articleId: string) =>
+      api.post(`/${tenantSlug}/tickets/${ticketId}/known-issues`, { article_id: articleId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ticket-known-issues', tenantSlug, ticketId] });
+      toast.success('알려진 이슈가 연결되었습니다.');
+      setKiLinkOpen(false);
+    },
+    onError: (err) => {
+      const status = (err as { response?: { status?: number } }).response?.status;
+      if (status === 409) {
+        toast.error('이미 연결된 알려진 이슈입니다.');
+        return;
+      }
+      toast.error(getErrorMessage(err));
+    },
+  });
+
+  // KI 연결 해제
+  const unlinkKiMutation = useMutation({
+    mutationFn: (articleId: string) =>
+      api.delete(`/${tenantSlug}/tickets/${ticketId}/known-issues/${articleId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ticket-known-issues', tenantSlug, ticketId] });
+      toast.success('알려진 이슈 연결이 해제되었습니다.');
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  // 담당 반납
+  const releaseMutation = useMutation({
+    mutationFn: () =>
+      api.post(`/${tenantSlug}/queue/${ticketId}/release`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ticket-detail-full', tenantSlug, ticketId] });
+      queryClient.invalidateQueries({ queryKey: ['tickets', tenantSlug] });
+      toast.success('티켓이 풀로 반납되었습니다.');
+    },
+    onError: (err) => {
+      const status = (err as { response?: { status?: number } }).response?.status;
+      if (status === 403) {
+        toast.error('본인 담당 티켓만 반납 가능합니다.');
+        return;
+      }
+      toast.error(getErrorMessage(err));
+    },
+  });
 
   if (ticketLoading) return <PageSkeleton />;
 
@@ -733,13 +808,69 @@ export default function TicketDetailPage() {
 
             {/* 담당자 */}
             <SideSection title="담당자">
-              <div className="text-sm">
-                {ticket.assignee_name ? (
-                  <span className="text-text-primary">{ticket.assignee_name}</span>
-                ) : (
-                  <span className="text-text-disabled">미배정</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm">
+                  {ticket.assignee_name ? (
+                    <span className="text-text-primary">{ticket.assignee_name}</span>
+                  ) : (
+                    <span className="text-text-disabled">미배정</span>
+                  )}
+                </div>
+                {ticket.assignee_name && (
+                  <button
+                    onClick={() => releaseMutation.mutate()}
+                    disabled={releaseMutation.isPending}
+                    className="shrink-0 flex items-center gap-1 text-xs text-text-secondary hover:text-error-text transition-colors px-1.5 py-0.5 rounded border border-border-default hover:border-error-text"
+                  >
+                    <UserMinus size={11} />
+                    반납
+                  </button>
                 )}
               </div>
+            </SideSection>
+
+            {/* 알려진 이슈 */}
+            <SideSection title="알려진 이슈">
+              {linkedKisRaw.length === 0 ? (
+                <p className="text-xs text-text-disabled text-center py-1">연결된 알려진 이슈 없음</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {linkedKisRaw.map((ki) => (
+                    <div key={ki.id} className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-text-primary font-medium leading-snug">{ki.title}</p>
+                        <div className="flex gap-1 mt-0.5 flex-wrap">
+                          {ki.ki_severity && (
+                            <span className="inline-flex items-center rounded-full bg-error-bg px-1.5 py-0.5 text-[10px] font-medium text-error-text">
+                              {ki.ki_severity}
+                            </span>
+                          )}
+                          {ki.ki_status && (
+                            <span className="inline-flex items-center rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                              {ki.ki_status}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => unlinkKiMutation.mutate(ki.id)}
+                        disabled={unlinkKiMutation.isPending}
+                        className="shrink-0 text-text-disabled hover:text-error-text transition-colors mt-0.5"
+                        title="연결 해제"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() => setKiLinkOpen(true)}
+                className="w-full flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border-default hover:border-border-strong text-xs text-text-secondary hover:text-text-primary px-2 py-1.5 transition-colors mt-1"
+              >
+                <Link2 size={11} />
+                + 연결
+              </button>
             </SideSection>
 
             {/* 작업 시간 요약 */}
@@ -828,6 +959,62 @@ export default function TicketDetailPage() {
         }
         onStopped={() => startTimerMutation.mutate()}
       />
+    )}
+    {/* 알려진 이슈 연결 모달 */}
+    {kiLinkOpen && (
+      <div
+        className="fixed inset-0 z-[9000] flex items-center justify-center bg-black/40"
+        onClick={(e) => { if (e.target === e.currentTarget) setKiLinkOpen(false); }}
+      >
+        <div className="bg-surface rounded-xl border border-border-default shadow-lg w-[420px] max-h-[500px] flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
+            <h3 className="text-sm font-semibold text-text-primary">알려진 이슈 연결</h3>
+            <button
+              onClick={() => setKiLinkOpen(false)}
+              className="text-text-secondary hover:text-text-primary transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <div className="overflow-y-auto flex-1 p-2">
+            {allKisLoading ? (
+              <div className="flex items-center justify-center py-10 text-text-secondary text-sm">
+                로딩 중...
+              </div>
+            ) : allKisRaw.length === 0 ? (
+              <div className="flex items-center justify-center py-10 text-text-secondary text-sm">
+                등록된 알려진 이슈가 없습니다.
+              </div>
+            ) : (
+              <ul className="flex flex-col gap-0.5">
+                {allKisRaw.map((ki) => (
+                  <li key={ki.id}>
+                    <button
+                      onClick={() => linkKiMutation.mutate(ki.id)}
+                      disabled={linkKiMutation.isPending}
+                      className="w-full text-left rounded-lg px-3 py-2.5 hover:bg-surface-elevated transition-colors"
+                    >
+                      <p className="text-sm text-text-primary font-medium">{ki.title}</p>
+                      <div className="flex gap-1 mt-1 flex-wrap">
+                        {ki.ki_severity && (
+                          <span className="inline-flex items-center rounded-full bg-error-bg px-1.5 py-0.5 text-[10px] font-medium text-error-text">
+                            {ki.ki_severity}
+                          </span>
+                        )}
+                        {ki.ki_status && (
+                          <span className="inline-flex items-center rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                            {ki.ki_status}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
     )}
     </div>
   );
