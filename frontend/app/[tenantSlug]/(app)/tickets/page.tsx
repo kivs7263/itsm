@@ -359,6 +359,14 @@ export default function TicketsPage() {
     }
   }, [searchParams]);
 
+  // RA-U5: 모바일 티켓 생성 FAB(/tickets?new=1)에서 넘어오면 생성 모달 자동 오픈
+  useEffect(() => {
+    if (searchParams?.get('new') === '1') {
+      setActiveTab('my-tickets');
+      setCreateOpen(true);
+    }
+  }, [searchParams]);
+
   // 티켓 목록 조회
   const { data, isLoading, isError, refetch } = useQuery<TicketsResponse>({
     queryKey: ['tickets', tenantSlug, filters],

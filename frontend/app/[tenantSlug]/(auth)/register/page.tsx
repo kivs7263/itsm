@@ -54,7 +54,8 @@ export default function RegisterPage() {
         organization_name: values.organization_name,
         slug: values.slug,
       });
-      router.replace(`/${values.slug}/tickets`);
+      // RA-U6: 가입 후 랜딩 = 사이드바 홈(/home)과 통일
+      router.replace(`/${values.slug}/home`);
     } catch (error) {
       setServerError(getErrorMessage(error));
     } finally {

@@ -19,7 +19,8 @@ export default function RootPage() {
     const slug = entry?.split('=')[1]?.trim();
 
     if (slug) {
-      router.replace(`/${slug}/tickets`);
+      // RA-U6: 랜딩 = 사이드바 홈(/home)과 통일
+      router.replace(`/${slug}/home`);
     } else {
       // slug 없으면 기본 조직 로그인 페이지로
       router.replace('/xiilab/login');

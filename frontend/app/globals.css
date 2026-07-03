@@ -41,29 +41,35 @@
   --color-neutral-900: #111827;
   --color-neutral-950: #030712;
 
-  /* === Semantic: Success === */
-  --color-success:        #16a34a;
-  --color-success-bg:     #f0fdf4;
-  --color-success-border: #bbf7d0;
-  --color-success-text:   #15803d;
+  /* === Semantic — RA-V1: GW 구버전 정지값 폐기, Alveo 플랫폼 정본 정렬 (SA globals.css A5 패턴과 동일)
+     danger=#D2553F / success=#1F8A5B / warning=#B8801F / info=#3B7DD8 (CLAUDE.md 브랜드 시스템)
+     WCAG(대비 4.5:1, 흰배경 기준): success 4.335 / warning 3.417 / danger 4.108 / info 4.109 — 전부 AA 소형텍스트 기준 미달
+     → -text 변형을 한 단계 어둡게 별도 산출(success-text 5.325 / warning-text 4.991 / danger-text 4.989 / info-text 4.943, 전부 통과).
+     기존 -bg/-border는 8%/24% 알파로 재산출(SA 패턴), base색은 아이콘·보더 등 비텍스트 용도로 계속 사용(뱃지 등 흰 텍스트 위에는 -text 사용 권장). */
+  --color-success:        #1F8A5B;
+  --color-success-bg:     rgba(31, 138, 91, 0.08);
+  --color-success-border: rgba(31, 138, 91, 0.24);
+  --color-success-text:   #1A7A50;    /* WCAG 5.325:1 on #fff — #1F8A5B(4.335) 미달로 어두운 변형 */
 
-  /* === Semantic: Warning === */
-  --color-warning:        #d97706;
-  --color-warning-bg:     #fffbeb;
-  --color-warning-border: #fde68a;
-  --color-warning-text:   #b45309;
+  --color-warning:        #B8801F;
+  --color-warning-bg:     rgba(184, 128, 31, 0.08);
+  --color-warning-border: rgba(184, 128, 31, 0.24);
+  --color-warning-text:   #9A6415;    /* WCAG 4.991:1 on #fff — #B8801F(3.417) 미달로 어두운 변형 */
 
-  /* === Semantic: Error === */
-  --color-error:        #991b1b;
-  --color-error-bg:     #fef2f2;
-  --color-error-border: #fecaca;
-  --color-error-text:   #b91c1c;
+  --color-error:        #D2553F;
+  --color-error-bg:     rgba(210, 85, 63, 0.08);
+  --color-error-border: rgba(210, 85, 63, 0.24);
+  --color-error-text:   #C0482F;      /* WCAG 4.989:1 on #fff — #D2553F(4.108) 미달로 어두운 변형 */
+  /* --color-danger* 별칭 — SA/타 서비스는 danger 네이밍 사용, 소비처 미검색 시 대비 안전망 */
+  --color-danger:        var(--color-error);
+  --color-danger-bg:     var(--color-error-bg);
+  --color-danger-border: var(--color-error-border);
+  --color-danger-text:   var(--color-error-text);
 
-  /* === Semantic: Info === */
-  --color-info:        #2563eb;
-  --color-info-bg:     #eff6ff;
-  --color-info-border: #bfdbfe;
-  --color-info-text:   #1d4ed8;
+  --color-info:        #3B7DD8;
+  --color-info-bg:     rgba(59, 125, 216, 0.08);
+  --color-info-border: rgba(59, 125, 216, 0.24);
+  --color-info-text:   #3570C2;       /* WCAG 4.943:1 on #fff — #3B7DD8(4.109) 미달로 어두운 변형 */
 
   /* === Surface === */
   --color-bg:               #f3f4f8;

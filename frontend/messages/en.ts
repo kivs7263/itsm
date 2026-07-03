@@ -17,6 +17,14 @@ const en = {
     contracts: 'Contracts',
     problems: 'Problem Management',
     queue: 'Ticket Pool',
+    sections: {
+      operations: 'Operations',
+      knowledge: 'Knowledge',
+      customers: 'Customers',
+      infra: 'Infrastructure',
+      reports: 'Reports',
+      settings: 'Settings',
+    },
   },
   auth: {
     logout: 'Log out',

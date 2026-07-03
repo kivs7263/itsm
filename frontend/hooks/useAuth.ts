@@ -120,7 +120,8 @@ export function useAuth() {
       await queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEY });
       const fresh = queryClient.getQueryData<AuthMeData | null>(AUTH_QUERY_KEY);
       const realSlug = fresh?.tenants?.[0]?.slug ?? getSlug(tenantSlug);
-      router.replace(realSlug ? `/${realSlug}/tickets` : '/tickets');
+      // RA-U6: 로그인 후 랜딩 = 사이드바 홈(/home)과 통일
+      router.replace(realSlug ? `/${realSlug}/home` : '/home');
     },
     onError: (error) => {
       throw error;

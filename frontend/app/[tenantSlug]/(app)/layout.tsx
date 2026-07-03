@@ -50,6 +50,7 @@ import {
   X,
   BarChart2,
   Home as HomeIcon,
+  Plus,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -59,7 +60,9 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { InboxUnreadCountResponse } from '@/lib/types';
 
+// RA-U5: 홈 탭 추가 — 모바일에서 더보기 시트에 묻혀 있던 대시보드 진입점을 1탭으로 승격
 const MOBILE_NAV = [
+  { label: '홈',         href: '/home',             icon: HomeIcon  },
   { label: '티켓',       href: '/tickets',          icon: LifeBuoy  },
   { label: '고객',       href: '/customers',        icon: Users     },
   { label: '지식베이스', href: '/kb',               icon: BookOpen  },
@@ -78,8 +81,8 @@ const SEG_LABELS: Record<string, string> = {
 // MobileMoreSheet — 모바일 더보기 바텀시트 (CA-6: 로그아웃 유일 모바일 진입점)
 // Topbar UserMenu는 hidden md:block — 모바일에서 도달 불가이므로 여기서 제공.
 // -----------------------------------------------------------------------
+// RA-U5: '홈'은 MOBILE_NAV로 승격 이동 — 더보기 시트 중복 제거
 const MOBILE_MORE_LINKS = [
-  { label: '홈',      href: '/home',          icon: HomeIcon   },
   { label: '알림',    href: '/notifications', icon: Bell       },
   { label: '리포트',  href: '/reports',       icon: BarChart2  },
   { label: '설정',    href: '/settings',      icon: Settings   },
@@ -184,50 +187,69 @@ function BottomNav() {
   const [moreOpen, setMoreOpen] = useState(false);
 
   return (
-    <nav
-      className="fixed bottom-0 left-0 right-0 z-40 border-t border-border-default bg-surface md:hidden"
-      aria-label="모바일 하단 네비게이션"
-    >
-      <div className="flex items-center justify-around px-2 py-1.5 pb-safe">
-        {MOBILE_NAV.map(({ label, href, icon: Icon }) => {
-          const fullHref = slug(href);
-          const isActive = pathname?.startsWith(fullHref);
-          return (
-            <Link
-              key={href}
-              href={fullHref}
-              className={cn(
-                'flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-md',
-                'text-[10px] transition-colors duration-fast',
-                isActive ? 'text-[#129B8E]' : 'text-text-secondary',
-              )}
-            >
-              <Icon size={18} />
-              <span>{label}</span>
-            </Link>
-          );
-        })}
-        {/* 더보기 — 설정·리포트·알림·로그아웃 접근 (CA-6) */}
-        <button
-          type="button"
-          onClick={() => setMoreOpen(true)}
-          className={cn(
-            'flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-md',
-            'text-[10px] transition-colors duration-fast text-text-secondary',
-          )}
-          aria-label="더보기"
-        >
-          <MoreHorizontal size={18} />
-          <span>더보기</span>
-        </button>
-      </div>
-      <MobileMoreSheet
-        open={moreOpen}
-        onClose={() => setMoreOpen(false)}
-        slug={slug}
-        logout={logout}
-      />
-    </nav>
+    <>
+      {/* RA-U5: 티켓 생성 FAB — 현장 엔지니어 모바일 원터치 생성 진입점.
+          기존 fixed 요소(BottomNav z-40, MobileMoreSheet/BulkActionBar z-50)와 겹치지 않게
+          bottom-nav 바로 위(bottom-16)·z-40으로 배치. /tickets?new=1 → CreateTicketModal 자동 오픈. */}
+      <Link
+        href={`${slug('/tickets')}?new=1`}
+        className={cn(
+          'fixed right-4 bottom-16 z-40 md:hidden',
+          'flex items-center justify-center h-12 w-12 rounded-full',
+          'bg-[#129B8E] text-white shadow-lg',
+          'active:scale-95 transition-transform duration-fast',
+        )}
+        aria-label="새 티켓 생성"
+        title="새 티켓 생성"
+      >
+        <Plus size={22} />
+      </Link>
+
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-40 border-t border-border-default bg-surface md:hidden"
+        aria-label="모바일 하단 네비게이션"
+      >
+        <div className="flex items-center justify-around px-2 py-1.5 pb-safe">
+          {MOBILE_NAV.map(({ label, href, icon: Icon }) => {
+            const fullHref = slug(href);
+            const isActive = pathname?.startsWith(fullHref);
+            return (
+              <Link
+                key={href}
+                href={fullHref}
+                className={cn(
+                  'flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-md',
+                  'text-[10px] transition-colors duration-fast',
+                  isActive ? 'text-[#129B8E]' : 'text-text-secondary',
+                )}
+              >
+                <Icon size={18} />
+                <span>{label}</span>
+              </Link>
+            );
+          })}
+          {/* 더보기 — 설정·리포트·알림·로그아웃 접근 (CA-6) */}
+          <button
+            type="button"
+            onClick={() => setMoreOpen(true)}
+            className={cn(
+              'flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-md',
+              'text-[10px] transition-colors duration-fast text-text-secondary',
+            )}
+            aria-label="더보기"
+          >
+            <MoreHorizontal size={18} />
+            <span>더보기</span>
+          </button>
+        </div>
+        <MobileMoreSheet
+          open={moreOpen}
+          onClose={() => setMoreOpen(false)}
+          slug={slug}
+          logout={logout}
+        />
+      </nav>
+    </>
   );
 }
 
@@ -329,7 +351,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     if (isLoading || !isAuthenticated || !tenantSlug || tenants.length === 0) return;
     const known = tenants.some((t) => t.slug === tenantSlug);
     if (!known) {
-      router.replace(`/${tenants[0].slug}/tickets`);
+      // RA-U6: 가짜 slug 교정 후 랜딩 = 사이드바 홈(/home)과 통일
+      router.replace(`/${tenants[0].slug}/home`);
     }
   }, [isLoading, isAuthenticated, tenantSlug, tenants, router]);
 

@@ -15,6 +15,14 @@ const ko = {
     contracts: '계약',
     problems: '문제 관리',
     queue: '티켓 풀',
+    sections: {
+      operations: '오퍼레이션',
+      knowledge: '지식',
+      customers: '고객',
+      infra: '인프라',
+      reports: '리포트',
+      settings: '설정',
+    },
   },
   auth: {
     logout: '로그아웃',
@@ -115,7 +123,7 @@ const ko = {
 };
 
 export interface Messages {
-  nav: { dashboard: string; tickets: string; workLogs: string; customers: string; kb: string; recurringIssues: string; reports: string; settings: string; assets: string; cmdb: string; changeRequests: string; sla: string; contracts: string; problems: string; queue: string };
+  nav: { dashboard: string; tickets: string; workLogs: string; customers: string; kb: string; recurringIssues: string; reports: string; settings: string; assets: string; cmdb: string; changeRequests: string; sla: string; contracts: string; problems: string; queue: string; sections: { operations: string; knowledge: string; customers: string; infra: string; reports: string; settings: string } };
   auth: { logout: string; role: Record<string, string> };
   sidebar: { open: string; close: string; language: string };
   ticket: {

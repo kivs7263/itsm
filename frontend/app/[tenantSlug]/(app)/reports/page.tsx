@@ -35,6 +35,13 @@ import type {
   ReportStatus,
 } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import {
+  CHART_COLORS_LIGHT,
+  CHART_BG_LIGHT,
+  CATEGORY_COLORS,
+  CATEGORY_BG_LIGHT,
+  BRAND_PROGRESS_GRADIENT,
+} from '@/lib/chart-colors';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import {
@@ -114,7 +121,7 @@ function MonthlyBar({ count, max }: { count: number; max: number }) {
         className="h-full rounded-sm"
         style={{
           width: `${pct}%`,
-          background: 'linear-gradient(90deg, #129B8E, #f59e0b)',
+          background: BRAND_PROGRESS_GRADIENT,
           transition: 'width 0.4s ease',
         }}
       />
@@ -176,7 +183,7 @@ function ScoreBar({ star, count, max }: { star: number; count: number; max: numb
           className="h-full rounded-sm"
           style={{
             width: `${pct}%`,
-            background: 'linear-gradient(90deg, #129B8E, #f59e0b)',
+            background: BRAND_PROGRESS_GRADIENT,
             transition: 'width 0.4s ease',
           }}
         />
@@ -851,8 +858,8 @@ export default function ReportsPage() {
             value={formatMttr(mttrMinutes)}
             sub="티켓 생성→해결 평균"
             icon={<Timer size={16} />}
-            iconColor="#129B8E"
-            iconBg="rgba(18, 155, 142,0.12)"
+            iconColor={CHART_COLORS_LIGHT.brand}
+            iconBg={CHART_BG_LIGHT.brand}
             isLoading={isLoading}
             tooltip="Mean Time To Resolve — 해결/종료된 티켓 기준"
           />
@@ -861,8 +868,8 @@ export default function ReportsPage() {
             value={formatMttr(mttaMinutes)}
             sub="티켓 생성→최초 응답"
             icon={<Zap size={16} />}
-            iconColor="#f97316"
-            iconBg="rgba(249,115,22,0.12)"
+            iconColor={CATEGORY_COLORS.orange}
+            iconBg={CATEGORY_BG_LIGHT.orange}
             isLoading={isLoading}
             tooltip="Mean Time To Acknowledge — 최초 담당자 배정 또는 댓글 기준"
           />
@@ -871,8 +878,8 @@ export default function ReportsPage() {
             value={fcrRate != null ? `${fcrRate}%` : '-'}
             sub="에스컬레이션 없이 해결"
             icon={<Target size={16} />}
-            iconColor="#22c55e"
-            iconBg="rgba(34,197,94,0.12)"
+            iconColor={CHART_COLORS_LIGHT.success}
+            iconBg={CHART_BG_LIGHT.success}
             isLoading={isLoading}
             tooltip="First Contact Resolution — 에스컬레이션 없이 해결된 티켓 비율"
           />
@@ -881,8 +888,8 @@ export default function ReportsPage() {
             value={`${(complianceRate * 100).toFixed(1)}%`}
             sub={`위반 ${report?.sla_breach_count ?? 0}건`}
             icon={<Clock size={16} />}
-            iconColor="#3b82f6"
-            iconBg="rgba(59,130,246,0.12)"
+            iconColor={CHART_COLORS_LIGHT.info}
+            iconBg={CHART_BG_LIGHT.info}
             isLoading={isLoading}
           />
           <KpiCard
@@ -890,8 +897,8 @@ export default function ReportsPage() {
             value={escalationRate != null ? `${escalationRate}%` : '-'}
             sub="전체 대비 에스컬레이션"
             icon={<AlertTriangle size={16} />}
-            iconColor="#ef4444"
-            iconBg="rgba(239,68,68,0.12)"
+            iconColor={CHART_COLORS_LIGHT.danger}
+            iconBg={CHART_BG_LIGHT.danger}
             isLoading={isLoading}
             tooltip="에스컬레이션된 티켓 / 전체 티켓 비율"
           />
@@ -900,8 +907,8 @@ export default function ReportsPage() {
             value={recurringRate != null ? `${recurringRate}%` : '-'}
             sub="반복 장애 감지 티켓"
             icon={<Layers size={16} />}
-            iconColor="#8b5cf6"
-            iconBg="rgba(139,92,246,0.12)"
+            iconColor={CATEGORY_COLORS.violet}
+            iconBg={CATEGORY_BG_LIGHT.violet}
             isLoading={isLoading}
             tooltip="동일 증상 반복 감지된 티켓 비율"
           />
@@ -912,8 +919,8 @@ export default function ReportsPage() {
             value={String(report?.monthly_resolved ?? 0)}
             sub="resolved + closed"
             icon={<CheckSquare size={16} />}
-            iconColor="#a855f7"
-            iconBg="rgba(168,85,247,0.12)"
+            iconColor={CATEGORY_COLORS.purple}
+            iconBg={CATEGORY_BG_LIGHT.purple}
             isLoading={isLoading}
           />
           <KpiCard
@@ -921,8 +928,8 @@ export default function ReportsPage() {
             value={kbTotalViews.toLocaleString()}
             sub={`게시 문서 ${kbArticleCount}건`}
             icon={<BookOpen size={16} />}
-            iconColor="#129B8E"
-            iconBg="rgba(18, 155, 142,0.12)"
+            iconColor={CHART_COLORS_LIGHT.brand}
+            iconBg={CHART_BG_LIGHT.brand}
             isLoading={isLoading}
           />
           <KpiCard
@@ -930,8 +937,8 @@ export default function ReportsPage() {
             value={`${totalHours}h`}
             sub={`청구 ${billableHours}h`}
             icon={<Layers size={16} />}
-            iconColor="#64748b"
-            iconBg="rgba(100,116,139,0.12)"
+            iconColor={CATEGORY_COLORS.slate}
+            iconBg={CATEGORY_BG_LIGHT.slate}
             isLoading={isLoading}
           />
         </div>
@@ -1015,9 +1022,9 @@ export default function ReportsPage() {
             <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-5 flex items-center gap-4">
               <div
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
-                style={{ background: 'rgba(34, 197, 94, 0.12)' }}
+                style={{ background: CHART_BG_LIGHT.success }}
               >
-                <Clock size={20} style={{ color: '#22c55e' }} />
+                <Clock size={20} style={{ color: CHART_COLORS_LIGHT.success }} />
               </div>
               <div>
                 <p className="text-xs text-text-secondary">SLA 준수율</p>
@@ -1188,32 +1195,32 @@ export default function ReportsPage() {
                     : '데이터 없음'
                 }
                 icon={<Star size={18} />}
-                iconColor="#129B8E"
-                iconBg="rgba(18, 155, 142, 0.12)"
+                iconColor={CHART_COLORS_LIGHT.brand}
+                iconBg={CHART_BG_LIGHT.brand}
                 isLoading={csatLoading}
               />
               <CsatKpiCard
                 label="응답률"
                 value={csat != null ? `${csat.response_rate.toFixed(1)}%` : '-'}
                 icon={<CheckSquare size={18} />}
-                iconColor="#22c55e"
-                iconBg="rgba(34, 197, 94, 0.12)"
+                iconColor={CHART_COLORS_LIGHT.success}
+                iconBg={CHART_BG_LIGHT.success}
                 isLoading={csatLoading}
               />
               <CsatKpiCard
                 label="총 설문 수"
                 value={csat != null ? String(csat.total) : '-'}
                 icon={<Users size={18} />}
-                iconColor="#3b82f6"
-                iconBg="rgba(59, 130, 246, 0.12)"
+                iconColor={CHART_COLORS_LIGHT.info}
+                iconBg={CHART_BG_LIGHT.info}
                 isLoading={csatLoading}
               />
               <CsatKpiCard
                 label="제출 수"
                 value={csat != null ? String(csat.submitted) : '-'}
                 icon={<MessageSquare size={18} />}
-                iconColor="#8b5cf6"
-                iconBg="rgba(139, 92, 246, 0.12)"
+                iconColor={CATEGORY_COLORS.violet}
+                iconBg={CATEGORY_BG_LIGHT.violet}
                 isLoading={csatLoading}
               />
             </div>
@@ -1267,7 +1274,7 @@ export default function ReportsPage() {
                               className="h-full rounded-sm"
                               style={{
                                 width: `${(t.avg_score / maxScore) * 100}%`,
-                                background: 'linear-gradient(90deg, #129B8E, #f59e0b)',
+                                background: BRAND_PROGRESS_GRADIENT,
                                 transition: 'width 0.4s ease',
                               }}
                             />

@@ -68,7 +68,8 @@ function CrossAppContent() {
         }
 
         // 서버가 HttpOnly 쿠키로 세션 발급 완료
-        router.replace(tenantSlug ? `/${tenantSlug}/tickets` : '/tickets');
+        // RA-U6: crossapp 로그인 후 랜딩 = 사이드바 홈(/home)과 통일
+        router.replace(tenantSlug ? `/${tenantSlug}/home` : '/home');
       } catch {
         if (cancelled) return;
         router.replace(
