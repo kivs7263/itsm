@@ -17,13 +17,18 @@ const ko = {
     contracts: '계약',
     problems: '문제 관리',
     queue: '티켓 풀',
+    // RX-4b: 신규 라우트 배선(자동화·서비스 카탈로그) + 관리 허브 딥링크(사용자·알림)
+    automation: '자동화',
+    serviceCatalog: '서비스 카탈로그',
+    notifications: '알림',
+    users: '사용자',
     sections: {
-      operations: '오퍼레이션',
+      work: '작업',
+      serviceMgmt: '서비스 관리',
       knowledge: '지식',
       customers: '고객',
       infra: '인프라',
-      reports: '리포트',
-      settings: '설정',
+      admin: '관리',
     },
   },
   auth: {
@@ -125,7 +130,7 @@ const ko = {
 };
 
 export interface Messages {
-  nav: { dashboard: string; tickets: string; workLogs: string; customers: string; kb: string; recurringIssues: string; reports: string; settings: string; assets: string; cmdb: string; inventory: string; changeRequests: string; sla: string; contracts: string; problems: string; queue: string; sections: { operations: string; knowledge: string; customers: string; infra: string; reports: string; settings: string } };
+  nav: { dashboard: string; tickets: string; workLogs: string; customers: string; kb: string; recurringIssues: string; reports: string; settings: string; assets: string; cmdb: string; inventory: string; changeRequests: string; sla: string; contracts: string; problems: string; queue: string; automation: string; serviceCatalog: string; notifications: string; users: string; sections: { work: string; serviceMgmt: string; knowledge: string; customers: string; infra: string; admin: string } };
   auth: { logout: string; role: Record<string, string> };
   sidebar: { open: string; close: string; language: string };
   ticket: {

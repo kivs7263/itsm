@@ -145,6 +145,44 @@ export interface CIDetail extends CI {
 }
 
 // -----------------------------------------------------------------------
+// CMDB SNMP Discovery 타입 (RX-3c)
+// 백엔드: app/routers/cmdb.py DiscoveryStartRequest / DiscoveryRunOut
+// -----------------------------------------------------------------------
+export type DiscoveryRunStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+/** POST /{tenant}/cmdb/discovery 요청 바디 (cmdb.py:868 DiscoveryStartRequest) */
+export interface DiscoveryStartRequest {
+  target: string;
+  community?: string;
+  port?: number;
+  timeout?: number;
+  customer_id?: string | null;
+}
+
+/** cmdb.py:883 DiscoveryRunOut */
+export interface DiscoveryRun {
+  id: string;
+  tenant_id: string;
+  target: string;
+  status: DiscoveryRunStatus;
+  started_at: string | null;
+  finished_at: string | null;
+  discovered_count: number;
+  error_count: number;
+  errors: Array<{ host?: string; message?: string; [key: string]: unknown }>;
+  created_by: string | null;
+  created_at: string;
+}
+
+/** GET /{tenant}/cmdb/discovery/runs 응답 (cmdb.py:1101) */
+export interface DiscoveryRunsResponse {
+  items: DiscoveryRun[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+// -----------------------------------------------------------------------
 // 고객 타입
 // -----------------------------------------------------------------------
 export type ContractTier = 'bronze' | 'silver' | 'gold' | 'platinum';
@@ -631,21 +669,6 @@ export interface SupportTeam {
   created_at: string;
 }
 
-export interface ExtNotifLog {
-  id: string;
-  ticket_id: string | null;
-  escalation_id: string | null;
-  channel: string;
-  event_type: string;
-  recipient: string;
-  status: string;
-  error_msg: string | null;
-  retry_count: number;
-  next_retry_at: string | null;
-  sent_at: string | null;
-  created_at: string;
-}
-
 export interface SymptomCategoryItem {
   id: string;
   name: string;
@@ -822,4 +845,62 @@ export interface UserSummary {
   name: string;
   role: string;
   is_active: boolean;
+}
+
+// -----------------------------------------------------------------------
+// 자동화 룰 엔진 타입 (RX-3a) — backend/app/automation/router.py 근거
+// -----------------------------------------------------------------------
+
+/** 지원 트리거 이벤트 — router.py SUPPORTED_TRIGGERS와 동기화 */
+export type AutomationTriggerEvent =
+  | 'ticket.created'
+  | 'ticket.status_changed'
+  | 'ticket.assigned'
+  | 'ticket.sla_breach_warning';
+
+/** JSONLogic 조건 표현식 — evaluator.py ALLOWED_OPERATORS 기준 임의 중첩 가능 */
+export type AutomationCondition = Record<string, unknown>;
+
+/** 액션 항목 — engine.py가 action.get("type")/action.get("params") 형태로 소비 */
+export interface AutomationAction {
+  type: string;
+  params: Record<string, unknown>;
+}
+
+export interface AutomationRule {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  trigger_event: string;
+  conditions: AutomationCondition[];
+  actions: AutomationAction[];
+  priority: number;
+  run_limit_per_hour: number | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationRunActionResult {
+  type: string;
+  status: string;
+  [key: string]: unknown;
+}
+
+export interface AutomationRun {
+  id: string;
+  rule_id: string;
+  tenant_id: string;
+  trigger_event: string;
+  trigger_payload: Record<string, unknown>;
+  matched: boolean;
+  depth: number;
+  idempotency_key: string | null;
+  actions_result: AutomationRunActionResult[] | null;
+  status: string;
+  error: string | null;
+  created_at: string;
+  completed_at: string | null;
 }

@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   LifeBuoy,
@@ -22,6 +22,10 @@ import {
   FileText,
   Bug,
   Inbox,
+  Workflow,
+  LayoutGrid,
+  Bell,
+  UserCog,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSlug } from '@/lib/slug';
@@ -41,14 +45,18 @@ function getInitialCollapsed(): boolean {
 }
 
 // RX-1c: assets·cmdb 2개 항목 → 단일 'inventory'(인프라)로 통합
-type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'recurringIssues' | 'reports' | 'settings' | 'inventory' | 'changeRequests' | 'sla' | 'contracts' | 'problems' | 'queue';
+// RX-4b: automation·serviceCatalog(신규 라우트) + notifications·users(설정 딥링크) 배선
+type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'recurringIssues' | 'reports' | 'settings' | 'inventory' | 'changeRequests' | 'sla' | 'contracts' | 'problems' | 'queue' | 'automation' | 'serviceCatalog' | 'notifications' | 'users';
 type NavItem = { key: NavKey; href: string; icon: React.ElementType };
 // RA-U3: 섹션 그룹핑 — titleKey 없으면 무제목 섹션(홈), 있으면 t.nav.sections[titleKey] 라벨
-type SectionKey = 'operations' | 'knowledge' | 'customers' | 'infra' | 'reports' | 'settings';
+// RX-4b: 16개 평면 항목 → 8 도메인 허브(홈/작업/서비스관리/고객/인프라/지식/관리)로 재편
+type SectionKey = 'work' | 'serviceMgmt' | 'customers' | 'infra' | 'knowledge' | 'admin';
 type NavSection = { titleKey?: SectionKey; items: NavItem[] };
 
 // SHELL-7 항목 ③: 아이콘 17px 통일
 // RA-U3: 13~15개 평면 나열(Miller 7±2 초과) → SSO Sidebar 패턴 참고해 섹션 그룹핑
+// RX-4b: 8 도메인 허브 — 홈 / 작업(티켓·풀·작업기록) / 서비스관리(변경요청·문제·SLA·반복이슈·자동화·서비스카탈로그) /
+//        고객(고객·계약) / 인프라 / 지식(KB) / 관리(리포트·설정·사용자·알림)
 const ENGINEER_SECTIONS: NavSection[] = [
   {
     items: [
@@ -56,23 +64,23 @@ const ENGINEER_SECTIONS: NavSection[] = [
     ],
   },
   {
-    titleKey: 'operations',
+    titleKey: 'work',
     items: [
-      { key: 'tickets',        href: '/tickets',         icon: LifeBuoy       },
+      { key: 'tickets',  href: '/tickets',   icon: LifeBuoy },
       // FRP-3d-A1: 티켓 풀 (미배정 티켓)
-      { key: 'queue',          href: '/queue',            icon: Inbox          },
-      { key: 'workLogs',       href: '/work-logs',        icon: Clock          },
-      { key: 'sla',            href: '/sla',              icon: Gauge          },
-      { key: 'changeRequests', href: '/change-requests',  icon: GitPullRequest },
-      // CA-P2-4: Problem Management
-      { key: 'problems',       href: '/problems',         icon: Bug            },
+      { key: 'queue',    href: '/queue',      icon: Inbox    },
+      { key: 'workLogs', href: '/work-logs',  icon: Clock    },
     ],
   },
   {
-    titleKey: 'knowledge',
+    titleKey: 'serviceMgmt',
     items: [
-      { key: 'kb',              href: '/kb',               icon: BookOpen  },
-      { key: 'recurringIssues', href: '/recurring-alerts', icon: RefreshCw },
+      { key: 'changeRequests',  href: '/change-requests',  icon: GitPullRequest },
+      // CA-P2-4: Problem Management
+      { key: 'problems',        href: '/problems',         icon: Bug            },
+      { key: 'sla',             href: '/sla',              icon: Gauge          },
+      { key: 'recurringIssues', href: '/recurring-alerts', icon: RefreshCw      },
+      // RX-4b: automation·serviceCatalog는 team_lead+ 전용 (아래 TEAM_LEAD_SECTIONS에서 추가)
     ],
   },
   {
@@ -90,27 +98,99 @@ const ENGINEER_SECTIONS: NavSection[] = [
       { key: 'inventory', href: '/inventory', icon: Boxes },
     ],
   },
+  {
+    titleKey: 'knowledge',
+    items: [
+      { key: 'kb', href: '/kb', icon: BookOpen },
+    ],
+  },
+  {
+    // RX-4b: 알림 로그/인박스(/notifications)는 전 역할 공용 페이지(관리자 전용 채널상태는 페이지 내부에서 자체 게이팅)
+    titleKey: 'admin',
+    items: [
+      { key: 'notifications', href: '/notifications', icon: Bell },
+    ],
+  },
 ];
 
 const TEAM_LEAD_SECTIONS: NavSection[] = [
-  ...ENGINEER_SECTIONS,
-  { titleKey: 'reports', items: [{ key: 'reports', href: '/reports', icon: BarChart2 }] },
+  {
+    items: [
+      { key: 'dashboard', href: '/home', icon: Home },
+    ],
+  },
+  {
+    titleKey: 'work',
+    items: [
+      { key: 'tickets',  href: '/tickets',   icon: LifeBuoy },
+      { key: 'queue',    href: '/queue',      icon: Inbox    },
+      { key: 'workLogs', href: '/work-logs',  icon: Clock    },
+    ],
+  },
+  {
+    titleKey: 'serviceMgmt',
+    items: [
+      { key: 'changeRequests',  href: '/change-requests',  icon: GitPullRequest },
+      { key: 'problems',        href: '/problems',         icon: Bug            },
+      { key: 'sla',             href: '/sla',              icon: Gauge          },
+      { key: 'recurringIssues', href: '/recurring-alerts', icon: RefreshCw      },
+      // RX-4b: 신규 라우트 배선 — 자동화 룰 관리(admin/team_lead, backend require_roles와 일치)
+      { key: 'automation',      href: '/automation',       icon: Workflow       },
+      { key: 'serviceCatalog',  href: '/service-catalog',  icon: LayoutGrid     },
+    ],
+  },
+  {
+    titleKey: 'customers',
+    items: [
+      { key: 'customers', href: '/customers', icon: Users    },
+      { key: 'contracts', href: '/contracts', icon: FileText },
+    ],
+  },
+  {
+    titleKey: 'infra',
+    items: [
+      { key: 'inventory', href: '/inventory', icon: Boxes },
+    ],
+  },
+  {
+    titleKey: 'knowledge',
+    items: [
+      { key: 'kb', href: '/kb', icon: BookOpen },
+    ],
+  },
+  {
+    titleKey: 'admin',
+    items: [
+      { key: 'reports',       href: '/reports',       icon: BarChart2 },
+      { key: 'notifications', href: '/notifications', icon: Bell      },
+    ],
+  },
 ];
 
-const ADMIN_SECTIONS: NavSection[] = [
-  ...TEAM_LEAD_SECTIONS,
-  { titleKey: 'settings', items: [{ key: 'settings', href: '/settings', icon: Settings }] },
-];
+const ADMIN_SECTIONS: NavSection[] = TEAM_LEAD_SECTIONS.map((section) =>
+  section.titleKey === 'admin'
+    ? {
+        ...section,
+        items: [
+          { key: 'reports', href: '/reports', icon: BarChart2 },
+          // settings 라우트는 admin 전용(page.tsx isAdminRole 게이트) — 딥링크로 대표 탭 직접 진입
+          { key: 'settings', href: '/settings?tab=general', icon: Settings },
+          { key: 'users',    href: '/settings?tab=users',   icon: UserCog  },
+          { key: 'notifications', href: '/notifications', icon: Bell },
+        ],
+      }
+    : section,
+);
 
 const SALES_SECTIONS: NavSection[] = [
   { items: [{ key: 'dashboard', href: '/home', icon: Home }] },
   { titleKey: 'customers', items: [{ key: 'customers', href: '/customers', icon: Users }] },
-  { titleKey: 'reports', items: [{ key: 'reports', href: '/reports', icon: BarChart2 }] },
+  { titleKey: 'admin', items: [{ key: 'reports', href: '/reports', icon: BarChart2 }] },
 ];
 
 const C_LEVEL_SECTIONS: NavSection[] = [
   { items: [{ key: 'dashboard', href: '/home', icon: Home }] },
-  { titleKey: 'reports', items: [{ key: 'reports', href: '/reports', icon: BarChart2 }] },
+  { titleKey: 'admin', items: [{ key: 'reports', href: '/reports', icon: BarChart2 }] },
 ];
 
 function getNavSections(role: UserRole | undefined): NavSection[] {
@@ -121,9 +201,17 @@ function getNavSections(role: UserRole | undefined): NavSection[] {
   return ENGINEER_SECTIONS;
 }
 
+// RX-4b: 설정 딥링크(예: /settings?tab=users)는 pathname에 쿼리스트링이 포함되지 않으므로
+// 섹션 자동펼침 판정 시 경로(base path)만으로 비교 — 쿼리는 아래 renderer의 정확 하이라이트에서만 사용
+function pathMatchesHref(pathname: string | null, fullHref: string): boolean {
+  if (!pathname) return false;
+  return pathname.startsWith(fullHref.split('?')[0]);
+}
+
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const slug = useSlug();
   const { user, logout } = useAuth();
   const { t } = useLocale();
@@ -164,7 +252,7 @@ export function Sidebar() {
   const activeSectionKey = useMemo<SectionKey | null>(() => {
     for (const section of navSections) {
       if (!section.titleKey) continue;
-      if (section.items.some((it) => pathname?.startsWith(slug(it.href)))) return section.titleKey;
+      if (section.items.some((it) => pathMatchesHref(pathname, slug(it.href)))) return section.titleKey;
     }
     return null;
   }, [navSections, pathname, slug]);
@@ -263,7 +351,12 @@ export function Sidebar() {
             {sectionOpen && section.items.map(({ key, href, icon: Icon }) => {
               const label = t.nav[key];
               const fullHref = slug(href);
-              const isActive = pathname?.startsWith(fullHref);
+              // RX-4b: 쿼리스트링 딥링크(/settings?tab=users 등)는 정확 일치로,
+              // 그 외 일반 경로는 기존 prefix 매칭 그대로 유지
+              const [hrefPath, hrefQuery] = fullHref.split('?');
+              const isActive = hrefQuery
+                ? pathname === hrefPath && (searchParams?.toString() ?? '') === hrefQuery
+                : pathname?.startsWith(fullHref);
 
               return (
                 <Link

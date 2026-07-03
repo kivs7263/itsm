@@ -5,8 +5,6 @@
 from app.models.base import Base, SoftDeleteMixin, TenantMixin, TimestampMixin  # noqa: F401
 from app.models.tenant import Tenant  # noqa: F401
 from app.models.user import User, UserRole  # noqa: F401
-from app.models.sso_config import SSOConfig  # noqa: F401
-from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.team import Team, TeamMember  # noqa: F401
 from app.models.customer import Customer, CustomerNote  # noqa: F401
 from app.models.customer_contact import CustomerContact  # noqa: F401
@@ -99,10 +97,6 @@ __all__ = [
     # user
     "User",
     "UserRole",
-    # sso
-    "SSOConfig",
-    # audit
-    "AuditLog",
     # team
     "Team",
     "TeamMember",

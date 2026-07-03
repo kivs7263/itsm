@@ -127,29 +127,30 @@ RX-4 (데드코드 정리 + IA 재구조화)           마지막 · 회귀주의
 
 ---
 
-### RX-3: 유령 기능 배선 or 제거 (P3) [ PENDING ]
-> 백엔드 완성·프론트 부재 3종. 각각 "UI 붙여 살릴지 / 제거할지" 결정 필요.
+### RX-3: 유령 기능 배선 (P3) [ DONE 2026-07-03 ]
+> 사용자 결정 = **배선(살림)**. 백엔드 완성·프론트 부재 3종에 관리 UI 신설. 배포 완료(빌드).
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `RX-3a` | 자동화 룰 엔진 — 설정 페이지에 룰 CRUD·조건 빌더·실행이력 UI 추가 or 제거 결정(`automation/router.py`, DB 0행) | M | `[ PENDING ]` |
-| `RX-3b` | 서비스카탈로그 관리자 UI — offering/category CRUD + approval_policy(다단결재) 편집기(`service_catalog.py`, 프론트 디렉토리 부재) | M | `[ PENDING ]` |
-| `RX-3c` | CMDB SNMP 디스커버리 트리거 UI — `cmdb/page.tsx`에 스캔 시작 버튼·run 이력 테이블 or 제거(`cmdb.py:886~`) | M | `[ PENDING ]` |
+| `RX-3a` | 자동화 룰 UI — `/automation` 신설(룰 CRUD·조건 빌더(트리거4·연산자7)·액션8종 폼·실행이력). admin/team_lead | M | `[ DONE 2026-07-03 ]` |
+| `RX-3b` | 서비스카탈로그 관리자 UI — `/service-catalog` 신설(offering/category CRUD + approval_policy 다단결재 편집기 + form_schema 빌더). is_system 403 회피 | M | `[ DONE 2026-07-03 ]` |
+| `RX-3c` | SNMP 디스커버리 UI — `/inventory` 디스커버리 탭(스캔폼·run이력·3s폴링·발견CI 자동갱신). admin/team_lead | M | `[ DONE 2026-07-03 ]` |
 
-**성공 기준**: 각 기능이 관리자 UI에서 생성·조회 가능(살림) 또는 코드·라우트 정리(제거).
+**성공 기준**: 각 관리 UI에서 생성·조회 가능. ✅ 라우트 빌드·health 200. (reviewer 검증 진행 중)
 
 ---
 
-### RX-4: 데드코드 정리 + IA 재구조화 (P4) [ PENDING ]
-> 회귀 주의 — 삭제 전 grep 전수 + 도달성 매트릭스.
+### RX-4: 데드코드 정리 + IA 재구조화 (P4) [ DONE 2026-07-03 ]
+> 사용자 결정 = 데드코드 + IA 함께. 배포 완료(백엔드 데드코드 반영·health 200, 프론트 빌드).
 
 | ID | 작업 | 크기 | 상태 |
 |---|---|---|---|
-| `RX-4a` | 데드코드 제거 — `AuditLog`·`SSOConfig` 모델, `calendar_events.py`, `external_notifications.py`, `bridge_worker`, `tickets.py` subtickets/root_causes. 각 삭제 전 grep 0건 재확인 | M | `[ PENDING ]` |
-| `RX-4b` | IA 재구조화 — 사이드바 16항목 → 8 도메인 허브(작업/서비스관리/고객/인프라/지식/관리). queue·recurring-alerts를 상위 도메인 탭으로 강등, contracts를 고객 하위로 일원화. 딥링크 리다이렉트 + 배지 소스 이관 | L | `[ PENDING ]` |
-| `RX-4c` | known_issues↔problems UX 진입점 정리(코드 통합 아님) + recurring_alerts를 Problems 필터탭으로 | M | `[ PENDING ]` |
+| `RX-4a` | 데드코드 제거 — `AuditLog`·`SSOConfig` 모델, `calendar_events`·`external_notifications` 라우터, `calendar_push_service`, tickets subtickets/root_causes. grep 0 재확인. **bridge_worker는 compose 등록 확인돼 유지**, calendar_event 모델은 파괴적 DROP 회피 위해 유지, external_notif_service는 5곳 사용으로 유지 | M | `[ DONE 2026-07-03 ]` |
+| `RX-4b` | IA 재구조화 — 사이드바 8 도메인 허브(홈/작업/서비스관리/고객/인프라/지식/관리). `/automation`·`/service-catalog`·`/notifications`(고아였음) 배선. 5역할 게이팅 100% 보존, 고아 라우트 0. **queue/recurring/contracts는 탭병합 대신 네비 재그룹핑(페이지 보존)** | L | `[ DONE 2026-07-03 ]` |
+| `RX-4c` | known_issues↔problems UX 진입점 정리 + recurring를 Problems 필터탭으로 — 페이지 레벨 탭병합이라 **후속 웨이브로 이연**(고아 방지) | M | `[ PENDING ]` |
 
-**성공 기준**: 데드코드 제거 후 빌드·테스트 통과 / 최상위 네비 8개 이하 / 고아 라우트 0.
+**성공 기준**: 데드코드 제거 후 build·health 통과 / 최상위 8그룹 / 고아 라우트 0. ✅ (reviewer 검증 진행 중)
+**이연**: queue→tickets탭, recurring→problems탭 등 페이지 레벨 탭병합은 딥링크·배지 이관 설계 필요 → 별도 웨이브.
 
 ---
 

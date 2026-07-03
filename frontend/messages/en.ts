@@ -19,13 +19,18 @@ const en = {
     contracts: 'Contracts',
     problems: 'Problem Management',
     queue: 'Ticket Pool',
+    // RX-4b: newly wired routes (automation, service catalog) + admin hub deep links (users, notifications)
+    automation: 'Automation',
+    serviceCatalog: 'Service Catalog',
+    notifications: 'Notifications',
+    users: 'Users',
     sections: {
-      operations: 'Operations',
+      work: 'Work',
+      serviceMgmt: 'Service Mgmt',
       knowledge: 'Knowledge',
       customers: 'Customers',
       infra: 'Infrastructure',
-      reports: 'Reports',
-      settings: 'Settings',
+      admin: 'Admin',
     },
   },
   auth: {

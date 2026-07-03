@@ -174,10 +174,6 @@ app.include_router(contracts_router.router, prefix="/api")       # /api/{slug}/c
 app.include_router(sla_router.router, prefix="/api")             # /api/{slug}/sla
 app.include_router(cmdb_router.router, prefix="/api")            # /api/{slug}/cmdb
 
-# P2-2 Calendar Events
-from app.routers import calendar_events as calendar_events_router  # noqa: E402
-app.include_router(calendar_events_router.router, prefix="/api")
-
 # P2-3 Search
 from app.routers import search as search_router  # noqa: E402
 app.include_router(search_router.router, prefix="/api")
@@ -251,10 +247,6 @@ app.include_router(settings_email_router.router, prefix="/api")            # /ap
 from app.routers import escalations as escalations_router  # noqa: E402
 app.include_router(escalations_router.esc_router, prefix="/api")   # /api/{slug}/tickets/{id}/escalations
 app.include_router(escalations_router.team_router, prefix="/api")  # /api/{slug}/support-teams
-
-# ESC-3 고객 외부 알림 이력
-from app.routers import external_notifications as ext_notif_router  # noqa: E402
-app.include_router(ext_notif_router.router, prefix="/api")         # /api/{slug}/notifications/external
 
 # ESC-4 고객 포털 매직링크
 from app.routers import portal as portal_router  # noqa: E402

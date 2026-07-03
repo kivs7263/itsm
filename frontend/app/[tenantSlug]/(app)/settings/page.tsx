@@ -45,7 +45,6 @@ import type {
   SlaPolicy,
   SymptomCategoryItem,
   SupportTeam,
-  ExtNotifLog,
   SubscriptionInfo,
   StripeInvoice,
 } from '@/lib/types';
@@ -80,7 +79,7 @@ const TIER_COLORS: Record<string, string> = {
 // -----------------------------------------------------------------------
 // 탭 정의
 // -----------------------------------------------------------------------
-type TabId = 'users' | 'notifications' | 'sla' | 'categories' | 'support-teams' | 'ext-notif-history' | 'email-inbound' | 'api-keys' | 'webhooks' | 'billing' | 'general';
+type TabId = 'users' | 'notifications' | 'sla' | 'categories' | 'support-teams' | 'email-inbound' | 'api-keys' | 'webhooks' | 'billing' | 'general';
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'users',             label: '사용자 관리',    icon: Users          },
@@ -89,7 +88,6 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'sla',               label: 'SLA 정책',       icon: Clock          },
   { id: 'categories',        label: '분류 체계',      icon: Tag            },
   { id: 'support-teams',     label: '지원팀 관리',    icon: PhoneForwarded },
-  { id: 'ext-notif-history', label: '외부 알림 이력', icon: History        },
   { id: 'api-keys',          label: 'API 키',         icon: Key            },
   { id: 'webhooks',          label: 'Webhook',        icon: Webhook        },
   { id: 'billing',           label: '구독',           icon: Zap            },
@@ -1195,136 +1193,6 @@ function SupportTeamsTab({ tenantSlug }: { tenantSlug: string }) {
   );
 }
 
-// -----------------------------------------------------------------------
-// 탭 6: 외부 알림 이력
-// -----------------------------------------------------------------------
-const STATUS_COLORS: Record<string, string> = {
-  sent:      'bg-success-bg text-success-text',
-  pending:   'bg-amber-100 text-amber-700',
-  retrying:  'bg-blue-100 text-blue-700',
-  failed:    'bg-error-bg text-error-text',
-};
-
-function ExtNotifHistoryTab({ tenantSlug }: { tenantSlug: string }) {
-  const [page, setPage] = useState(1);
-  const pageSize = 50;
-
-  const { data, isLoading } = useQuery<{ items: ExtNotifLog[]; total: number }>({
-    queryKey: ['ext-notif-history', tenantSlug, page],
-    queryFn: () =>
-      api
-        .get(`/${tenantSlug}/notifications/external`, { params: { page, page_size: pageSize } })
-        .then((r) => r.data),
-    enabled: !!tenantSlug,
-  });
-
-  const logs = data?.items ?? [];
-  const total = data?.total ?? 0;
-  const totalPages = Math.ceil(total / pageSize);
-
-  const formatDate = (val: string | null) => {
-    if (!val) return '-';
-    return new Date(val).toLocaleString('ko-KR', {
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm text-text-secondary">
-        고객에게 발송된 외부 알림(이메일·SMS·카카오 등) 이력을 확인합니다.
-      </p>
-
-      <div className="overflow-auto rounded-lg border border-border-default shadow-sm">
-        <table className="w-full text-sm min-w-[700px]">
-          <thead className="bg-surface border-b border-border-default">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">티켓</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">채널</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">이벤트</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">수신자</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">상태</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">발송일시</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">재시도</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">오류</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <RowSkeletons cols={8} />
-            ) : logs.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-sm text-text-secondary">
-                  알림 이력이 없습니다.
-                </td>
-              </tr>
-            ) : (
-              logs.map((log) => (
-                <tr key={log.id} className="border-b border-border-subtle hover:bg-surface-hover transition-colors">
-                  <td className="px-4 py-3 text-xs text-text-secondary font-mono">
-                    {log.ticket_id ? log.ticket_id.slice(0, 8) : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-text-primary font-medium">{log.channel}</td>
-                  <td className="px-4 py-3 text-xs text-text-secondary">{log.event_type}</td>
-                  <td className="px-4 py-3 text-xs text-text-secondary truncate max-w-[140px]">{log.recipient}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={cn(
-                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                        STATUS_COLORS[log.status] ?? 'bg-surface text-text-secondary',
-                      )}
-                    >
-                      {log.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-text-secondary">{formatDate(log.sent_at)}</td>
-                  <td className="px-4 py-3 text-xs text-text-secondary text-center">{log.retry_count}</td>
-                  <td className="px-4 py-3 text-xs text-error-text max-w-[160px]">
-                    {log.error_msg ? (
-                      <span title={log.error_msg} className="truncate block cursor-help">
-                        {log.error_msg}
-                      </span>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* 페이지네이션 */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-end gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-          >
-            이전
-          </Button>
-          <span className="text-xs text-text-secondary">
-            {page} / {totalPages}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
-          >
-            다음
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // -----------------------------------------------------------------------
 // EmailInboundTab — IMAP 수신 설정 (ONB-3)
@@ -2422,7 +2290,6 @@ export default function SettingsPage() {
         {activeTab === 'sla' && <SlaTab tenantSlug={tenantSlug} />}
         {activeTab === 'categories' && <CategoriesTab tenantSlug={tenantSlug} />}
         {activeTab === 'support-teams' && <SupportTeamsTab tenantSlug={tenantSlug} />}
-        {activeTab === 'ext-notif-history' && <ExtNotifHistoryTab tenantSlug={tenantSlug} />}
         {activeTab === 'api-keys' && <ApiKeysTab tenantSlug={tenantSlug} />}
         {activeTab === 'webhooks' && <WebhooksTab tenantSlug={tenantSlug} />}
         {activeTab === 'billing' && <BillingTab tenantSlug={tenantSlug} />}

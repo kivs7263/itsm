@@ -11,22 +11,24 @@
 
 import React, { Suspense, useCallback, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Boxes, Server, Waypoints } from 'lucide-react';
+import { Boxes, Server, Waypoints, Radar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AssetsListView } from '@/components/inventory/AssetsListView';
 import { CIListView } from '@/components/inventory/CIListView';
 import { RelationshipMapView } from '@/components/inventory/RelationshipMapView';
+import { DiscoveryView } from '@/components/inventory/DiscoveryView';
 
-type TabKey = 'assets' | 'cis' | 'map';
+type TabKey = 'assets' | 'cis' | 'map' | 'discovery';
 
 const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
-  { key: 'assets', label: '자산 목록',       icon: Boxes     },
-  { key: 'cis',    label: '구성항목(CI)',    icon: Server    },
-  { key: 'map',    label: '관계맵',          icon: Waypoints },
+  { key: 'assets',    label: '자산 목록',       icon: Boxes     },
+  { key: 'cis',       label: '구성항목(CI)',    icon: Server    },
+  { key: 'map',       label: '관계맵',          icon: Waypoints },
+  { key: 'discovery', label: '디스커버리',      icon: Radar     },
 ];
 
 function isTabKey(v: string | null): v is TabKey {
-  return v === 'assets' || v === 'cis' || v === 'map';
+  return v === 'assets' || v === 'cis' || v === 'map' || v === 'discovery';
 }
 
 function InventoryPageInner() {
@@ -48,6 +50,7 @@ function InventoryPageInner() {
   const content = useMemo(() => {
     if (activeTab === 'cis') return <CIListView />;
     if (activeTab === 'map') return <RelationshipMapView />;
+    if (activeTab === 'discovery') return <DiscoveryView />;
     return <AssetsListView />;
   }, [activeTab]);
 
