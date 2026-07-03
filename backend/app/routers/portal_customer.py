@@ -1213,9 +1213,24 @@ async def portal_create_catalog_ticket(
     await db.refresh(ticket)
 
     # ── 8. 결재 트리거 (graceful) ─────────────────────────────────
+    # RA-C5: approval_policy v2 — steps 기반 다단/조건부 결재선 지원
+    # v1 {required:bool} 하위호환 유지 (steps 없으면 결재선 미설정 draft)
     approval_policy = offering.approval_policy or {}
     if isinstance(approval_policy, dict) and approval_policy.get("required") and customer.email:
         from app.services import gw_approval_service
+        from app.services.catalog_approval import resolve_approval_steps
+
+        # 정책에서 결재선 해석 (조건부 포함)
+        approver_steps = resolve_approval_steps(
+            policy=approval_policy,
+            form_data=body.form_data if isinstance(body.form_data, dict) else {},
+        )
+        _cat_logger.info(
+            "포털 카탈로그 결재 정책 해석: offering=%s steps=%d approvers=%d",
+            offering.code,
+            len(approval_policy.get("steps") or []),
+            len(approver_steps),
+        )
 
         gw_result = None
         try:
@@ -1229,6 +1244,7 @@ async def portal_create_catalog_ticket(
                     f"우선순위: {priority_val}\n"
                     f"제목: {ticket.title}"
                 ),
+                approver_steps=approver_steps or None,
             )
         except Exception:
             _cat_logger.exception(
@@ -1239,8 +1255,8 @@ async def portal_create_catalog_ticket(
             ticket.gw_approval_doc_id = str(gw_result.get("id", ""))
             ticket.gw_approval_status = "pending"
             _cat_logger.info(
-                "포털 카탈로그 GW 결재 기안 성공: ticket=%s doc_id=%s",
-                ticket.id, ticket.gw_approval_doc_id,
+                "포털 카탈로그 GW 결재 기안 성공: ticket=%s doc_id=%s approver_count=%s",
+                ticket.id, ticket.gw_approval_doc_id, gw_result.get("approver_count", 0),
             )
         else:
             ticket.gw_approval_status = "gw_not_configured"

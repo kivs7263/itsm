@@ -78,6 +78,7 @@ async def submit_approval_draft(
     requester_email: str,
     title: str,
     content_text: str,
+    approver_steps: list[dict] | None = None,
 ) -> dict | None:
     """GW external 엔드포인트로 결재 기안 제출.
 
@@ -85,9 +86,13 @@ async def submit_approval_draft(
         requester_email: 기안자 이메일
         title: 결재 제목
         content_text: 결재 내용
+        approver_steps: 다단 결재선 목록 — [{email, order, line_type?}].
+            None 또는 빈 리스트면 결재선 미설정 draft.
+            GW가 이메일로 내부 사용자 조회 후 ApprovalLine 삽입 (status=pending).
+            미발견 이메일은 GW 측에서 graceful 처리.
 
     Returns:
-        GW 응답 dict {id, title, status} 또는 None (미설정/실패 시).
+        GW 응답 dict {id, title, status, approver_count} 또는 None (미설정/실패 시).
     """
     if not settings.GW_BACKEND_URL:
         return None
@@ -99,11 +104,13 @@ async def submit_approval_draft(
         return None
 
     url = f"{settings.GW_BACKEND_URL}/api/approvals/external/draft"
-    payload = {
+    payload: dict = {
         "requester_email": requester_email,
         "title": title,
         "content_text": content_text,
     }
+    if approver_steps:
+        payload["approver_lines"] = approver_steps
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
