@@ -143,10 +143,10 @@
   --sidebar-bg:               #17181C;
   --sidebar-border:           #24262B;
   --sidebar-nav-text:         #9A96A4;
-  /* D1: 정본 트라이어드 — 밝은 pill(#F2F4F6)+다크텍스트(#16181D)+제품 accent inset */
-  --sidebar-active-bg:        #F2F4F6;
+  /* RA-B(다크 리파인드, Vercel/Raycast 계열): 화이트 오버레이 8% + 좌측바 제거 (구 밝은 pill #F2F4F6 폐기) */
+  --sidebar-active-bg:        rgba(255, 255, 255, 0.08);
   --sidebar-active-border:    var(--color-brand);
-  --sidebar-active-text:      #16181D;
+  --sidebar-active-text:      #F5F5F5;
   --sidebar-nav-active-text:  var(--sidebar-active-text); /* 별칭(하위호환) */
   --sidebar-user-name:        #EDEBF0;
   --sidebar-user-meta:        #6E6B79;
@@ -258,10 +258,10 @@
   --sidebar-bg:               #17181C;
   --sidebar-border:           #24262B;
   --sidebar-nav-text:         #9A96A4;
-  /* D1: 정본 트라이어드 — 밝은 pill(#F2F4F6)+다크텍스트(#16181D)+제품 accent inset */
-  --sidebar-active-bg:        #F2F4F6;
+  /* RA-B(다크 리파인드, Vercel/Raycast 계열): 화이트 오버레이 8% + 좌측바 제거 (구 밝은 pill #F2F4F6 폐기) */
+  --sidebar-active-bg:        rgba(255, 255, 255, 0.08);
   --sidebar-active-border:    var(--color-brand);
-  --sidebar-active-text:      #16181D;
+  --sidebar-active-text:      #F5F5F5;
   --sidebar-nav-active-text:  var(--sidebar-active-text); /* 별칭(하위호환) */
   --sidebar-user-name:        #EDEBF0;
   --sidebar-user-meta:        #6E6B79;

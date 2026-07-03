@@ -160,6 +160,26 @@ export function Sidebar() {
 
   const navSections = useMemo(() => getNavSections(user?.role as UserRole), [user?.role]);
 
+  // 아코디언(단일 오픈): 한 번에 한 섹션만 열림. 현재 라우트가 속한 섹션은 이동 시 자동 펼침(위치 상실 방지).
+  const activeSectionKey = useMemo<SectionKey | null>(() => {
+    for (const section of navSections) {
+      if (!section.titleKey) continue;
+      if (section.items.some((it) => pathname?.startsWith(slug(it.href)))) return section.titleKey;
+    }
+    return null;
+  }, [navSections, pathname, slug]);
+
+  const [openSection, setOpenSection] = useState<SectionKey | null>(() => activeSectionKey);
+
+  // 라우트가 다른 섹션으로 바뀌면 그 섹션을 열고 나머지는 닫음 (단일 오픈 유지)
+  useEffect(() => {
+    if (activeSectionKey) setOpenSection(activeSectionKey);
+  }, [activeSectionKey]);
+
+  const toggleSection = useCallback((key: SectionKey) => {
+    setOpenSection((prev) => (prev === key ? null : key));
+  }, []);
+
   // SHELL-7: useCallback으로 변경 ([ 키 단축키 의존성용)
   const toggleCollapsed = useCallback(() => {
     setCollapsed((prev) => {
@@ -208,18 +228,39 @@ export function Sidebar() {
       <WorkspaceSwitcher collapsed={!effectivelyExpanded} />
 
       {/* RA-U3: 섹션 그룹핑 (SSO Sidebar 패턴 참고 — 무제목 섹션 + titled 섹션들) */}
-      <nav className="flex-1 overflow-y-auto py-2 px-1.5 space-y-3" aria-label={t.nav.dashboard}>
-        {navSections.map((section, si) => (
-          <div key={section.titleKey ?? `section-${si}`}>
-            {section.titleKey && effectivelyExpanded && (
-              <p
-                className="px-2.5 mb-1 text-[10px] font-semibold uppercase tracking-wider truncate"
-                style={{ color: 'var(--sidebar-section-text, rgba(255,255,255,0.28))' }}
+      <nav className="flex-1 overflow-y-auto py-2 px-1.5 space-y-5" aria-label={t.nav.dashboard}>
+        {navSections.map((section, si) => {
+          const sectionKey = section.titleKey;
+          // 아이콘 레일(사이드바 축소) 상태에선 전 항목을 아이콘으로 노출(도달성 보장).
+          // 펼침 상태에선 단일 오픈 섹션만 항목 표시.
+          const sectionOpen =
+            !sectionKey ||
+            !effectivelyExpanded ||
+            openSection === sectionKey;
+
+          return (
+          <div key={sectionKey ?? `section-${si}`}>
+            {sectionKey && effectivelyExpanded && (
+              <button
+                type="button"
+                onClick={() => toggleSection(sectionKey)}
+                className="w-full flex items-center gap-1.5 px-2.5 py-1.5 mb-2 rounded-md focus-visible:outline-none hover:bg-white/[0.04] transition-colors"
+                aria-expanded={sectionOpen}
               >
-                {t.nav.sections[section.titleKey]}
-              </p>
+                <ChevronRight
+                  size={12}
+                  className={cn('shrink-0 transition-transform duration-150', sectionOpen && 'rotate-90')}
+                  style={{ color: 'var(--sidebar-section-text, rgba(255,255,255,0.5))' }}
+                />
+                <span
+                  className="text-[12px] font-semibold truncate"
+                  style={{ color: 'var(--sidebar-section-text, rgba(255,255,255,0.4))' }}
+                >
+                  {t.nav.sections[sectionKey]}
+                </span>
+              </button>
             )}
-            {section.items.map(({ key, href, icon: Icon }) => {
+            {sectionOpen && section.items.map(({ key, href, icon: Icon }) => {
               const label = t.nav[key];
               const fullHref = slug(href);
               const isActive = pathname?.startsWith(fullHref);
@@ -232,29 +273,28 @@ export function Sidebar() {
                     'flex items-center gap-3 rounded-md px-2.5 py-2',
                     'transition-colors duration-[150ms]',
                     'focus-visible:outline-none focus-visible:shadow-brand',
-                    // D1: 밝은 pill 정본 — isActive 시 box-shadow inset 2px teal
+                    // RA-B(다크 리파인드): 화이트 오버레이 8% 단일 장치 — 좌측바 제거, pill 하나로 절제
                     isActive
-                      ? 'font-medium'
+                      ? 'font-semibold'
                       : 'hover:bg-white/[0.06]',
                   )}
                   style={
                     isActive
                       ? {
                           background: 'var(--sidebar-active-bg)',
-                          boxShadow: 'inset 2px 0 0 var(--sidebar-active-border)',
-                          color: 'var(--sidebar-active-text, #16181D)',
-                          fontSize: '13.5px',
+                          color: 'var(--sidebar-active-text, #F5F5F5)',
+                          fontSize: '14px',
                         }
                       : {
                           color: 'var(--sidebar-nav-text, rgba(255,255,255,0.6))',
-                          fontSize: '13.5px',
+                          fontSize: '14px',
                         }
                   }
                   title={!effectivelyExpanded ? label : undefined}
                 >
-                  {/* SHELL-7 항목 ③: 아이콘 17px */}
+                  {/* SHELL-7 항목 ③: 아이콘 16px */}
                   <Icon
-                    size={17}
+                    size={16}
                     className={cn('shrink-0', isActive ? '' : 'text-white/40')}
                     style={isActive ? { color: 'var(--color-brand)' } : undefined}
                   />
@@ -273,7 +313,8 @@ export function Sidebar() {
               );
             })}
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* 하단: 사용자 카드 1행 (SHELL-7 항목 ④) — D2: 언어 토글은 헤더 UserMenu로 통합 */}
@@ -352,7 +393,7 @@ export function Sidebar() {
         className={cn(
           'flex h-6 w-6 items-center justify-center rounded-full',
           'absolute -right-3 top-7',
-          'border border-white/10 bg-[#2A2A2A]',
+          'border border-white/10 bg-[#1F2025]',
           'text-white/40 hover:text-white transition-colors duration-fast',
           'focus-visible:outline-none focus-visible:shadow-brand',
           'z-10',
