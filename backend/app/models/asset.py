@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import enum
 
-from sqlalchemy import Column, Date, Enum, ForeignKey, Index, String
+from sqlalchemy import CheckConstraint, Column, Date, Enum, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.models.base import Base, gen_uuid, utcnow
@@ -23,6 +23,10 @@ class Asset(Base):
     __table_args__ = (
         Index("ix_assets_tenant_customer", "tenant_id", "customer_id"),
         Index("ix_assets_tenant_tag", "tenant_id", "asset_tag"),
+        CheckConstraint(
+            "status IN ('active', 'retired', 'disposed')",
+            name="ck_assets_status",
+        ),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=gen_uuid)
@@ -40,6 +44,7 @@ class Asset(Base):
     model = Column(String(200), nullable=False)
     serial = Column(String(200), nullable=True)
     asset_type = Column(_asset_type_enum, nullable=False)
+    status = Column(String(20), nullable=False, default="active", server_default="active")
     location = Column(JSONB, nullable=False, default=dict, server_default="{}")
     installed_at = Column(Date, nullable=True)
     warranty_end = Column(Date, nullable=True)

@@ -17,7 +17,6 @@ import {
   Settings,
   Clock,
   Boxes,
-  Network,
   GitPullRequest,
   Gauge,
   FileText,
@@ -41,7 +40,8 @@ function getInitialCollapsed(): boolean {
   return stored === null ? false : stored === 'true';
 }
 
-type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'recurringIssues' | 'reports' | 'settings' | 'assets' | 'cmdb' | 'changeRequests' | 'sla' | 'contracts' | 'problems' | 'queue';
+// RX-1c: assets·cmdb 2개 항목 → 단일 'inventory'(인프라)로 통합
+type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'recurringIssues' | 'reports' | 'settings' | 'inventory' | 'changeRequests' | 'sla' | 'contracts' | 'problems' | 'queue';
 type NavItem = { key: NavKey; href: string; icon: React.ElementType };
 // RA-U3: 섹션 그룹핑 — titleKey 없으면 무제목 섹션(홈), 있으면 t.nav.sections[titleKey] 라벨
 type SectionKey = 'operations' | 'knowledge' | 'customers' | 'infra' | 'reports' | 'settings';
@@ -83,11 +83,11 @@ const ENGINEER_SECTIONS: NavSection[] = [
     ],
   },
   {
-    // CA-5: 운영 관리 메뉴 — page.tsx 실재 확인된 라우트만 등록
+    // CA-5 → RX-1c: 운영 관리 메뉴 — assets/cmdb를 단일 "인프라" 진입점(/inventory)으로 통합
+    // (탭: 자산 목록 / 구성항목(CI) / 관계맵). 기존 /assets, /cmdb 경로는 리다이렉트로 보존.
     titleKey: 'infra',
     items: [
-      { key: 'assets', href: '/assets', icon: Boxes   },
-      { key: 'cmdb',   href: '/cmdb',   icon: Network },
+      { key: 'inventory', href: '/inventory', icon: Boxes },
     ],
   },
 ];

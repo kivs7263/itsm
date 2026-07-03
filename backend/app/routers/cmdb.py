@@ -45,6 +45,7 @@ from app.models import (
     CIType,
     CmdbImportRun,
     ConfigurationItem,
+    Customer,
     User,
     UserRole,
 )
@@ -323,6 +324,15 @@ async def create_ci(
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db),
 ) -> CIOut:
+    if data.customer_id:
+        cust = await db.scalar(
+            select(Customer).where(
+                Customer.id == data.customer_id,
+                Customer.tenant_id == current_user.tenant_id,
+            )
+        )
+        if cust is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="고객을 찾을 수 없습니다.")
     ci = ConfigurationItem(
         id=uuid.uuid4(),
         tenant_id=current_user.tenant_id,
@@ -864,6 +874,10 @@ class DiscoveryStartRequest(BaseModel):
     community: str = Field(default="public", max_length=100)
     port: int = Field(default=161, ge=1, le=65535)
     timeout: float = Field(default=3.0, ge=0.5, le=30.0)
+    customer_id: uuid.UUID | None = Field(
+        default=None,
+        description="발견된 CI를 귀속시킬 고객 ID (선택). 미지정 시 None 유지.",
+    )
 
 
 class DiscoveryRunOut(BaseModel):
@@ -891,7 +905,7 @@ class DiscoveryRunOut(BaseModel):
 async def start_cmdb_discovery(
     tenant_slug: str,
     body: DiscoveryStartRequest,
-    current_user: Annotated[User, Depends(get_current_user)] = None,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> DiscoveryRunOut:
     """SNMP 디스커버리를 background로 실행하고 run 레코드를 즉시 반환(202).
@@ -900,8 +914,18 @@ async def start_cmdb_discovery(
     CIDR 범위: 비동기 gather (최대 /24 = 254호스트).
 
     실제 SNMP 대상이 없으면 run status=failed + errors 기록 (graceful).
+    RBAC: admin/team_lead만 (SNMP 스캔 오남용 방지). Depends로 강제.
     """
-    require_roles([UserRole.admin, UserRole.team_lead])(current_user)
+    # 다른 테넌트 customer_id로 CI가 매달리는 것 방지
+    if body.customer_id:
+        cust = await db.scalar(
+            select(Customer).where(
+                Customer.id == body.customer_id,
+                Customer.tenant_id == current_user.tenant_id,
+            )
+        )
+        if cust is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="고객을 찾을 수 없습니다.")
 
     # Discovery Run 레코드 생성 (pending)
     run = DiscoveryRun(
@@ -925,6 +949,7 @@ async def start_cmdb_discovery(
             community=body.community,
             port=body.port,
             timeout=body.timeout,
+            customer_id=body.customer_id,
         )
     )
 
@@ -939,6 +964,7 @@ async def _run_discovery_background(
     community: str,
     port: int,
     timeout: float,
+    customer_id: uuid.UUID | None = None,
 ) -> None:
     """Discovery run 백그라운드 실행 — 별도 DB 세션 사용."""
     import asyncio
@@ -1005,6 +1031,7 @@ async def _run_discovery_background(
                             environment=CIEnvironment.production,
                             status=CIStatus.active,
                             criticality=CICriticality.medium,
+                            customer_id=customer_id,
                             attributes={"snmp_sysDescr": result.sys_descr or "", "discovery_source": "snmp"},
                         )
                         bg_db.add(ci)

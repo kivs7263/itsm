@@ -193,19 +193,35 @@ async def _build_summary_data(
         )
     ) or 0
 
-    # SLA 준수율 — SLAEvent.breached 건수 / 전체 티켓 기준
-    breach_count = await db.scalar(
-        select(func.count())
+    # SLA 준수율
+    # 분자: 기간 내 SLA 위반(breached)이 발생한 고유 티켓 수 (distinct ticket_id).
+    #   이벤트 건수(COUNT(*)) 사용 시 response+resolution 2건 위반이 분자를 2 증가시켜 음수 가능.
+    #   sla_worker.py는 response breach(itsm:sla:breach:{id})와
+    #   resolution breach(itsm:sla:res_breach:{id})를 각각 INSERT하므로
+    #   티켓 1개 = breached 이벤트 최대 2건 → 반드시 distinct ticket_id 기준으로 집계.
+    # 분모: 기간 내 전체 티켓 수.
+    #   SLA 정책 미적용 티켓(계약 없는 등)이 포함되어 준수율이 과대계상될 수 있음.
+    #   (sla_worker.py:235 WHERE t.status NOT IN ('resolved','closed') 내 contract_id IS NOT NULL
+    #    조건 참조 — 분모를 "SLA 정책 적용 티켓"으로 정제하는 것은 향후 개선 과제)
+    breach_ticket_conditions = [
+        SLAEvent.tenant_id == tenant_id,
+        SLAEvent.event_type == SLAEventType.breached,
+    ]
+    if period_start:
+        breach_ticket_conditions.append(func.date(Ticket.created_at) >= period_start)
+    if period_end:
+        breach_ticket_conditions.append(func.date(Ticket.created_at) <= period_end)
+
+    breach_ticket_count = await db.scalar(
+        select(func.count(SLAEvent.ticket_id.distinct()))
         .select_from(SLAEvent)
-        .where(
-            and_(
-                SLAEvent.tenant_id == tenant_id,
-                SLAEvent.event_type == SLAEventType.breached,
-            )
-        )
+        .join(Ticket, SLAEvent.ticket_id == Ticket.id)
+        .where(and_(*breach_ticket_conditions))
     ) or 0
 
-    sla_compliance_rate = round(1.0 - (breach_count / total), 4) if total > 0 else 1.0
+    sla_compliance_rate = (
+        round(max(0.0, 1.0 - breach_ticket_count / total), 4) if total > 0 else 1.0
+    )
 
     # ------------------------------------------------------------------
     # MTTR (Mean Time To Resolve) — 분 단위, resolved/closed 티켓만
@@ -414,6 +430,28 @@ async def _build_summary_data(
     recurring_rate = round(recurring_count / total * 100, 1) if total > 0 else 0.0
 
     # ------------------------------------------------------------------
+    # RX-0e: 재오픈 비율 (reopen_rate) + 평균 재오픈 횟수
+    # Ticket.reopen_count (models/ticket.py:110) — 티켓 재오픈 시 routers/tickets.py:687에서 +1
+    # ------------------------------------------------------------------
+    reopen_ticket_count = await db.scalar(
+        select(func.count())
+        .select_from(Ticket)
+        .where(
+            and_(
+                *base_where,
+                Ticket.reopen_count > 0,
+            )
+        )
+    ) or 0
+    reopen_rate = round(reopen_ticket_count / total * 100, 1) if total > 0 else 0.0
+
+    avg_reopen_val = await db.scalar(
+        select(func.avg(Ticket.reopen_count))
+        .where(and_(*base_where))
+    )
+    avg_reopen_count = round(float(avg_reopen_val), 2) if avg_reopen_val is not None else 0.0
+
+    # ------------------------------------------------------------------
     # KPI-1: MTTA (Mean Time To Acknowledge) — 분 단위
     # ------------------------------------------------------------------
     mtta_result = await db.scalar(
@@ -435,7 +473,7 @@ async def _build_summary_data(
         "monthly_tickets": monthly_tickets,
         "by_status": by_status,
         "sla_compliance_rate": sla_compliance_rate,
-        "sla_breach_count": breach_count,
+        "sla_breach_count": breach_ticket_count,
         "monthly_resolved": monthly_resolved,
         "mttr_minutes": mttr_minutes,
         "mtta_minutes": mtta_minutes,
@@ -450,6 +488,10 @@ async def _build_summary_data(
         "channel_breakdown": channel_breakdown,
         "escalation_rate": escalation_rate,
         "recurring_rate": recurring_rate,
+        # RX-0e: 재오픈 지표
+        "reopen_ticket_count": reopen_ticket_count,
+        "reopen_rate": reopen_rate,
+        "avg_reopen_count": avg_reopen_count,
     }
 
 

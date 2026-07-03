@@ -305,7 +305,7 @@ export default function CIDetailPage() {
       await api.delete(`/${tenantSlug}/cmdb/cis/${ciId}`);
       toast.success('CI가 삭제되었습니다.');
       await queryClient.invalidateQueries({ queryKey: ['cmdb-cis', tenantSlug] });
-      router.push(`/${tenantSlug}/cmdb`);
+      router.push(`/${tenantSlug}/inventory?tab=cis`);
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -385,7 +385,7 @@ export default function CIDetailPage() {
       <div className="flex items-center gap-3 px-6 py-4 border-b border-border-default bg-surface shrink-0">
         <button
           type="button"
-          onClick={() => router.push(`/${tenantSlug}/cmdb`)}
+          onClick={() => router.push(`/${tenantSlug}/inventory?tab=cis`)}
           className="flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors"
         >
           <ArrowLeft size={16} />

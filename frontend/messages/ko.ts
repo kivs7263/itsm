@@ -10,6 +10,8 @@ const ko = {
     settings: '설정',
     assets: '자산',
     cmdb: 'CMDB',
+    // RX-1c: assets·cmdb 통합 인프라 진입점(/inventory) 라벨
+    inventory: '인프라',
     changeRequests: '변경 요청',
     sla: 'SLA',
     contracts: '계약',
@@ -123,7 +125,7 @@ const ko = {
 };
 
 export interface Messages {
-  nav: { dashboard: string; tickets: string; workLogs: string; customers: string; kb: string; recurringIssues: string; reports: string; settings: string; assets: string; cmdb: string; changeRequests: string; sla: string; contracts: string; problems: string; queue: string; sections: { operations: string; knowledge: string; customers: string; infra: string; reports: string; settings: string } };
+  nav: { dashboard: string; tickets: string; workLogs: string; customers: string; kb: string; recurringIssues: string; reports: string; settings: string; assets: string; cmdb: string; inventory: string; changeRequests: string; sla: string; contracts: string; problems: string; queue: string; sections: { operations: string; knowledge: string; customers: string; infra: string; reports: string; settings: string } };
   auth: { logout: string; role: Record<string, string> };
   sidebar: { open: string; close: string; language: string };
   ticket: {

@@ -1,0 +1,431 @@
+'use client';
+
+// -----------------------------------------------------------------------
+// AssetsListView — RX-1c: /assets 페이지 본문을 인프라 탭 콘텐츠로 이전
+// (원본: app/[tenantSlug]/(app)/assets/page.tsx)
+// 기능은 전부 보존, 상단 "자산" 타이틀 h1만 제거(탭 라벨과 중복이므로).
+// -----------------------------------------------------------------------
+
+import React, { useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Plus, Search, Package, AlertCircle, RefreshCw } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { toast } from 'sonner';
+import { api, getErrorMessage } from '@/lib/api';
+import type { Asset, AssetsResponse } from '@/lib/types';
+import {
+  ASSET_TYPE_LABELS,
+  ASSET_CATEGORY_OPTIONS_BY_TYPE,
+  assetTypeLabel,
+  assetCategoryLabel,
+  getAssetCategory,
+  type AssetTypeCode,
+} from '@/lib/assetTypes';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+
+// -----------------------------------------------------------------------
+// 날짜 포맷 유틸
+// -----------------------------------------------------------------------
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '-';
+  try {
+    const d = new Date(dateStr);
+    const y = d.getFullYear();
+    const m = (d.getMonth() + 1).toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, '0');
+    return `${y}.${m}.${day}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+// -----------------------------------------------------------------------
+// 스켈레톤 행
+// -----------------------------------------------------------------------
+function SkeletonRows() {
+  return (
+    <>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <tr key={i} className="border-b border-border-subtle">
+          <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
+// -----------------------------------------------------------------------
+// 빈 상태
+// -----------------------------------------------------------------------
+function EmptyState({ onNew }: { onNew: () => void }) {
+  return (
+    <tr>
+      <td colSpan={6}>
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <div
+            className="flex h-14 w-14 items-center justify-center rounded-2xl"
+            style={{ background: 'rgba(18, 155, 142, 0.12)' }}
+          >
+            <Package size={28} strokeWidth={1.5} style={{ color: '#129B8E' }} />
+          </div>
+          <div className="text-center">
+            <p className="text-base font-semibold text-text-primary">자산 없음</p>
+            <p className="mt-1 text-sm text-text-secondary">등록된 자산이 없습니다.</p>
+          </div>
+          <Button size="sm" onClick={onNew} leftIcon={<Plus size={14} />}>
+            새 자산
+          </Button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// -----------------------------------------------------------------------
+// 새 자산 모달 스키마
+// -----------------------------------------------------------------------
+const createAssetSchema = z.object({
+  asset_tag:    z.string().min(1, '자산 태그를 입력하세요'),
+  model:        z.string().min(1, '모델명을 입력하세요'),
+  asset_type:   z.enum(['hw', 'sw'], { required_error: '유형을 선택하세요' }),
+  category:     z.string().min(1, '세부 유형을 선택하세요'),
+  customer_id:  z.string().uuid('고객을 선택하세요').min(1, '고객을 선택하세요'),
+  installed_at: z.string().optional(),
+  warranty_end: z.string().optional(),
+});
+
+type CreateAssetValues = z.infer<typeof createAssetSchema>;
+
+// -----------------------------------------------------------------------
+// 폼 필드 래퍼
+// -----------------------------------------------------------------------
+function FormField({
+  label,
+  error,
+  children,
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-sm font-medium text-text-primary">{label}</label>
+      {children}
+      {error && <p className="text-xs text-error-text">{error}</p>}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
+// 새 자산 모달
+// -----------------------------------------------------------------------
+function CreateAssetModal({
+  open,
+  onClose,
+  tenantSlug,
+}: {
+  open: boolean;
+  onClose: () => void;
+  tenantSlug: string;
+}) {
+  const queryClient = useQueryClient();
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<CreateAssetValues>({
+    resolver: zodResolver(createAssetSchema),
+  });
+
+  const assetTypeValue = watch('asset_type');
+  const categoryValue = watch('category');
+  const customerIdValue = watch('customer_id');
+
+  // asset_type(hw/sw) 변경 시 category 선택 초기화(다른 대분류의 세부값 잔존 방지)
+  const prevAssetTypeRef = React.useRef<CreateAssetValues['asset_type'] | undefined>(undefined);
+  React.useEffect(() => {
+    if (prevAssetTypeRef.current !== undefined && prevAssetTypeRef.current !== assetTypeValue) {
+      setValue('category', '', { shouldValidate: false });
+    }
+    prevAssetTypeRef.current = assetTypeValue;
+  }, [assetTypeValue, setValue]);
+
+  // 고객 목록 조회
+  const { data: customersData } = useQuery<{ items: { id: string; name: string }[] }>({
+    queryKey: ['customers-select', tenantSlug],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/customers`, { params: { page_size: 200 } }).then((r) => r.data),
+    enabled: open && !!tenantSlug,
+  });
+  const customers = customersData?.items ?? [];
+
+  function handleClose() {
+    reset();
+    onClose();
+  }
+
+  async function onSubmit(values: CreateAssetValues) {
+    try {
+      await api.post(`/${tenantSlug}/assets`, {
+        asset_tag:    values.asset_tag,
+        model:        values.model,
+        asset_type:   values.asset_type,
+        // RX-1e: 세부 유형은 백엔드 enum(hw/sw) 밖이므로 검증 없는 location(JSONB)에 저장
+        location:     { category: values.category },
+        customer_id:  values.customer_id,
+        installed_at: values.installed_at || null,
+        warranty_end: values.warranty_end || null,
+      });
+      toast.success('자산이 생성되었습니다.');
+      await queryClient.invalidateQueries({ queryKey: ['assets', tenantSlug] });
+      handleClose();
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>새 자산 추가</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)} className="px-6 pb-0">
+          <div className="flex flex-col gap-4">
+            {/* 고객 선택 */}
+            <FormField label="고객 *" error={errors.customer_id?.message}>
+              <Select
+                value={customerIdValue ?? ''}
+                onValueChange={(v) => setValue('customer_id', v, { shouldValidate: true })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="고객 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customers.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="자산 태그 *" error={errors.asset_tag?.message}>
+                <input
+                  {...register('asset_tag')}
+                  placeholder="AST-001"
+                  className="h-9 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
+                />
+              </FormField>
+              <FormField label="유형 *" error={errors.asset_type?.message}>
+                <Select
+                  value={assetTypeValue ?? ''}
+                  onValueChange={(v) => setValue('asset_type', v as AssetTypeCode, { shouldValidate: true })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.entries(ASSET_TYPE_LABELS) as [AssetTypeCode, string][]).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>{v}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormField>
+            </div>
+            <FormField label="세부 유형 *" error={errors.category?.message}>
+              <Select
+                value={categoryValue ?? ''}
+                onValueChange={(v) => setValue('category', v, { shouldValidate: true })}
+                disabled={!assetTypeValue}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={assetTypeValue ? '선택' : '먼저 유형을 선택하세요'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(assetTypeValue ? ASSET_CATEGORY_OPTIONS_BY_TYPE[assetTypeValue] : []).map((c) => (
+                    <SelectItem key={c} value={c}>{assetCategoryLabel(c)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="모델 *" error={errors.model?.message}>
+              <input
+                {...register('model')}
+                placeholder="모델명"
+                className="h-9 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
+              />
+            </FormField>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="설치일" error={errors.installed_at?.message}>
+                <input
+                  {...register('installed_at')}
+                  type="date"
+                  className="h-9 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
+                />
+              </FormField>
+              <FormField label="보증 만료일" error={errors.warranty_end?.message}>
+                <input
+                  {...register('warranty_end')}
+                  type="date"
+                  className="h-9 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-strong"
+                />
+              </FormField>
+            </div>
+          </div>
+        </form>
+        <DialogFooter>
+          <Button variant="ghost" onClick={handleClose} disabled={isSubmitting}>취소</Button>
+          <Button onClick={handleSubmit(onSubmit)} isLoading={isSubmitting}>생성</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// -----------------------------------------------------------------------
+// 자산 목록 뷰 (인프라 탭 콘텐츠)
+// -----------------------------------------------------------------------
+export function AssetsListView() {
+  const params = useParams();
+  const router = useRouter();
+  const tenantSlug = params?.tenantSlug as string;
+
+  const [search, setSearch] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const { data, isLoading, isError, refetch } = useQuery<AssetsResponse>({
+    queryKey: ['assets', tenantSlug, search],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/assets`, {
+        params: search ? { search } : undefined,
+      }).then((r) => r.data),
+    enabled: !!tenantSlug,
+  });
+
+  const assets: Asset[] = data?.items ?? [];
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* 필터 바 */}
+      <div className="flex items-center justify-between gap-3 px-6 py-3 border-b border-border-subtle bg-surface shrink-0">
+        <div className="relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-disabled pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="자산 검색..."
+            className="h-8 pl-8 pr-3 w-56 rounded-md border border-border-default bg-surface text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
+          />
+        </div>
+        <Button size="sm" onClick={() => setCreateOpen(true)} leftIcon={<Plus size={14} />}>
+          새 자산
+        </Button>
+      </div>
+
+      {/* 테이블 */}
+      <div className="flex-1 overflow-auto min-h-0">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 z-10 bg-surface border-b border-border-default">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">자산 태그</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">모델</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">유형</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">고객</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">설치일</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">보증 만료</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isError ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-16 text-center">
+                  <AlertCircle size={32} className="mx-auto mb-3 text-error" />
+                  <p className="text-sm text-text-secondary mb-3">데이터를 불러오지 못했습니다.</p>
+                  <button
+                    onClick={() => refetch()}
+                    className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+                  >
+                    <RefreshCw size={12} />
+                    다시 시도
+                  </button>
+                </td>
+              </tr>
+            ) : isLoading ? (
+              <SkeletonRows />
+            ) : assets.length === 0 ? (
+              <EmptyState onNew={() => setCreateOpen(true)} />
+            ) : (
+              assets.map((a) => (
+                <tr
+                  key={a.id}
+                  className="border-b border-border-subtle hover:bg-surface-hover transition-colors cursor-pointer"
+                  onClick={() => router.push(`/${tenantSlug}/assets/${a.id}`)}
+                >
+                  <td className="px-4 py-3 font-mono text-xs text-text-primary">
+                    {typeof a.asset_tag === 'string' ? a.asset_tag : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-text-primary">
+                    {typeof a.model === 'string' ? a.model : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-text-secondary text-xs">
+                    {assetTypeLabel(a.asset_type)}
+                    {getAssetCategory(a.location) && (
+                      <span className="ml-1 text-text-disabled">
+                        · {assetCategoryLabel(getAssetCategory(a.location))}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-text-secondary text-sm">
+                    {typeof a.customer_name === 'string' ? a.customer_name : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-text-secondary text-xs">
+                    {formatDate(a.installed_at)}
+                  </td>
+                  <td className="px-4 py-3 text-text-secondary text-xs">
+                    {formatDate(a.warranty_end)}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 생성 모달 */}
+      <CreateAssetModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        tenantSlug={tenantSlug}
+      />
+    </div>
+  );
+}

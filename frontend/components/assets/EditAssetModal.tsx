@@ -10,12 +10,26 @@ import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type { Asset } from '@/lib/types';
 import {
+  ASSET_TYPE_LABELS,
+  ASSET_CATEGORY_OPTIONS_BY_TYPE,
+  assetCategoryLabel,
+  getAssetCategory,
+  type AssetTypeCode,
+} from '@/lib/assetTypes';
+import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 
 // -----------------------------------------------------------------------
@@ -25,7 +39,10 @@ const editAssetSchema = z.object({
   asset_tag:    z.string().optional(),
   model:        z.string().optional(),
   serial:       z.string().optional(),
-  asset_type:   z.string().optional(),
+  // RX-1e: 백엔드 DB enum(hw/sw)만 허용 — 자유 텍스트 입력은 422 오류를 유발했음
+  asset_type:   z.enum(['hw', 'sw']),
+  category:     z.string().optional(),
+  status:       z.enum(['active', 'retired', 'disposed']),
   installed_at: z.string().optional(),
   warranty_end: z.string().optional(),
   license_end:  z.string().optional(),
@@ -76,10 +93,17 @@ export function EditAssetModal({ open, onClose, tenantSlug, asset }: EditAssetMo
     try { return val.substring(0, 10); } catch { return ''; }
   }
 
+  // DB enum(hw/sw)만 허용 — 방어적으로 미확인 값은 'hw'로 폴백
+  function toAssetType(v: string | null | undefined): AssetTypeCode {
+    return v === 'sw' ? 'sw' : 'hw';
+  }
+
   const {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<EditAssetValues>({
     resolver: zodResolver(editAssetSchema),
@@ -87,12 +111,18 @@ export function EditAssetModal({ open, onClose, tenantSlug, asset }: EditAssetMo
       asset_tag:    asset.asset_tag,
       model:        asset.model,
       serial:       asset.serial ?? '',
-      asset_type:   asset.asset_type,
+      asset_type:   toAssetType(asset.asset_type),
+      category:     getAssetCategory(asset.location),
+      status:       (['active', 'retired', 'disposed'].includes(asset.status) ? asset.status : 'active') as 'active' | 'retired' | 'disposed',
       installed_at: toDateInput(asset.installed_at),
       warranty_end: toDateInput(asset.warranty_end),
       license_end:  toDateInput(asset.license_end),
     },
   });
+
+  const assetTypeValue = watch('asset_type');
+  const categoryValue = watch('category');
+  const statusValue = watch('status');
 
   // 모달 열릴 때마다 최신 asset 값으로 폼 초기화
   useEffect(() => {
@@ -101,7 +131,8 @@ export function EditAssetModal({ open, onClose, tenantSlug, asset }: EditAssetMo
         asset_tag:    asset.asset_tag,
         model:        asset.model,
         serial:       asset.serial ?? '',
-        asset_type:   asset.asset_type,
+        asset_type:   toAssetType(asset.asset_type),
+        category:     getAssetCategory(asset.location),
         installed_at: toDateInput(asset.installed_at),
         warranty_end: toDateInput(asset.warranty_end),
         license_end:  toDateInput(asset.license_end),
@@ -120,7 +151,10 @@ export function EditAssetModal({ open, onClose, tenantSlug, asset }: EditAssetMo
         asset_tag:    values.asset_tag    || null,
         model:        values.model        || null,
         serial:       values.serial       || null,
-        asset_type:   values.asset_type   || null,
+        asset_type:   values.asset_type,
+        status:       values.status,
+        // RX-1e: 세부 유형은 검증 없는 location(JSONB)에 저장 (백엔드 asset_type enum은 hw/sw만 허용)
+        location:     { ...(asset.location ?? {}), category: values.category || undefined },
         installed_at: values.installed_at || null,
         warranty_end: values.warranty_end || null,
         license_end:  values.license_end  || null,
@@ -151,13 +185,55 @@ export function EditAssetModal({ open, onClose, tenantSlug, asset }: EditAssetMo
                 />
               </FormField>
               <FormField label="유형" error={errors.asset_type?.message}>
-                <input
-                  {...register('asset_type')}
-                  placeholder="노트북, 서버 등"
-                  className="h-9 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
-                />
+                <Select
+                  value={assetTypeValue}
+                  onValueChange={(v) => {
+                    setValue('asset_type', v as AssetTypeCode, { shouldValidate: true });
+                    // 대분류 변경 시 다른 대분류의 세부값 잔존 방지
+                    setValue('category', '', { shouldValidate: false });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.entries(ASSET_TYPE_LABELS) as [AssetTypeCode, string][]).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>{v}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </FormField>
             </div>
+            <FormField label="세부 유형" error={errors.category?.message}>
+              <Select
+                value={categoryValue ?? ''}
+                onValueChange={(v) => setValue('category', v, { shouldValidate: true })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="선택 (선택사항)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ASSET_CATEGORY_OPTIONS_BY_TYPE[assetTypeValue].map((c) => (
+                    <SelectItem key={c} value={c}>{assetCategoryLabel(c)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="상태" error={errors.status?.message}>
+              <Select
+                value={statusValue}
+                onValueChange={(v) => setValue('status', v as 'active' | 'retired' | 'disposed', { shouldValidate: true })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">사용 중</SelectItem>
+                  <SelectItem value="retired">사용 중지</SelectItem>
+                  <SelectItem value="disposed">폐기</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
             <FormField label="모델" error={errors.model?.message}>
               <input
                 {...register('model')}

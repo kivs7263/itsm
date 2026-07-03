@@ -319,13 +319,16 @@ async def sla_dashboard(
         select(func.count()).select_from(warning_subq.alias())
     ) or 0
 
-    # compliance_rate — breach 기반: 1 - (SLA 위반 이벤트 수 / 전체 티켓 수)
-    # RA-D5: 이전 resolved/total = 해결률(다른 지표). breach 기반으로 통일(reports.py:208 정본).
+    # compliance_rate — distinct breach 티켓 기준: 1 - (SLA 위반 고유 티켓 수 / 전체 티켓 수)
+    # 이벤트 건수(COUNT(*)) 사용 시 response+resolution 2건 위반이 분자를 2 증가시켜 음수 가능.
+    # (sla_worker.py: response breach·resolution breach 각각 별도 INSERT → 티켓 1개 = 최대 2이벤트)
+    # 분모: 전체 티켓 수. SLA 미적용 티켓 포함 시 준수율 과대계상 가능.
+    # (sla_worker.py:235 contract_id IS NOT NULL 참조 — 분모 정제는 향후 개선 과제)
     total_tickets: int = await db.scalar(
         select(func.count()).select_from(Ticket).where(Ticket.tenant_id == tid)
     ) or 0
-    sla_breach_count: int = await db.scalar(
-        select(func.count())
+    sla_breach_ticket_count: int = await db.scalar(
+        select(func.count(SLAEvent.ticket_id.distinct()))
         .select_from(SLAEvent)
         .where(
             and_(
@@ -334,7 +337,10 @@ async def sla_dashboard(
             )
         )
     ) or 0
-    compliance_rate = round((1.0 - sla_breach_count / total_tickets) * 100, 2) if total_tickets > 0 else 100.0
+    compliance_rate = (
+        round(max(0.0, 1.0 - sla_breach_ticket_count / total_tickets) * 100, 2)
+        if total_tickets > 0 else 100.0
+    )
 
     # 평균 해결 시간 (분)
     avg_minutes_row = await db.scalar(
@@ -448,9 +454,9 @@ async def download_sla_report_pdf(
     total_tickets: int = await db.scalar(
         select(func.count()).select_from(Ticket).where(Ticket.tenant_id == tid)
     ) or 0
-    # RA-D5: breach 기반 준수율 — sla_dashboard와 동일 공식 적용
-    pdf_sla_breach_count: int = await db.scalar(
-        select(func.count())
+    # distinct breach 티켓 기준 준수율 — sla_dashboard와 동일 공식 (음수 방지 포함)
+    pdf_sla_breach_ticket_count: int = await db.scalar(
+        select(func.count(SLAEvent.ticket_id.distinct()))
         .select_from(SLAEvent)
         .where(
             and_(
@@ -459,7 +465,10 @@ async def download_sla_report_pdf(
             )
         )
     ) or 0
-    compliance_rate = round((1.0 - pdf_sla_breach_count / total_tickets) * 100, 2) if total_tickets > 0 else 100.0
+    compliance_rate = (
+        round(max(0.0, 1.0 - pdf_sla_breach_ticket_count / total_tickets) * 100, 2)
+        if total_tickets > 0 else 100.0
+    )
 
     avg_minutes_row = await db.scalar(
         select(

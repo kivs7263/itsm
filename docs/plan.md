@@ -1,5 +1,5 @@
 # ITSM 작업 계획서
-# 버전: v2.0 | 갱신: 2026-06-14
+# 버전: v3.0 | 갱신: 2026-07-03 (Phase RX 전면 개편 추가)
 
 > **단일 정본** — 모든 상태 변경은 이 파일에서만 관리
 > 상태: `[ PENDING ]` / `[ IN PROGRESS ]` / `[ DONE YYYY-MM-DD ]`
@@ -51,6 +51,114 @@
 > 상세 내역: [docs/plan_archive/phases_recent.md](plan_archive/phases_recent.md)
 >
 > 주요 산출물: backend(14 routers, 3 workers, 9 migrations) · frontend(35+ files) · docker(13 services, itsm_ prefix) · CrossApp SSO 3방향 · GW 결재 연동 · CSAT · PDF 리포트 · 멀티채널 알림
+
+---
+
+## Phase RX — ITSM 전면 개편 (2026-07-03 · 6에이전트 진단 기반) [ IN PROGRESS ]
+
+> **진단 정본**: [docs/design/2026-07-03_redesign_diagnosis.md](design/2026-07-03_redesign_diagnosis.md)
+> **방법**: product·uiux·architect·reviewer·analytics·backend 6에이전트 병렬 실사(file:line + 외부 리서치).
+> **결정(사용자)**: ① 제품정체성 = 하이브리드(생태계 부속+독립판매) → 외부결합·billing graceful 유지 ② 고객모델 = 전면 재설계(Company/Site/Contact) ③ 착수 = 계획서 우선.
+> **핵심 프레임**: 전면 재작성 아님 = **타깃 개편**. 엔진(백엔드)은 건전, 문제는 (a)프론트 진입점 부재로 죽은 기능 (b)고객 데이터 모델 (c)버그 4건 (d)데드코드 (e)IA.
+
+### 진행 순서
+```
+RX-0 (버그 4건)          즉시 · 독립 · 최우선
+    │
+RX-1 (고객360+인프라CRUD+자산/CMDB 단일UI)   RX-0 이후 · 백엔드 CRUD 이미 존재
+    │
+RX-2 (Customer 모델 전면 재설계)             RX-1 UI 안정화 후 · 대형 마이그레이션 · reviewer 필수
+    │
+RX-3 (유령 기능 배선 or 제거)                RX-1과 병렬 가능
+    │
+RX-4 (데드코드 정리 + IA 재구조화)           마지막 · 회귀주의
+```
+
+---
+
+### RX-0: 즉시 버그 수정 (P0) [ DONE 2026-07-03 ]
+> 잘못된 KPI가 SA 경영 스코어카드로 송출 중 — 최우선. 전부 소스 근거 확인됨. 배포 완료(백엔드 마이그레이션 056, 프론트 빌드).
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `RX-0a` | **Asset.status 컬럼 추가**(`active`/`retired`/`disposed`, CheckConstraint) + 롤업 정상화. Migration 056(down_revision 055). active_assets KPI 복구 | S | `[ DONE 2026-07-03 ]` |
+| `RX-0b` | **SLA 준수율 공식 통일** — `reports.py`·`sla.py`·`kpi_service.py` 3곳을 `1 - COUNT(DISTINCT breached ticket_id)/total` + max(0,..)로. kpi_service "해결률" 오송출 교정 | M | `[ DONE 2026-07-03 ]` |
+| `RX-0c` | **CSAT 응답률 표기 버그** — `reports/page.tsx:1204` `(response_rate*100).toFixed(1)%`. 0.5%→50% 정상화 | S | `[ DONE 2026-07-03 ]` |
+| `RX-0d` | **GW 결재 설정** — `GW_BACKEND_URL`/`KC_TOKEN_URL`/`KC_SERVICE_CLIENT_*`를 `.env.example`에 문서화. 실사용 여부는 배포 결정(미설정 시 graceful) | S | `[ DONE 2026-07-03 ]` |
+| `RX-0e` | Reopen Rate 리포트 추가(백엔드 집계 + 프론트 카드/타입). `SLAEventType.resolved`는 enum 재생성 위험으로 현상유지 판단 | S | `[ DONE 2026-07-03 ]` |
+
+**성공 기준**: active_assets KPI 실값 표시 / SA 스코어카드 SLA 준수율이 실제 위반율 기반 / CSAT 응답률 정상 단위 표시.
+
+---
+
+### RX-1: 고객 360 허브 + 인프라 자원 CRUD + 자산/CMDB 단일 UI (P1) [ DONE 2026-07-03 ]
+> **사용자 핵심 요구.** 백엔드 CRUD는 이미 존재 — 없던 건 고객 화면의 진입점. 배포 완료(프론트 빌드·docker cp).
+> 참고 IA: HubSpot record 360 / Freshservice asset relationships. 진단 §고객360 갭.
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `RX-1a` | 고객 상세 InfraTab 활성화 — 자산·CI 등록(customer_id 프리필 모달)/삭제(confirm)/행 드릴다운. 읽기전용 해소 | M | `[ DONE 2026-07-03 ]` |
+| `RX-1b` | SNMP 발견 CI에 `customer_id` 선택 파라미터(`cmdb.py`) → 고객 화면 노출. POST /cmdb/cis는 이미 customer_id 수용. (별도 nested 엔드포인트 대신 기존 POST에 프리필로 단순화) | M | `[ DONE 2026-07-03 ]` |
+| `RX-1c` | 자산+CMDB **단일 `/inventory` 페이지**(탭: 자산/CI/관계맵). `/assets`·`/cmdb` 리다이렉트, Sidebar 단일 "인프라" 항목, 기존 기능 전량 보존 | L | `[ DONE 2026-07-03 ]` |
+| `RX-1d` | 고객 360 SLA 탭/카드(전사 준수율+고객 에스컬레이션 티켓, 고객별 SLA 집계 API는 후속) + 연락처 헤더 전화/메일 CTA | M | `[ DONE 2026-07-03 ]` |
+| `RX-1e` | 자산 유형 정합 — hw/sw 대분류(enum) + `category` 세부(location JSONB). 생성/상세/EditModal 일치. `lib/assetTypes.ts` 공유 | S | `[ DONE 2026-07-03 ]` |
+| `RX-1V` | reviewer 스폰(보안·권한·테넌트 격리) + health 검증 | M | `[ IN PROGRESS ]` |
+
+**성공 기준**: 고객 상세에서 서버/자산 1대를 등록·삭제 가능 / SNMP 발견 자산이 해당 고객 화면에 표시(customer_id) / 인프라 단일 페이지에서 자산·구성·관계맵 통합 조회. ✅ health 200·tsc 0·build 0.
+**후속 발견**: 백엔드 `/sla/dashboard`에 고객별 필터 부재 → RX-1d는 전사 지표+고객 에스컬레이션으로 최소 충족. 고객별 SLA 집계 API 신설을 백로그로.
+
+---
+
+### RX-2: Customer 데이터 모델 전면 재설계 (P2) [ PENDING ]
+> 가장 큰 가치이자 가장 큰 마이그레이션 리스크. 사용자 결정 = 전면 재설계. **RX-1 UI 안정화 후 착수, reviewer 필수, ADR 선행.**
+> 현 상태: Customer가 회사+사람 겸용, company=String, Site 없음, Ticket→contact 링크 없음.
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `RX-2-ADR` | ADR 작성 — Company/Site/Contact 3분리 스키마 + 마이그레이션 전략. → **[ADR-043](adr/ADR-043-customer-data-model-redesign.md)** 완료. 마이그레이션 057~062 6단계(신테이블→백필→FK→호환뷰→2주 이중쓰기→구컬럼 DROP), 리스크 Top3(고아 division·autogen drift·이중쓰기 누락) | M | `[ DONE 2026-07-03 ]` |
+| `RX-2a` | Migration — `companies`(구 account)·`sites`(신규 지점)·`contacts`(구 customer_contacts 승격) 정규화. 데이터 변환 스크립트(무중단 백필) | L | `[ PENDING ]` |
+| `RX-2b` | Ticket에 `requester_contact_id`·`site_id` FK 추가, Asset/CI/Contract를 site 귀속 옵션화 | M | `[ PENDING ]` |
+| `RX-2c` | Backend — customers 라우터를 companies/sites/contacts로 재편(하위호환 라우트 유지) | L | `[ PENDING ]` |
+| `RX-2d` | Frontend — 고객 목록·상세를 Company→Site→Contact 계층으로 재구성 | L | `[ PENDING ]` |
+| `RX-2V` | reviewer(데이터 마이그레이션·격리·하위호환) + 마이그레이션 리허설(스테이징 백필 검증) | L | `[ PENDING ]` |
+
+**성공 기준**: 다지점 고객사에서 지점별 자산·계약·티켓 필터 / 티켓이 요청자 개인에 연결 / 기존 데이터 무손실 이관.
+**리스크**: 55개 기존 마이그레이션 위 대형 변환. 반드시 스테이징 리허설 + 롤백 스크립트.
+
+---
+
+### RX-3: 유령 기능 배선 or 제거 (P3) [ PENDING ]
+> 백엔드 완성·프론트 부재 3종. 각각 "UI 붙여 살릴지 / 제거할지" 결정 필요.
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `RX-3a` | 자동화 룰 엔진 — 설정 페이지에 룰 CRUD·조건 빌더·실행이력 UI 추가 or 제거 결정(`automation/router.py`, DB 0행) | M | `[ PENDING ]` |
+| `RX-3b` | 서비스카탈로그 관리자 UI — offering/category CRUD + approval_policy(다단결재) 편집기(`service_catalog.py`, 프론트 디렉토리 부재) | M | `[ PENDING ]` |
+| `RX-3c` | CMDB SNMP 디스커버리 트리거 UI — `cmdb/page.tsx`에 스캔 시작 버튼·run 이력 테이블 or 제거(`cmdb.py:886~`) | M | `[ PENDING ]` |
+
+**성공 기준**: 각 기능이 관리자 UI에서 생성·조회 가능(살림) 또는 코드·라우트 정리(제거).
+
+---
+
+### RX-4: 데드코드 정리 + IA 재구조화 (P4) [ PENDING ]
+> 회귀 주의 — 삭제 전 grep 전수 + 도달성 매트릭스.
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `RX-4a` | 데드코드 제거 — `AuditLog`·`SSOConfig` 모델, `calendar_events.py`, `external_notifications.py`, `bridge_worker`, `tickets.py` subtickets/root_causes. 각 삭제 전 grep 0건 재확인 | M | `[ PENDING ]` |
+| `RX-4b` | IA 재구조화 — 사이드바 16항목 → 8 도메인 허브(작업/서비스관리/고객/인프라/지식/관리). queue·recurring-alerts를 상위 도메인 탭으로 강등, contracts를 고객 하위로 일원화. 딥링크 리다이렉트 + 배지 소스 이관 | L | `[ PENDING ]` |
+| `RX-4c` | known_issues↔problems UX 진입점 정리(코드 통합 아님) + recurring_alerts를 Problems 필터탭으로 | M | `[ PENDING ]` |
+
+**성공 기준**: 데드코드 제거 후 빌드·테스트 통과 / 최상위 네비 8개 이하 / 고아 라우트 0.
+
+---
+
+### RX 마이그레이션 위험도 요약
+| 마이그레이션 | 변경 | 위험도 |
+|---|---|---|
+| RX-0a Asset.status 컬럼 | ADD COLUMN nullable + 백필 default | 낮음 |
+| RX-2a companies/sites/contacts 정규화 | 대형 데이터 변환 + FK 재배선 | **높음** (스테이징 리허설 필수) |
+| RX-2b Ticket FK 추가 | ADD COLUMN nullable | 낮음 |
 
 ---
 

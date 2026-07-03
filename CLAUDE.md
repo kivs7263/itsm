@@ -57,7 +57,7 @@ itsm/
 | `nginx/nginx.conf` | `docker compose restart itsm_nginx` |
 
 **예외 — 절대 자동 실행 금지**: `alembic/versions/*.py` migration은 감지만, 실행 없음.
-**중요**: migration 파일은 `docker cp [file] itsm_backend:/app/app/alembic/versions/ && docker exec itsm_backend alembic upgrade head` (이미지 rebuild 아님 — 오버레이 서비스라 compose build 금지. docker-cp로 파일 주입 후 upgrade).
+**중요**: migration 파일은 `docker cp [file] itsm_backend:/app/alembic/versions/ && docker exec itsm_backend alembic upgrade head` (이미지 rebuild 아님 — 오버레이 서비스라 compose build 금지. docker-cp로 파일 주입 후 upgrade). ⚠️ 컨테이너 내 실제 경로는 `/app/alembic/versions/` (코드는 `/app/app/...`이지만 alembic은 `/app/alembic/`). 2026-07-03 배포 시 `/app/app/alembic`로 오인해 실패 → 정정.
 
 ---
 

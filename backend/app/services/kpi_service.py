@@ -5,7 +5,7 @@ SA Workspace 경영 스코어카드가 호출하는 테넌트별 KPI.
 LLM 호출 없음. 마이그레이션 없음(읽기 집계만).
 
 반환 스키마:
-    sla_compliance_rate : float (%)  resolved+closed / total * 100
+    sla_compliance_rate : float (%)  1 - (SLA 위반 고유 티켓 수 / 전체 티켓 수) × 100
     csat_avg            : float | None  제출 기준 평균 점수 (1~5)
     csat_response_rate  : float  제출 / 전체 설문 (0~1)
     open_ticket_count   : int  open/in_progress/pending 티켓 수
@@ -73,22 +73,29 @@ async def get_kpi(db: AsyncSession, tenant_id: uuid.UUID) -> dict:
             select(func.count()).select_from(breached_subq.alias())
         ) or 0
 
-        # compliance_rate: (resolved + closed) / total * 100
+        # SLA 준수율: 1 - (SLA 위반 고유 티켓 수 / 전체 티켓 수) × 100
+        # 이전 공식 resolved+closed / total = 해결률(다른 지표) — 잘못된 대입 수정.
+        # breach 기반 공식으로 reports.py / sla.py 대시보드와 통일.
+        # 이벤트 건수(COUNT(*)) 사용 시 response+resolution 2건 위반 → 음수 가능하므로
+        # distinct ticket_id 기준으로 집계 (sla_worker.py 참조).
+        # 분모: 전체 티켓 수. SLA 미적용 티켓 포함 시 준수율 과대계상 가능.
+        # (sla_worker.py:235 contract_id IS NOT NULL 참조 — 분모 정제는 향후 개선 과제)
         total_tickets: int = await db.scalar(
             select(func.count()).select_from(Ticket).where(Ticket.tenant_id == tenant_id)
         ) or 0
-        resolved_tickets: int = await db.scalar(
-            select(func.count())
-            .select_from(Ticket)
+        sla_breach_ticket_count: int = await db.scalar(
+            select(func.count(SLAEvent.ticket_id.distinct()))
+            .select_from(SLAEvent)
             .where(
                 and_(
-                    Ticket.tenant_id == tenant_id,
-                    Ticket.status.in_(_CLOSED_STATUSES),
+                    SLAEvent.tenant_id == tenant_id,
+                    SLAEvent.event_type == SLAEventType.breached,
                 )
             )
         ) or 0
         sla_compliance_rate = (
-            round(resolved_tickets / total_tickets * 100, 2) if total_tickets > 0 else 0.0
+            round(max(0.0, 1.0 - sla_breach_ticket_count / total_tickets) * 100, 2)
+            if total_tickets > 0 else 100.0
         )
 
         # 평균 해결 시간 (분)

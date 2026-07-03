@@ -29,6 +29,8 @@ import {
   Layers,
   AlertCircle,
   RefreshCw,
+  ShieldCheck,
+  ShieldAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
@@ -53,7 +55,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 // -----------------------------------------------------------------------
 // KPI 스트립
 // -----------------------------------------------------------------------
-function KpiStrip({ rollup }: { rollup: CustomerRollup }) {
+function KpiStrip({ rollup, slaComplianceRate }: { rollup: CustomerRollup; slaComplianceRate?: number | null }) {
   return (
     <div className="flex items-center gap-6 px-6 py-3 bg-surface-raised border-b border-border-subtle text-sm">
       <span className="text-text-secondary">
@@ -68,6 +70,14 @@ function KpiStrip({ rollup }: { rollup: CustomerRollup }) {
       <span className="text-text-secondary">
         계약 <strong className="text-text-primary">{rollup.active_contracts}건</strong>
       </span>
+      {typeof slaComplianceRate === 'number' && (
+        <span className="text-text-secondary">
+          SLA 준수율{' '}
+          <strong className={cn('text-text-primary', slaComplianceRate < 90 && 'text-error-text')}>
+            {slaComplianceRate.toFixed(1)}%
+          </strong>
+        </span>
+      )}
     </div>
   );
 }
@@ -758,8 +768,312 @@ function getCiIcon(ciType: string) {
 
 type InfraFilter = 'all' | 'hw' | 'sw' | 'asset';
 
+const CI_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'server', label: '서버' },
+  { value: 'workstation', label: '워크스테이션' },
+  { value: 'network_device', label: '네트워크' },
+  { value: 'application', label: '애플리케이션' },
+  { value: 'service', label: '서비스' },
+  { value: 'database', label: '데이터베이스' },
+  { value: 'virtual_machine', label: '가상머신' },
+  { value: 'cloud_resource', label: '클라우드' },
+  { value: 'storage', label: '스토리지' },
+  { value: 'firewall', label: '방화벽' },
+  { value: 'router_switch', label: '라우터/스위치' },
+  { value: 'printer', label: '프린터' },
+];
+
+const infraInputCls = 'h-8 w-full rounded-md border border-border-default bg-surface px-2.5 text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong';
+
+// -----------------------------------------------------------------------
+// 자산 등록 모달 (고객 프리필) — POST /{slug}/assets (customer_id 포함)
+// -----------------------------------------------------------------------
+interface InfraAssetFormState {
+  asset_tag: string;
+  model: string;
+  asset_type: 'hw' | 'sw';
+  installed_at: string;
+  warranty_end: string;
+}
+const EMPTY_INFRA_ASSET_FORM: InfraAssetFormState = {
+  asset_tag: '', model: '', asset_type: 'hw', installed_at: '', warranty_end: '',
+};
+
+function CreateAssetForCustomerModal({
+  open, onClose, tenantSlug, customerId,
+}: { open: boolean; onClose: () => void; tenantSlug: string; customerId: string }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState<InfraAssetFormState>(EMPTY_INFRA_ASSET_FORM);
+
+  const createMutation = useMutation({
+    mutationFn: (d: InfraAssetFormState) =>
+      api.post(`/${tenantSlug}/assets`, {
+        asset_tag: d.asset_tag,
+        model: d.model,
+        asset_type: d.asset_type,
+        customer_id: customerId,
+        installed_at: d.installed_at || null,
+        warranty_end: d.warranty_end || null,
+      }),
+    onSuccess: () => {
+      toast.success('자산이 등록되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['customer-assets', tenantSlug, customerId] });
+      queryClient.invalidateQueries({ queryKey: ['customer-rollup', tenantSlug, customerId] });
+      setForm(EMPTY_INFRA_ASSET_FORM);
+      onClose();
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={() => { if (!createMutation.isPending) onClose(); }}
+        aria-hidden="true"
+      />
+      <div className="relative z-10 bg-surface rounded-xl shadow-xl border border-border-default p-6 max-w-md w-full mx-4">
+        <h3 className="text-sm font-semibold text-text-primary mb-4">자산 등록</h3>
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="text-xs text-text-secondary mb-1 block">자산 태그 *</label>
+            <input
+              autoFocus
+              className={infraInputCls}
+              value={form.asset_tag}
+              onChange={(e) => setForm((f) => ({ ...f, asset_tag: e.target.value }))}
+              placeholder="AST-001"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-text-secondary mb-1 block">모델 *</label>
+            <input
+              className={infraInputCls}
+              value={form.model}
+              onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
+              placeholder="모델명"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-text-secondary mb-1 block">유형 *</label>
+            <select
+              className={infraInputCls}
+              value={form.asset_type}
+              onChange={(e) => setForm((f) => ({ ...f, asset_type: e.target.value as 'hw' | 'sw' }))}
+            >
+              <option value="hw">하드웨어</option>
+              <option value="sw">소프트웨어</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-text-secondary mb-1 block">설치일</label>
+              <input
+                type="date"
+                className={infraInputCls}
+                value={form.installed_at}
+                onChange={(e) => setForm((f) => ({ ...f, installed_at: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-secondary mb-1 block">보증 만료일</label>
+              <input
+                type="date"
+                className={infraInputCls}
+                value={form.warranty_end}
+                onChange={(e) => setForm((f) => ({ ...f, warranty_end: e.target.value }))}
+              />
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 justify-end mt-5">
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={createMutation.isPending}>
+            취소
+          </Button>
+          <Button
+            size="sm"
+            disabled={!form.asset_tag.trim() || !form.model.trim()}
+            isLoading={createMutation.isPending}
+            onClick={() => createMutation.mutate(form)}
+          >
+            등록
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
+// CI 등록 모달 (고객 프리필) — POST /{slug}/cmdb/cis (customer_id 포함)
+// -----------------------------------------------------------------------
+interface InfraCIFormState {
+  name: string;
+  ci_type: string;
+  environment: string;
+  status: string;
+  criticality: string;
+  hostname: string;
+  ip_address: string;
+}
+const EMPTY_INFRA_CI_FORM: InfraCIFormState = {
+  name: '', ci_type: 'server', environment: 'production', status: 'active', criticality: 'medium', hostname: '', ip_address: '',
+};
+
+function CreateCIForCustomerModal({
+  open, onClose, tenantSlug, customerId,
+}: { open: boolean; onClose: () => void; tenantSlug: string; customerId: string }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState<InfraCIFormState>(EMPTY_INFRA_CI_FORM);
+
+  const createMutation = useMutation({
+    mutationFn: (d: InfraCIFormState) =>
+      api.post(`/${tenantSlug}/cmdb/cis`, {
+        name: d.name,
+        ci_type: d.ci_type,
+        environment: d.environment,
+        status: d.status,
+        criticality: d.criticality,
+        hostname: d.hostname || null,
+        ip_address: d.ip_address || null,
+        customer_id: customerId,
+        attributes: {},
+      }),
+    onSuccess: () => {
+      toast.success('CI가 등록되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['customer-cis', tenantSlug, customerId] });
+      setForm(EMPTY_INFRA_CI_FORM);
+      onClose();
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={() => { if (!createMutation.isPending) onClose(); }}
+        aria-hidden="true"
+      />
+      <div className="relative z-10 bg-surface rounded-xl shadow-xl border border-border-default p-6 max-w-md w-full mx-4">
+        <h3 className="text-sm font-semibold text-text-primary mb-4">CI 등록</h3>
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="text-xs text-text-secondary mb-1 block">이름 *</label>
+            <input
+              autoFocus
+              className={infraInputCls}
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="CI 이름"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-text-secondary mb-1 block">CI 유형 *</label>
+              <select
+                className={infraInputCls}
+                value={form.ci_type}
+                onChange={(e) => setForm((f) => ({ ...f, ci_type: e.target.value }))}
+              >
+                {CI_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-text-secondary mb-1 block">환경 *</label>
+              <select
+                className={infraInputCls}
+                value={form.environment}
+                onChange={(e) => setForm((f) => ({ ...f, environment: e.target.value }))}
+              >
+                <option value="production">운영</option>
+                <option value="staging">스테이징</option>
+                <option value="development">개발</option>
+                <option value="test">테스트</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-text-secondary mb-1 block">상태 *</label>
+              <select
+                className={infraInputCls}
+                value={form.status}
+                onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+              >
+                <option value="active">운영중</option>
+                <option value="maintenance">점검중</option>
+                <option value="inactive">중단</option>
+                <option value="decommissioned">폐기</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-text-secondary mb-1 block">중요도 *</label>
+              <select
+                className={infraInputCls}
+                value={form.criticality}
+                onChange={(e) => setForm((f) => ({ ...f, criticality: e.target.value }))}
+              >
+                <option value="critical">긴급</option>
+                <option value="high">높음</option>
+                <option value="medium">보통</option>
+                <option value="low">낮음</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-text-secondary mb-1 block">호스트명</label>
+              <input
+                className={infraInputCls}
+                value={form.hostname}
+                onChange={(e) => setForm((f) => ({ ...f, hostname: e.target.value }))}
+                placeholder="hostname (선택)"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-secondary mb-1 block">IP 주소</label>
+              <input
+                className={infraInputCls}
+                value={form.ip_address}
+                onChange={(e) => setForm((f) => ({ ...f, ip_address: e.target.value }))}
+                placeholder="192.168.0.1 (선택)"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 justify-end mt-5">
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={createMutation.isPending}>
+            취소
+          </Button>
+          <Button
+            size="sm"
+            disabled={!form.name.trim()}
+            isLoading={createMutation.isPending}
+            onClick={() => createMutation.mutate(form)}
+          >
+            등록
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InfraTab({ tenantSlug, customerId }: { tenantSlug: string; customerId: string }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const user = getUser();
+  const canWrite = isEngineerOrAbove(user?.role);
+  const canDelete = isTeamLeadOrAbove(user?.role);
+
   const [filter, setFilter] = useState<InfraFilter>('all');
+  const [showAssetModal, setShowAssetModal] = useState(false);
+  const [showCIModal, setShowCIModal] = useState(false);
 
   const { data: ciData, isLoading: ciLoading } = useQuery({
     queryKey: ['customer-cis', tenantSlug, customerId],
@@ -773,6 +1087,25 @@ function InfraTab({ tenantSlug, customerId }: { tenantSlug: string; customerId: 
     queryFn: () =>
       api.get(`/${tenantSlug}/assets`, { params: { customer_id: customerId, page_size: 100 } })
         .then((r) => r.data),
+  });
+
+  const deleteCiMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/${tenantSlug}/cmdb/cis/${id}`),
+    onSuccess: () => {
+      toast.success('CI가 삭제되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['customer-cis', tenantSlug, customerId] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const deleteAssetMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/${tenantSlug}/assets/${id}`),
+    onSuccess: () => {
+      toast.success('자산이 삭제되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['customer-assets', tenantSlug, customerId] });
+      queryClient.invalidateQueries({ queryKey: ['customer-rollup', tenantSlug, customerId] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   const cis: CI[] = ciData?.items ?? [];
@@ -820,6 +1153,16 @@ function InfraTab({ tenantSlug, customerId }: { tenantSlug: string; customerId: 
           <span className="text-xl font-bold text-text-primary">{assets.length}</span>
           <span className="text-xs text-text-secondary mt-0.5">자산 {assets.length}개</span>
         </div>
+        {canWrite && (
+          <div className="ml-auto flex items-center gap-2 self-center">
+            <Button size="sm" variant="outline" leftIcon={<Plus size={13} />} onClick={() => setShowCIModal(true)}>
+              CI 등록
+            </Button>
+            <Button size="sm" leftIcon={<Plus size={13} />} onClick={() => setShowAssetModal(true)}>
+              자산 등록
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* 필터 탭 */}
@@ -843,7 +1186,14 @@ function InfraTab({ tenantSlug, customerId }: { tenantSlug: string; customerId: 
       {/* 아이템 목록 */}
       <div className="flex-1 divide-y divide-border-subtle">
         {showCis && displayCis.map((ci) => (
-          <div key={`ci-${ci.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover">
+          <div
+            key={`ci-${ci.id}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => router.push(`/${tenantSlug}/cmdb/${ci.id}`)}
+            onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/${tenantSlug}/cmdb/${ci.id}`); }}
+            className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover cursor-pointer"
+          >
             {getCiIcon(ci.ci_type)}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
@@ -870,11 +1220,31 @@ function InfraTab({ tenantSlug, customerId }: { tenantSlug: string; customerId: 
                 {STATUS_LABELS[ci.status] ?? ci.status}
               </span>
             )}
+            {canDelete && (
+              <button
+                type="button"
+                title="CI 삭제"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm(`'${ci.name}' CI를 삭제하시겠습니까?`)) deleteCiMutation.mutate(ci.id);
+                }}
+                className="shrink-0 p-1.5 rounded hover:bg-error-bg text-text-disabled hover:text-error-text transition-colors"
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
           </div>
         ))}
 
         {showAssets && assets.map((a) => (
-          <div key={`asset-${a.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover">
+          <div
+            key={`asset-${a.id}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => router.push(`/${tenantSlug}/assets/${a.id}`)}
+            onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/${tenantSlug}/assets/${a.id}`); }}
+            className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover cursor-pointer"
+          >
             <Package size={14} className="shrink-0 text-text-secondary" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
@@ -890,15 +1260,54 @@ function InfraTab({ tenantSlug, customerId }: { tenantSlug: string; customerId: 
                 )}
               </div>
             </div>
+            {canDelete && (
+              <button
+                type="button"
+                title="자산 삭제"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm(`'${a.asset_tag}' 자산을 삭제하시겠습니까?`)) deleteAssetMutation.mutate(a.id);
+                }}
+                className="shrink-0 p-1.5 rounded hover:bg-error-bg text-text-disabled hover:text-error-text transition-colors"
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
           </div>
         ))}
 
         {(filter === 'all' ? (cis.length + assets.length) : filter === 'hw' ? hwCis.length : filter === 'sw' ? swCis.length : assets.length) === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-text-secondary text-sm">
-            등록된 항목이 없습니다.
+          <div className="flex flex-col items-center justify-center py-16 text-text-secondary text-sm gap-3">
+            <span>등록된 항목이 없습니다.</span>
+            {canWrite && (
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" leftIcon={<Plus size={13} />} onClick={() => setShowCIModal(true)}>
+                  CI 등록
+                </Button>
+                <Button size="sm" leftIcon={<Plus size={13} />} onClick={() => setShowAssetModal(true)}>
+                  자산 등록
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* 자산 등록 모달 */}
+      <CreateAssetForCustomerModal
+        open={showAssetModal}
+        onClose={() => setShowAssetModal(false)}
+        tenantSlug={tenantSlug}
+        customerId={customerId}
+      />
+
+      {/* CI 등록 모달 */}
+      <CreateCIForCustomerModal
+        open={showCIModal}
+        onClose={() => setShowCIModal(false)}
+        tenantSlug={tenantSlug}
+        customerId={customerId}
+      />
     </div>
   );
 }
@@ -1567,6 +1976,99 @@ function NotesTab({
 }
 
 // -----------------------------------------------------------------------
+// 탭: SLA — 준수율 카드(전사 기준) + 이 고객 에스컬레이션 발생 티켓
+// -----------------------------------------------------------------------
+interface SlaDashboard {
+  total_active_tickets: number;
+  breached_tickets: number;
+  warning_tickets: number;
+  compliance_rate: number;
+  avg_resolution_minutes: number;
+  policy_by_grade: { grade: string; response_minutes: number; resolution_minutes: number }[];
+}
+
+function SlaTab({ tenantSlug, customerId }: { tenantSlug: string; customerId: string }) {
+  const { data: dashboard, isLoading: dashboardLoading } = useQuery<SlaDashboard>({
+    queryKey: ['sla-dashboard', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/sla/dashboard`).then((r) => r.data),
+    enabled: !!tenantSlug,
+  });
+
+  const { data: historyData, isLoading: historyLoading } = useQuery<SupportHistoryResponse>({
+    queryKey: ['customer-support-history', tenantSlug, customerId],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/customers/${customerId}/support-history`).then((r) => r.data),
+    enabled: !!tenantSlug && !!customerId,
+  });
+
+  const escalatedItems = (historyData?.items ?? []).filter((item) => item.escalation_count > 0);
+
+  if (dashboardLoading || historyLoading) {
+    return (
+      <div className="p-6 flex flex-col gap-3">
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 flex flex-col gap-6">
+      {/* 준수율 카드 (전사 기준 — 고객별 SLA 대시보드 API 미제공, sla.py:266 참고) */}
+      <div>
+        <p className="text-xs text-text-secondary mb-2">전사 SLA 지표 (테넌트 전체 기준)</p>
+        <div className="grid grid-cols-4 gap-3">
+          <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4">
+            <div className="flex items-center gap-1.5 text-text-secondary text-xs mb-1">
+              <ShieldCheck size={13} />
+              준수율
+            </div>
+            <p className={cn('text-xl font-bold', (dashboard?.compliance_rate ?? 100) < 90 ? 'text-error-text' : 'text-text-primary')}>
+              {(dashboard?.compliance_rate ?? 0).toFixed(1)}%
+            </p>
+          </div>
+          <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4">
+            <div className="flex items-center gap-1.5 text-text-secondary text-xs mb-1">
+              <ShieldAlert size={13} />
+              위반 티켓
+            </div>
+            <p className="text-xl font-bold text-error-text">{dashboard?.breached_tickets ?? 0}</p>
+          </div>
+          <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4">
+            <div className="text-text-secondary text-xs mb-1">경고 티켓</div>
+            <p className="text-xl font-bold text-warning-text">{dashboard?.warning_tickets ?? 0}</p>
+          </div>
+          <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4">
+            <div className="text-text-secondary text-xs mb-1">평균 해결 시간</div>
+            <p className="text-xl font-bold text-text-primary">
+              {dashboard ? Math.round(dashboard.avg_resolution_minutes / 60) : 0}h
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 이 고객 에스컬레이션 발생 티켓 */}
+      <div>
+        <p className="text-xs text-text-secondary mb-2">
+          이 고객 에스컬레이션 발생 티켓 <strong className="text-text-primary">{escalatedItems.length}건</strong>
+        </p>
+        {escalatedItems.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-text-secondary text-sm">
+            에스컬레이션이 발생한 티켓이 없습니다.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {escalatedItems.map((item) => (
+              <SupportHistoryCard key={item.id} item={item} tenantSlug={tenantSlug} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
 // 탭 정의
 // -----------------------------------------------------------------------
 const TABS = [
@@ -1574,6 +2076,7 @@ const TABS = [
   { id: 'tickets',   label: '티켓',     icon: ScrollText },
   { id: 'infra',     label: '인프라',   icon: Cpu },
   { id: 'contracts', label: '계약',     icon: FileText },
+  { id: 'sla',       label: 'SLA',      icon: ShieldCheck },
   { id: 'notes',     label: '메모',     icon: Clock },
 ] as const;
 
@@ -1635,6 +2138,27 @@ export default function CustomerDetailPage() {
     enabled: !!tenantSlug && !!selectedNodeId && selectedNodeId !== customerId,
   });
 
+  // RX-1d: KPI 스트립용 SLA 준수율 (전사 기준 — 고객별 SLA API 미제공)
+  const { data: slaDashboard } = useQuery<{ compliance_rate: number }>({
+    queryKey: ['sla-dashboard', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/sla/dashboard`).then((r) => r.data),
+    enabled: !!tenantSlug,
+  });
+
+  // RX-1d: 헤더 빠른액션(전화·메일)용 주 연락처
+  const { data: headerContacts } = useQuery<CustomerContact[]>({
+    queryKey: ['customer-contacts', tenantSlug, customerId],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/customers/${customerId}/contacts`).then((r) => {
+        const d = r.data;
+        return Array.isArray(d) ? d : (d?.items ?? []);
+      }),
+    enabled: !!tenantSlug && !!customerId,
+  });
+  const primaryContact = (headerContacts ?? []).find((c) => c.is_primary) ?? (headerContacts ?? [])[0] ?? null;
+  const headerPhone = primaryContact?.phone ?? customer?.phone ?? null;
+  const headerEmail = primaryContact?.email ?? customer?.email ?? null;
+
   const displayCustomer = selectedNodeId === customerId ? customer : selectedCustomer;
 
   if (customerLoading) {
@@ -1694,10 +2218,35 @@ export default function CustomerDetailPage() {
             {customer.contract_grade}
           </span>
         )}
+        {/* RX-1d: 주 연락처 빠른액션 */}
+        {(headerPhone || headerEmail) && (
+          <div className="ml-auto flex items-center gap-1.5">
+            {headerPhone && (
+              <a
+                href={`tel:${headerPhone}`}
+                title={`${headerPhone} 전화`}
+                className="inline-flex items-center gap-1 rounded-md border border-border-default px-2.5 py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+              >
+                <Phone size={12} />
+                전화
+              </a>
+            )}
+            {headerEmail && (
+              <a
+                href={`mailto:${headerEmail}`}
+                title={`${headerEmail} 메일`}
+                className="inline-flex items-center gap-1 rounded-md border border-border-default px-2.5 py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+              >
+                <Mail size={12} />
+                메일
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
       {/* KPI 스트립 */}
-      {rollup && <KpiStrip rollup={rollup} />}
+      {rollup && <KpiStrip rollup={rollup} slaComplianceRate={slaDashboard?.compliance_rate ?? null} />}
 
       {/* 본문: 좌측 트리 + 우측 탭 */}
       <div className="flex flex-1 overflow-hidden min-h-0">
@@ -1814,6 +2363,9 @@ export default function CustomerDetailPage() {
             )}
             {activeTab === 'contracts' && (
               <ContractsTab tenantSlug={tenantSlug} customerId={selectedNodeId} />
+            )}
+            {activeTab === 'sla' && (
+              <SlaTab tenantSlug={tenantSlug} customerId={selectedNodeId} />
             )}
             {activeTab === 'notes' && (
               <NotesTab tenantSlug={tenantSlug} customerId={selectedNodeId} />

@@ -12,6 +12,8 @@ const en = {
     settings: 'Settings',
     assets: 'Assets',
     cmdb: 'CMDB',
+    // RX-1c: unified assets+cmdb entry point (/inventory) label
+    inventory: 'Infrastructure',
     changeRequests: 'Change Requests',
     sla: 'SLA',
     contracts: 'Contracts',

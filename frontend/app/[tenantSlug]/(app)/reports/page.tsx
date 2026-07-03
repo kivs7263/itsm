@@ -22,6 +22,7 @@ import {
   Layers,
   AlertCircle,
   RefreshCw,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
@@ -811,6 +812,7 @@ export default function ReportsPage() {
   const channelBreakdown  = report?.channel_breakdown ?? [];
   const escalationRate    = report?.escalation_rate;
   const recurringRate     = report?.recurring_rate;
+  const reopenRate        = report?.reopen_rate;
 
   const maxMonthlyCount = Math.max(...monthlyTickets.map((m) => m.count), 1);
 
@@ -940,6 +942,16 @@ export default function ReportsPage() {
             iconColor={CATEGORY_COLORS.slate}
             iconBg={CATEGORY_BG_LIGHT.slate}
             isLoading={isLoading}
+          />
+          <KpiCard
+            label="재오픈율 (Reopen)"
+            value={reopenRate != null ? `${reopenRate}%` : '-'}
+            sub={`재오픈 ${report?.reopen_ticket_count ?? 0}건`}
+            icon={<RotateCcw size={16} />}
+            iconColor={CHART_COLORS_LIGHT.danger}
+            iconBg={CHART_BG_LIGHT.danger}
+            isLoading={isLoading}
+            tooltip="해결 후 다시 열린 티켓 비율 — 재작업/품질 지표"
           />
         </div>
 
@@ -1201,7 +1213,7 @@ export default function ReportsPage() {
               />
               <CsatKpiCard
                 label="응답률"
-                value={csat != null ? `${csat.response_rate.toFixed(1)}%` : '-'}
+                value={csat != null ? `${(csat.response_rate * 100).toFixed(1)}%` : '-'}
                 icon={<CheckSquare size={18} />}
                 iconColor={CHART_COLORS_LIGHT.success}
                 iconBg={CHART_BG_LIGHT.success}

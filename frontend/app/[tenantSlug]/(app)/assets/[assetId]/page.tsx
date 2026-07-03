@@ -7,6 +7,7 @@ import { ArrowLeft, Package, AlertTriangle, Pencil, Trash2, RefreshCw } from 'lu
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type { Asset } from '@/lib/types';
+import { assetTypeLabel, assetCategoryLabel, getAssetCategory } from '@/lib/assetTypes';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EditAssetModal } from '@/components/assets/EditAssetModal';
@@ -26,20 +27,6 @@ function formatDate(dateStr: string | null | undefined): string {
     return typeof dateStr === 'string' ? dateStr : '-';
   }
 }
-
-// -----------------------------------------------------------------------
-// 자산 유형 한글
-// -----------------------------------------------------------------------
-const ASSET_TYPE_LABELS: Record<string, string> = {
-  server: '서버',
-  network: '네트워크',
-  storage: '스토리지',
-  workstation: '워크스테이션',
-  laptop: '노트북',
-  mobile: '모바일',
-  printer: '프린터',
-  other: '기타',
-};
 
 // -----------------------------------------------------------------------
 // 정보 행
@@ -98,7 +85,7 @@ export default function AssetDetailPage() {
       await api.delete(`/${tenantSlug}/assets/${assetId}`);
       toast.success('자산이 삭제되었습니다.');
       await queryClient.invalidateQueries({ queryKey: ['assets', tenantSlug] });
-      router.push(`/${tenantSlug}/assets`);
+      router.push(`/${tenantSlug}/inventory?tab=assets`);
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -144,9 +131,9 @@ export default function AssetDetailPage() {
     );
   }
 
-  const assetTypeLabel = typeof asset.asset_type === 'string'
-    ? (ASSET_TYPE_LABELS[asset.asset_type] ?? asset.asset_type)
-    : '-';
+  const typeLabel = assetTypeLabel(asset.asset_type);
+  const category = getAssetCategory(asset.location);
+  const categoryLabel = assetCategoryLabel(category);
 
   // 보증 만료 여부
   const isWarrantyExpired = asset.warranty_end
@@ -159,7 +146,7 @@ export default function AssetDetailPage() {
       <div className="flex items-center gap-3 px-6 py-4 border-b border-border-default bg-surface shrink-0">
         <button
           type="button"
-          onClick={() => router.push(`/${tenantSlug}/assets`)}
+          onClick={() => router.push(`/${tenantSlug}/inventory?tab=assets`)}
           className="flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors"
         >
           <ArrowLeft size={16} />
@@ -170,8 +157,13 @@ export default function AssetDetailPage() {
           {typeof asset.asset_tag === 'string' ? asset.asset_tag : assetId}
         </h1>
         <span className="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-info-bg text-info-text">
-          {assetTypeLabel}
+          {typeLabel}
         </span>
+        {category && (
+          <span className="ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-neutral-100 text-neutral-500">
+            {categoryLabel}
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-2">
           <Button
             size="sm"
@@ -209,7 +201,9 @@ export default function AssetDetailPage() {
                 <p className="text-sm font-semibold text-text-primary">
                   {typeof asset.model === 'string' ? asset.model : '자산 상세'}
                 </p>
-                <p className="text-xs text-text-secondary">{assetTypeLabel}</p>
+                <p className="text-xs text-text-secondary">
+                  {typeLabel}{category && ` · ${categoryLabel}`}
+                </p>
               </div>
             </div>
 
@@ -227,7 +221,8 @@ export default function AssetDetailPage() {
                   {typeof asset.serial === 'string' ? asset.serial : '-'}
                 </span>
               </InfoRow>
-              <InfoRow label="유형">{assetTypeLabel}</InfoRow>
+              <InfoRow label="유형">{typeLabel}</InfoRow>
+              <InfoRow label="세부 유형">{category ? categoryLabel : '-'}</InfoRow>
               <InfoRow label="고객">
                 {typeof asset.customer_name === 'string'
                   ? asset.customer_name

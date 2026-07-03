@@ -19,7 +19,7 @@ from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,16 +40,27 @@ router = APIRouter(
 # ------------------------------------------------------------------
 
 
+_ASSET_STATUS_VALUES = {"active", "retired", "disposed"}
+
+
 class AssetCreate(BaseModel):
     asset_tag: str = Field(..., max_length=100)
     model: str = Field(..., max_length=200)
     serial: str | None = Field(None, max_length=200)
     asset_type: AssetType
     customer_id: uuid.UUID
+    status: str = "active"
     location: dict | None = None
     installed_at: date | None = None
     warranty_end: date | None = None
     license_end: date | None = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        if v not in _ASSET_STATUS_VALUES:
+            raise ValueError(f"status must be one of {sorted(_ASSET_STATUS_VALUES)}")
+        return v
 
 
 class AssetUpdate(BaseModel):
@@ -58,10 +69,18 @@ class AssetUpdate(BaseModel):
     serial: str | None = Field(None, max_length=200)
     asset_type: AssetType | None = None
     customer_id: uuid.UUID | None = None
+    status: str | None = None
     location: dict | None = None
     installed_at: date | None = None
     warranty_end: date | None = None
     license_end: date | None = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in _ASSET_STATUS_VALUES:
+            raise ValueError(f"status must be one of {sorted(_ASSET_STATUS_VALUES)}")
+        return v
 
 
 class AssetOut(BaseModel):
@@ -73,6 +92,7 @@ class AssetOut(BaseModel):
     model: str
     serial: str | None
     asset_type: str
+    status: str
     location: dict | None
     installed_at: date | None
     warranty_end: date | None
@@ -180,7 +200,7 @@ async def list_assets(
 async def create_asset(
     tenant_slug: str,
     data: AssetCreate,
-    current_user: Annotated[User, Depends(get_current_user)] = None,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead, UserRole.engineer))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> AssetOut:
     if data.customer_id:
@@ -200,6 +220,7 @@ async def create_asset(
         model=data.model,
         serial=data.serial,
         asset_type=data.asset_type,
+        status=data.status,
         customer_id=data.customer_id,
         location=data.location or {},
         installed_at=data.installed_at,
@@ -254,7 +275,7 @@ async def update_asset(
     tenant_slug: str,
     asset_id: uuid.UUID,
     data: AssetUpdate,
-    current_user: Annotated[User, Depends(get_current_user)] = None,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead, UserRole.engineer))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> AssetOut:
     asset = await _get_or_404(db, current_user.tenant_id, asset_id)

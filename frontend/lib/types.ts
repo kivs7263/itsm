@@ -209,6 +209,7 @@ export interface Asset {
   model: string;
   serial: string | null;
   asset_type: string;
+  status: string; // active | retired | disposed (RX-0a)
   location: Record<string, unknown> | null;
   installed_at: string | null;
   warranty_end: string | null;
@@ -355,6 +356,10 @@ export interface ReportSummary {
   channel_breakdown?: { channel: string; count: number }[];
   escalation_rate?: number;
   recurring_rate?: number;
+  // RX-0e 신규 — Reopen Rate (재오픈)
+  reopen_ticket_count?: number;
+  reopen_rate?: number;
+  avg_reopen_count?: number;
 }
 
 // -----------------------------------------------------------------------
