@@ -53,7 +53,7 @@ const NAV_ITEMS: NavItem[] = [
   { section: '티켓',       label: '작업 로그',    href: '/work-logs',        icon: Clock     },
   { section: '고객',       label: '고객 목록',    href: '/customers',        icon: Users     },
   { section: '지식베이스', label: '지식베이스',   href: '/kb',               icon: BookOpen  },
-  { section: '운영',       label: '반복 장애',    href: '/recurring-alerts', icon: RefreshCw },
+  { section: '운영',       label: '반복 감지',    href: '/problems?tab=recurring', icon: RefreshCw },
   { section: '보고서',     label: '보고서',       href: '/reports',          icon: BarChart2 },
   { section: '설정',       label: '설정',         href: '/settings',         icon: Settings  },
 ];

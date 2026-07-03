@@ -13,7 +13,6 @@ import {
   ChevronRight,
   Home,
   BookOpen,
-  RefreshCw,
   Settings,
   Clock,
   Boxes,
@@ -21,7 +20,6 @@ import {
   Gauge,
   FileText,
   Bug,
-  Inbox,
   Workflow,
   LayoutGrid,
   Bell,
@@ -46,7 +44,8 @@ function getInitialCollapsed(): boolean {
 
 // RX-1c: assets·cmdb 2개 항목 → 단일 'inventory'(인프라)로 통합
 // RX-4b: automation·serviceCatalog(신규 라우트) + notifications·users(설정 딥링크) 배선
-type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'recurringIssues' | 'reports' | 'settings' | 'inventory' | 'changeRequests' | 'sla' | 'contracts' | 'problems' | 'queue' | 'automation' | 'serviceCatalog' | 'notifications' | 'users';
+// RX-4c: queue·recurringIssues 최상위 항목 제거 — 각각 tickets(?view=pool)·problems(?tab=recurring) 탭으로 흡수
+type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'reports' | 'settings' | 'inventory' | 'changeRequests' | 'sla' | 'contracts' | 'problems' | 'automation' | 'serviceCatalog' | 'notifications' | 'users';
 type NavItem = { key: NavKey; href: string; icon: React.ElementType };
 // RA-U3: 섹션 그룹핑 — titleKey 없으면 무제목 섹션(홈), 있으면 t.nav.sections[titleKey] 라벨
 // RX-4b: 16개 평면 항목 → 8 도메인 허브(홈/작업/서비스관리/고객/인프라/지식/관리)로 재편
@@ -66,9 +65,8 @@ const ENGINEER_SECTIONS: NavSection[] = [
   {
     titleKey: 'work',
     items: [
+      // RX-4c: 티켓 풀(FRP-3d-A1)은 tickets 페이지 "티켓 풀" 탭(?view=pool)으로 흡수 — 최상위 항목 제거
       { key: 'tickets',  href: '/tickets',   icon: LifeBuoy },
-      // FRP-3d-A1: 티켓 풀 (미배정 티켓)
-      { key: 'queue',    href: '/queue',      icon: Inbox    },
       { key: 'workLogs', href: '/work-logs',  icon: Clock    },
     ],
   },
@@ -77,9 +75,9 @@ const ENGINEER_SECTIONS: NavSection[] = [
     items: [
       { key: 'changeRequests',  href: '/change-requests',  icon: GitPullRequest },
       // CA-P2-4: Problem Management
+      // RX-4c: 반복 이슈(recurring-alerts)는 problems 페이지 "반복 감지" 탭(?tab=recurring)으로 흡수 — 최상위 항목 제거
       { key: 'problems',        href: '/problems',         icon: Bug            },
       { key: 'sla',             href: '/sla',              icon: Gauge          },
-      { key: 'recurringIssues', href: '/recurring-alerts', icon: RefreshCw      },
       // RX-4b: automation·serviceCatalog는 team_lead+ 전용 (아래 TEAM_LEAD_SECTIONS에서 추가)
     ],
   },
@@ -122,8 +120,8 @@ const TEAM_LEAD_SECTIONS: NavSection[] = [
   {
     titleKey: 'work',
     items: [
+      // RX-4c: 티켓 풀은 tickets 페이지 "티켓 풀" 탭(?view=pool)으로 흡수 — 최상위 항목 제거
       { key: 'tickets',  href: '/tickets',   icon: LifeBuoy },
-      { key: 'queue',    href: '/queue',      icon: Inbox    },
       { key: 'workLogs', href: '/work-logs',  icon: Clock    },
     ],
   },
@@ -133,7 +131,7 @@ const TEAM_LEAD_SECTIONS: NavSection[] = [
       { key: 'changeRequests',  href: '/change-requests',  icon: GitPullRequest },
       { key: 'problems',        href: '/problems',         icon: Bug            },
       { key: 'sla',             href: '/sla',              icon: Gauge          },
-      { key: 'recurringIssues', href: '/recurring-alerts', icon: RefreshCw      },
+      // RX-4c: 반복 이슈는 problems 페이지 "반복 감지" 탭(?tab=recurring)으로 흡수 — 최상위 항목 제거
       // RX-4b: 신규 라우트 배선 — 자동화 룰 관리(admin/team_lead, backend require_roles와 일치)
       { key: 'automation',      href: '/automation',       icon: Workflow       },
       { key: 'serviceCatalog',  href: '/service-catalog',  icon: LayoutGrid     },
@@ -216,7 +214,7 @@ export function Sidebar() {
   const { user, logout } = useAuth();
   const { t } = useLocale();
 
-  // 미배정 티켓 카운트 (queue 배지용)
+  // 미배정 티켓 카운트 (RX-4c: queue 최상위 항목 제거 → tickets 항목으로 배지 이관, 엔드포인트·polling 주기 동일)
   const tenantSlug = useMemo(() => {
     if (!pathname) return null;
     const match = pathname.match(/^\/([^/]+)/);
@@ -392,7 +390,7 @@ export function Sidebar() {
                     style={isActive ? { color: 'var(--color-brand)' } : undefined}
                   />
                   {effectivelyExpanded && <span className="truncate flex-1">{label}</span>}
-                  {key === 'queue' && (queueCountData?.count ?? 0) > 0 && (
+                  {key === 'tickets' && (queueCountData?.count ?? 0) > 0 && (
                     <span
                       className="shrink-0 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1.5 min-w-4 h-4"
                       // RA-V1: 흰 텍스트가 배지 위에 올라가므로 base(--color-error, WCAG 4.11:1 미달)가 아닌

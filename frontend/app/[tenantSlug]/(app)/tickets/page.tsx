@@ -6,9 +6,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, LifeBuoy, Inbox, UserPlus, Info, RotateCcw, AlertCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
-import type { Ticket, TicketStatus, TicketPriority, TicketsResponse } from '@/lib/types';
+import type { Ticket, TicketStatus, TicketPriority, TicketsResponse, UserSummary } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
-import { isTeamLeadOrAbove, type UserRole } from '@/lib/auth';
+import { isTeamLeadOrAbove, isAdminRole, type UserRole } from '@/lib/auth';
 import { cn, formatRelativeTime, formatWorkHours } from '@/lib/utils';
 import { SlaBadge } from '@/components/tickets/SlaBadge';
 import { TicketSlider } from '@/components/tickets/TicketSlider';
@@ -17,6 +17,13 @@ import { BulkActionBar } from '@/components/tickets/BulkActionBar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -170,12 +177,111 @@ const REQUEST_TYPE_LABELS: Record<string, string> = {
 };
 
 // -----------------------------------------------------------------------
-// 티켓 풀 탭 (인라인)
+// 배정 모달 (admin 전용 — user list는 admin만 조회 가능)
+// FRP-3d-A1 queue/page.tsx AssignModal 이식 (RX-4c: queue → tickets 탭 병합)
+// -----------------------------------------------------------------------
+interface AssignModalProps {
+  open: boolean;
+  onClose: () => void;
+  tenantSlug: string;
+  ticketId: string;
+  ticketNumber: string | null;
+}
+
+interface UsersResponse {
+  items: UserSummary[];
+  total: number;
+}
+
+function AssignModal({ open, onClose, tenantSlug, ticketId, ticketNumber }: AssignModalProps) {
+  const queryClient = useQueryClient();
+  const [selectedEngineerId, setSelectedEngineerId] = useState('');
+
+  const { data: usersData, isLoading: usersLoading } = useQuery<UsersResponse>({
+    queryKey: ['queue-users', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/settings/users`).then((r) => r.data),
+    enabled: open && !!tenantSlug,
+    staleTime: 60_000,
+  });
+
+  const users: UserSummary[] = Array.isArray(usersData?.items)
+    ? usersData.items.filter((u) => u.is_active)
+    : [];
+
+  const assignMutation = useMutation({
+    mutationFn: () =>
+      api
+        .post(`/${tenantSlug}/queue/${ticketId}/assign`, { engineer_id: selectedEngineerId })
+        .then((r) => r.data),
+    onSuccess: (ticket) => {
+      toast.success(`티켓 ${ticketNumber ?? ticketId.slice(0, 8)} 배정 완료`);
+      queryClient.invalidateQueries({ queryKey: ['queue', tenantSlug] });
+      queryClient.invalidateQueries({ queryKey: ['tickets', tenantSlug] });
+      onClose();
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err));
+    },
+  });
+
+  function handleClose() {
+    setSelectedEngineerId('');
+    onClose();
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>엔지니어 배정</DialogTitle>
+        </DialogHeader>
+        <div className="py-2 space-y-3">
+          <p className="text-sm text-text-secondary">
+            티켓 <span className="font-mono font-medium text-text-primary">{ticketNumber ?? ticketId.slice(0, 8)}</span>에 담당 엔지니어를 배정합니다.
+          </p>
+          {usersLoading ? (
+            <Skeleton className="h-9 w-full rounded-md" />
+          ) : users.length === 0 ? (
+            <p className="text-sm text-text-disabled">활성 사용자가 없습니다.</p>
+          ) : (
+            <Select value={selectedEngineerId} onValueChange={setSelectedEngineerId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="담당자 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                {users.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.name} ({u.role})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={handleClose} disabled={assignMutation.isPending}>취소</Button>
+          <Button
+            onClick={() => assignMutation.mutate()}
+            isLoading={assignMutation.isPending}
+            disabled={!selectedEngineerId || assignMutation.isPending}
+            leftIcon={<UserPlus size={14} />}
+          >
+            배정
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// -----------------------------------------------------------------------
+// 티켓 풀 탭 (인라인) — RX-4c: /queue 페이지 병합 (claim·assign·SELECT FOR UPDATE 락 UX 이식)
 // -----------------------------------------------------------------------
 function QueueTab({ tenantSlug }: { tenantSlug: string }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const _isManager = isTeamLeadOrAbove(user?.role as UserRole);
+  const isAdmin = isAdminRole(user?.role as UserRole);
+  const [assignTarget, setAssignTarget] = useState<{ id: string; ticket_number: string | null } | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery<QueueResponse>({
     queryKey: ['queue', tenantSlug],
@@ -298,17 +404,30 @@ function QueueTab({ tenantSlug }: { tenantSlug: string }) {
                   <td className="px-4 py-3 text-text-secondary text-xs">
                     {formatRelativeTime(t.created_at)}
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      leftIcon={<UserPlus size={13} />}
-                      onClick={() => claimMutation.mutate(t.id)}
-                      isLoading={claimMutation.isPending && claimMutation.variables === t.id}
-                      disabled={claimMutation.isPending}
-                    >
-                      접수
-                    </Button>
+                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-2">
+                      {/* 관리자 전용: 엔지니어 직접 배정 */}
+                      {isAdmin && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          leftIcon={<UserPlus size={13} />}
+                          onClick={() => setAssignTarget({ id: t.id, ticket_number: t.ticket_number })}
+                        >
+                          배정
+                        </Button>
+                      )}
+                      {/* 선착순 접수 */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => claimMutation.mutate(t.id)}
+                        isLoading={claimMutation.isPending && claimMutation.variables === t.id}
+                        disabled={claimMutation.isPending}
+                      >
+                        접수
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -316,6 +435,17 @@ function QueueTab({ tenantSlug }: { tenantSlug: string }) {
           </tbody>
         </table>
       </div>
+
+      {/* 배정 모달 (admin 전용) */}
+      {assignTarget && (
+        <AssignModal
+          open={!!assignTarget}
+          onClose={() => setAssignTarget(null)}
+          tenantSlug={tenantSlug}
+          ticketId={assignTarget.id}
+          ticketNumber={assignTarget.ticket_number}
+        />
+      )}
     </div>
   );
 }
@@ -331,15 +461,17 @@ interface Filters {
 
 // -----------------------------------------------------------------------
 // 티켓 목록 페이지
+// RX-4c: /queue 페이지 병합 — ?view=pool 쿼리파라미터로 딥링크 진입 (redirect('/tickets?view=pool'))
 // -----------------------------------------------------------------------
-type TicketTab = 'my-tickets' | 'queue';
+type TicketTab = 'my-tickets' | 'pool';
 
 export default function TicketsPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const tenantSlug = params?.tenantSlug as string;
 
-  const [activeTab, setActiveTab] = useState<TicketTab>('my-tickets');
+  const initialTab: TicketTab = searchParams?.get('view') === 'pool' ? 'pool' : 'my-tickets';
+  const [activeTab, setActiveTab] = useState<TicketTab>(initialTab);
   const [filters, setFilters] = useState<Filters>({
     status: '',
     priority: '',
@@ -432,10 +564,10 @@ export default function TicketsPage() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('queue')}
+              onClick={() => setActiveTab('pool')}
               className={cn(
                 'rounded-md px-3 py-1 text-sm font-medium transition-colors duration-fast',
-                activeTab === 'queue'
+                activeTab === 'pool'
                   ? 'bg-surface text-text-primary shadow-sm'
                   : 'text-text-secondary hover:text-text-primary',
               )}
@@ -456,7 +588,7 @@ export default function TicketsPage() {
       </div>
 
       {/* 티켓 풀 탭 */}
-      {activeTab === 'queue' && <QueueTab tenantSlug={tenantSlug} />}
+      {activeTab === 'pool' && <QueueTab tenantSlug={tenantSlug} />}
 
       {/* 내 티켓 탭 — 필터 바 + 테이블 */}
       {activeTab === 'my-tickets' && (

@@ -66,7 +66,7 @@ const MOBILE_NAV = [
   { label: '티켓',       href: '/tickets',          icon: LifeBuoy  },
   { label: '고객',       href: '/customers',        icon: Users     },
   { label: '지식베이스', href: '/kb',               icon: BookOpen  },
-  { label: '반복 장애',  href: '/recurring-alerts', icon: RefreshCw },
+  { label: '반복 감지',  href: '/problems?tab=recurring', icon: RefreshCw },
 ] as const;
 
 // 경로 세그먼트 → breadcrumb 제목 (ALVEO-SHELL-3)

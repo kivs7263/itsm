@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Bug, AlertCircle, RefreshCw } from 'lucide-react';
+import { Plus, Search, Bug, AlertCircle, RefreshCw, CheckCircle2, BellOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
-import type { Problem, ProblemStatus, ProblemPriority, ProblemsResponse } from '@/lib/types';
+import type { Problem, ProblemStatus, ProblemPriority, ProblemsResponse, RecurringAlert, RecurringAlertsResponse } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -234,6 +234,175 @@ function CreateProblemModal({ open, onClose, tenantSlug }: CreateProblemModalPro
 }
 
 // -----------------------------------------------------------------------
+// 반복 감지 탭 (인라인) — RX-4c: /recurring-alerts 페이지 병합
+// 반복 이슈 감지 목록·인지(acknowledge)·Problem 생성 전환 이식
+// -----------------------------------------------------------------------
+function RecurringTab({ tenantSlug }: { tenantSlug: string }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, isError, refetch } = useQuery<RecurringAlertsResponse>({
+    queryKey: ['recurring-alerts', tenantSlug],
+    queryFn: () => api.get(`/${tenantSlug}/recurring-alerts`).then((r) => r.data),
+    enabled: !!tenantSlug,
+  });
+
+  const acknowledgeMutation = useMutation({
+    mutationFn: (alertId: string) =>
+      api.post(`/${tenantSlug}/recurring-alerts/${alertId}/acknowledge`).then((r) => r.data),
+    onSuccess: () => {
+      toast.success('알림을 인지 처리했습니다.');
+      queryClient.invalidateQueries({ queryKey: ['recurring-alerts', tenantSlug] });
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err));
+    },
+  });
+
+  const createProblemMutation = useMutation({
+    mutationFn: (alertId: string) =>
+      api.post(`/${tenantSlug}/recurring-alerts/${alertId}/create-problem`).then((r) => r.data),
+    onSuccess: (problem) => {
+      toast.success('Problem이 생성되었습니다. Problem 페이지로 이동합니다.');
+      queryClient.invalidateQueries({ queryKey: ['recurring-alerts', tenantSlug] });
+      queryClient.invalidateQueries({ queryKey: ['problems', tenantSlug] });
+      if (problem?.id) {
+        router.push(`/${tenantSlug}/problems/${problem.id}`);
+      }
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err));
+    },
+  });
+
+  const alerts: RecurringAlert[] = data?.items ?? [];
+
+  return (
+    <div className="flex-1 overflow-auto min-h-0 mt-4">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 z-10 bg-surface border-b border-border-default">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">발생 횟수</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">트리거 티켓 수</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">감지 시각</th>
+            <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary">액션</th>
+          </tr>
+        </thead>
+        <tbody>
+          {isLoading ? (
+            <>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <tr key={i} className="border-b border-border-subtle">
+                  <td className="px-4 py-3"><Skeleton className="h-5 w-10 rounded-full" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-8" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-7 w-20 rounded-md" /></td>
+                </tr>
+              ))}
+            </>
+          ) : isError ? (
+            <tr>
+              <td colSpan={4} className="px-4 py-16 text-center">
+                <AlertCircle size={32} className="mx-auto mb-3 text-error" />
+                <p className="text-sm text-text-secondary mb-3">데이터를 불러오지 못했습니다.</p>
+                <button
+                  onClick={() => refetch()}
+                  className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+                >
+                  <RefreshCw size={12} />
+                  다시 시도
+                </button>
+              </td>
+            </tr>
+          ) : alerts.length === 0 ? (
+            <tr>
+              <td colSpan={4}>
+                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                  <div
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                    style={{ background: 'var(--color-success-bg)' }}
+                  >
+                    <CheckCircle2 size={24} strokeWidth={1.5} style={{ color: 'var(--color-success)' }} />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-text-primary">반복 감지된 장애 없음</p>
+                    <p className="text-xs text-text-secondary mt-0.5">현재 반복 패턴이 감지된 장애가 없습니다.</p>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          ) : (
+            alerts.map((alert) => (
+              <tr
+                key={alert.id}
+                className={cn(
+                  'border-b border-border-subtle transition-colors',
+                  alert.is_acknowledged ? 'opacity-50' : 'hover:bg-surface-hover',
+                )}
+              >
+                <td className="px-4 py-3">
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                      alert.occurrence_count >= 5
+                        ? 'bg-error-bg text-error-text'
+                        : alert.occurrence_count >= 3
+                          ? 'bg-warning-bg text-warning-text'
+                          : 'bg-info-bg text-info-text',
+                    )}
+                  >
+                    <RefreshCw size={10} />
+                    {alert.occurrence_count}회
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-text-secondary text-xs tabular-nums">
+                  {alert.trigger_ticket_ids.length}건
+                </td>
+                <td className="px-4 py-3 text-text-secondary text-xs whitespace-nowrap">
+                  {formatRelativeTime(alert.detected_at)}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    {alert.is_acknowledged ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-success-text">
+                        <CheckCircle2 size={12} />
+                        인지됨
+                      </span>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        leftIcon={<BellOff size={13} />}
+                        onClick={() => acknowledgeMutation.mutate(alert.id)}
+                        isLoading={acknowledgeMutation.isPending && acknowledgeMutation.variables === alert.id}
+                        disabled={acknowledgeMutation.isPending || createProblemMutation.isPending}
+                      >
+                        인지
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      leftIcon={<Bug size={13} />}
+                      onClick={() => createProblemMutation.mutate(alert.id)}
+                      isLoading={createProblemMutation.isPending && createProblemMutation.variables === alert.id}
+                      disabled={createProblemMutation.isPending || acknowledgeMutation.isPending}
+                      title="반복 장애에서 Problem 생성 (멱등 — 이미 있으면 기존 반환)"
+                    >
+                      Problem 생성
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
 // 상태 필터 탭
 // -----------------------------------------------------------------------
 const STATUS_TABS: Array<{ value: string; label: string }> = [
@@ -280,10 +449,17 @@ function Pagination({
 // -----------------------------------------------------------------------
 // 문제 관리 목록 페이지
 // -----------------------------------------------------------------------
+type ProblemsPageTab = 'list' | 'recurring';
+
 export default function ProblemsPage() {
   const params = useParams();
   const tenantSlug = params?.tenantSlug as string;
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // RX-4c: /recurring-alerts 병합 — ?tab=recurring 딥링크 진입 (redirect('/problems?tab=recurring'))
+  const initialPageTab: ProblemsPageTab = searchParams?.get('tab') === 'recurring' ? 'recurring' : 'list';
+  const [pageTab, setPageTab] = useState<ProblemsPageTab>(initialPageTab);
 
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(1);
@@ -306,7 +482,7 @@ export default function ProblemsPage() {
           },
         })
         .then((r) => r.data),
-    enabled: !!tenantSlug,
+    enabled: !!tenantSlug && pageTab === 'list',
   });
 
   const items: Problem[] = data?.items ?? [];
@@ -339,18 +515,54 @@ export default function ProblemsPage() {
     <div className="flex flex-col h-full">
       {/* 페이지 헤더 */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border-default bg-surface shrink-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold text-text-primary">문제 관리</h1>
-          {total > 0 && (
+          {/* 탭 토글 — RX-4c: 반복 감지(/recurring-alerts) 병합 */}
+          <div className="flex gap-0.5 p-0.5 rounded-lg bg-border-subtle">
+            <button
+              type="button"
+              onClick={() => setPageTab('list')}
+              className={cn(
+                'rounded-md px-3 py-1 text-sm font-medium transition-colors duration-fast',
+                pageTab === 'list'
+                  ? 'bg-surface text-text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary',
+              )}
+            >
+              문제 목록
+            </button>
+            <button
+              type="button"
+              onClick={() => setPageTab('recurring')}
+              className={cn(
+                'rounded-md px-3 py-1 text-sm font-medium transition-colors duration-fast',
+                pageTab === 'recurring'
+                  ? 'bg-surface text-text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary',
+              )}
+            >
+              반복 감지
+            </button>
+          </div>
+          {pageTab === 'list' && total > 0 && (
             <span className="text-xs text-text-secondary bg-surface-subtle px-2 py-0.5 rounded-full">
               {total}
             </span>
           )}
         </div>
-        <Button size="sm" onClick={() => setCreateOpen(true)} leftIcon={<Plus size={14} />}>
-          새 Problem
-        </Button>
+        {pageTab === 'list' && (
+          <Button size="sm" onClick={() => setCreateOpen(true)} leftIcon={<Plus size={14} />}>
+            새 Problem
+          </Button>
+        )}
       </div>
+
+      {/* 반복 감지 탭 */}
+      {pageTab === 'recurring' && <RecurringTab tenantSlug={tenantSlug} />}
+
+      {/* 문제 목록 탭 */}
+      {pageTab === 'list' && (
+      <>
 
       {/* 필터 영역 */}
       <div className="shrink-0 border-b border-border-subtle bg-surface">
@@ -504,6 +716,8 @@ export default function ProblemsPage() {
         onClose={() => setCreateOpen(false)}
         tenantSlug={tenantSlug}
       />
+      </>
+      )}
     </div>
   );
 }
