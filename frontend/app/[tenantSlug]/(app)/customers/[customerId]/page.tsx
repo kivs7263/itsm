@@ -764,7 +764,7 @@ function InfraTab({ tenantSlug, customerId }: { tenantSlug: string; customerId: 
   const { data: ciData, isLoading: ciLoading } = useQuery({
     queryKey: ['customer-cis', tenantSlug, customerId],
     queryFn: () =>
-      api.get(`/${tenantSlug}/cmdb`, { params: { customer_id: customerId, page_size: 100 } })
+      api.get(`/${tenantSlug}/cmdb/cis`, { params: { customer_id: customerId, page_size: 100 } })
         .then((r) => r.data),
   });
 

@@ -349,7 +349,11 @@ function SlaStep({
     mutationFn: () =>
       Promise.all(
         DEFAULT_SLAS.map((sla) =>
-          api.post(`/${tenantSlug}/sla`, sla).catch(() => null),
+          api.post(`/${tenantSlug}/sla/policies`, {
+            grade: sla.grade,
+            response_minutes: sla.response_minutes,
+            resolution_minutes: sla.resolve_minutes,
+          }),
         ),
       ),
     onSuccess: () => {
