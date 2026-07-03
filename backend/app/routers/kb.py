@@ -30,6 +30,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.kb_article import KbArticle
+from app.models.kb_article_version import KbArticleVersion
+from app.models.kb_category import KbCategory
 from app.models.user import User, UserRole
 from app.services import search_service
 
@@ -65,6 +67,8 @@ class KbArticleCreate(BaseModel):
     is_known_issue: bool = False
     ki_severity: str | None = None
     ki_status: str | None = None
+    # RA-C10-B: 카테고리
+    category_id: uuid.UUID | None = None
 
 
 class KbArticleUpdate(BaseModel):
@@ -77,6 +81,8 @@ class KbArticleUpdate(BaseModel):
     is_known_issue: bool | None = None
     ki_severity: str | None = None
     ki_status: str | None = None
+    # RA-C10-B: 카테고리
+    category_id: uuid.UUID | None = None
 
 
 class KbArticleResponse(BaseModel):
@@ -92,8 +98,50 @@ class KbArticleResponse(BaseModel):
     view_count: int = 0
     helpful_votes: int = 0
     not_helpful_votes: int = 0
+    category_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# RA-C10-B: KB 카테고리 스키마
+class KbCategoryCreate(BaseModel):
+    name: str = Field(..., max_length=200)
+    description: str | None = None
+    parent_id: uuid.UUID | None = None
+
+
+class KbCategoryUpdate(BaseModel):
+    name: str | None = Field(None, max_length=200)
+    description: str | None = None
+    parent_id: uuid.UUID | None = None
+
+
+class KbCategoryResponse(BaseModel):
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    name: str
+    description: str | None
+    parent_id: uuid.UUID | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# RA-C10-B: KB 버전 스키마
+class KbVersionResponse(BaseModel):
+    id: uuid.UUID
+    article_id: uuid.UUID
+    tenant_id: uuid.UUID
+    version_no: int
+    title: str
+    content: str
+    tags: list[str]
+    edited_by: uuid.UUID | None
+    edited_by_name: str | None
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -135,12 +183,13 @@ def _to_kb_doc(article: KbArticle, author_name: str) -> search_service.KbDoc:
 @router.get(
     "",
     response_model=dict,
-    summary="KB 문서 목록 (게시 + 본인 미게시)",
+    summary="KB 문서 목록 (게시 + 본인 미게시, category_id 필터 지원)",
 )
 async def list_kb_articles(
     tenant_slug: str,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    category_id: uuid.UUID | None = Query(None, description="카테고리 필터"),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -158,6 +207,9 @@ async def list_kb_articles(
                 KbArticle.author_id == current_user.id,
             ),
         )
+
+    if category_id is not None:
+        visibility = and_(visibility, KbArticle.category_id == category_id)
 
     total = await db.scalar(
         select(func.count()).select_from(KbArticle).where(visibility)
@@ -301,11 +353,16 @@ async def update_kb_article(
     _require_writer(current_user)
     article = await _get_or_404(db, current_user.tenant_id, kb_id)
 
+    # RA-C10-B: 편집 직전 스냅샷을 버전 이력에 저장
+    await _snapshot_kb_version(db, article, current_user)
+
     update_data = data.model_dump(exclude_none=True)
     for field, value in update_data.items():
         setattr(article, field, value)
     if "linked_ticket_id" in data.model_fields_set and data.linked_ticket_id is None:
         article.linked_ticket_id = None
+    if "category_id" in data.model_fields_set and data.category_id is None:
+        article.category_id = None
 
     await db.commit()
     await db.refresh(article)
@@ -532,3 +589,311 @@ async def _get_or_404(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="KB 문서를 찾을 수 없습니다.")
     return row
+
+
+async def _snapshot_kb_version(
+    db: AsyncSession, article: KbArticle, editor: User
+) -> None:
+    """편집 직전 현재 상태를 kb_article_versions에 저장.
+
+    version_no = 해당 article의 기존 최대 version_no + 1.
+    동시 편집 경합 시 DB UNIQUE(article_id, version_no) 제약으로 보호.
+    """
+    from sqlalchemy import func as sa_func
+    from app.models.kb_article_version import KbArticleVersion
+
+    max_ver = await db.scalar(
+        select(func.max(KbArticleVersion.version_no)).where(
+            KbArticleVersion.article_id == article.id
+        )
+    )
+    next_ver = (max_ver or 0) + 1
+
+    snap = KbArticleVersion(
+        id=uuid.uuid4(),
+        article_id=article.id,
+        tenant_id=article.tenant_id,
+        version_no=next_ver,
+        title=article.title,
+        content=article.content,
+        tags=list(article.tags or []),
+        edited_by=editor.id,
+        edited_by_name=editor.name,
+    )
+    db.add(snap)
+    # flush 만 — 외부 commit과 함께 단일 트랜잭션으로 처리
+    await db.flush()
+
+
+# ==================================================================
+# [RA-C10-B] KB 카테고리 CRUD
+# ==================================================================
+
+
+_CATEGORY_WRITER_ROLES = {UserRole.engineer, UserRole.team_lead, UserRole.admin}
+
+
+async def _get_category_or_404(
+    db: AsyncSession, tenant_id: uuid.UUID, cat_id: uuid.UUID
+) -> KbCategory:
+    row = (
+        await db.execute(
+            select(KbCategory).where(
+                and_(
+                    KbCategory.id == cat_id,
+                    KbCategory.tenant_id == tenant_id,
+                )
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="KB 카테고리를 찾을 수 없습니다.")
+    return row
+
+
+@router.get(
+    "/categories",
+    response_model=dict,
+    summary="[RA-C10-B] KB 카테고리 목록",
+)
+async def list_kb_categories(
+    tenant_slug: str,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    where = KbCategory.tenant_id == current_user.tenant_id
+    total = await db.scalar(
+        select(func.count()).select_from(KbCategory).where(where)
+    )
+    rows = (
+        await db.execute(
+            select(KbCategory)
+            .where(where)
+            .order_by(KbCategory.name.asc())
+            .offset((page - 1) * limit)
+            .limit(limit)
+        )
+    ).scalars().all()
+    return {
+        "items": [KbCategoryResponse.model_validate(r) for r in rows],
+        "total": total,
+        "page": page,
+        "limit": limit,
+    }
+
+
+@router.post(
+    "/categories",
+    response_model=KbCategoryResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="[RA-C10-B] KB 카테고리 생성 (engineer 이상)",
+)
+async def create_kb_category(
+    tenant_slug: str,
+    data: KbCategoryCreate,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> KbCategoryResponse:
+    if current_user.role not in _CATEGORY_WRITER_ROLES:
+        raise HTTPException(status_code=403, detail="카테고리 생성 권한이 없습니다.")
+
+    # parent_id 유효성 — 같은 tenant여야 함
+    if data.parent_id:
+        await _get_category_or_404(db, current_user.tenant_id, data.parent_id)
+
+    cat = KbCategory(
+        id=uuid.uuid4(),
+        tenant_id=current_user.tenant_id,
+        name=data.name,
+        description=data.description,
+        parent_id=data.parent_id,
+    )
+    db.add(cat)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="동일 이름의 카테고리가 이미 존재합니다.")
+    await db.refresh(cat)
+    return KbCategoryResponse.model_validate(cat)
+
+
+@router.patch(
+    "/categories/{cat_id}",
+    response_model=KbCategoryResponse,
+    summary="[RA-C10-B] KB 카테고리 수정 (engineer 이상)",
+)
+async def update_kb_category(
+    tenant_slug: str,
+    cat_id: uuid.UUID,
+    data: KbCategoryUpdate,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> KbCategoryResponse:
+    if current_user.role not in _CATEGORY_WRITER_ROLES:
+        raise HTTPException(status_code=403, detail="카테고리 수정 권한이 없습니다.")
+
+    cat = await _get_category_or_404(db, current_user.tenant_id, cat_id)
+
+    if data.parent_id and data.parent_id != cat.id:
+        await _get_category_or_404(db, current_user.tenant_id, data.parent_id)
+
+    update_data = data.model_dump(exclude_none=True)
+    for field, value in update_data.items():
+        setattr(cat, field, value)
+    if "parent_id" in data.model_fields_set and data.parent_id is None:
+        cat.parent_id = None
+
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="동일 이름의 카테고리가 이미 존재합니다.")
+    await db.refresh(cat)
+    return KbCategoryResponse.model_validate(cat)
+
+
+@router.delete(
+    "/categories/{cat_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="[RA-C10-B] KB 카테고리 삭제 (admin/team_lead)",
+)
+async def delete_kb_category(
+    tenant_slug: str,
+    cat_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    if current_user.role not in {UserRole.admin, UserRole.team_lead}:
+        raise HTTPException(status_code=403, detail="카테고리 삭제 권한이 없습니다.")
+
+    cat = await _get_category_or_404(db, current_user.tenant_id, cat_id)
+    await db.delete(cat)
+    await db.commit()
+
+
+# ==================================================================
+# [RA-C10-B] KB 아티클 버전 이력
+# ==================================================================
+
+
+@router.get(
+    "/{kb_id}/versions",
+    response_model=dict,
+    summary="[RA-C10-B] KB 아티클 버전 이력 목록",
+)
+async def list_kb_article_versions(
+    tenant_slug: str,
+    kb_id: uuid.UUID,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    # 아티클 존재·권한 확인
+    await _get_or_404(db, current_user.tenant_id, kb_id)
+
+    where = and_(
+        KbArticleVersion.article_id == kb_id,
+        KbArticleVersion.tenant_id == current_user.tenant_id,
+    )
+    total = await db.scalar(
+        select(func.count()).select_from(KbArticleVersion).where(where)
+    )
+    rows = (
+        await db.execute(
+            select(KbArticleVersion)
+            .where(where)
+            .order_by(KbArticleVersion.version_no.desc())
+            .offset((page - 1) * limit)
+            .limit(limit)
+        )
+    ).scalars().all()
+
+    return {
+        "items": [KbVersionResponse.model_validate(r) for r in rows],
+        "total": total,
+        "page": page,
+        "limit": limit,
+    }
+
+
+@router.get(
+    "/{kb_id}/versions/{version_no}",
+    response_model=KbVersionResponse,
+    summary="[RA-C10-B] KB 아티클 특정 버전 조회",
+)
+async def get_kb_article_version(
+    tenant_slug: str,
+    kb_id: uuid.UUID,
+    version_no: int,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> KbVersionResponse:
+    await _get_or_404(db, current_user.tenant_id, kb_id)
+
+    ver = (
+        await db.execute(
+            select(KbArticleVersion).where(
+                and_(
+                    KbArticleVersion.article_id == kb_id,
+                    KbArticleVersion.tenant_id == current_user.tenant_id,
+                    KbArticleVersion.version_no == version_no,
+                )
+            )
+        )
+    ).scalar_one_or_none()
+    if ver is None:
+        raise HTTPException(status_code=404, detail=f"버전 {version_no}을 찾을 수 없습니다.")
+    return KbVersionResponse.model_validate(ver)
+
+
+@router.post(
+    "/{kb_id}/versions/{version_no}/restore",
+    response_model=KbArticleResponse,
+    summary="[RA-C10-B] KB 아티클 버전 복원 (engineer 이상, 복원 자체가 새 버전 생성)",
+)
+async def restore_kb_article_version(
+    tenant_slug: str,
+    kb_id: uuid.UUID,
+    version_no: int,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> KbArticleResponse:
+    """지정 버전의 title/content/tags를 현재 아티클에 복원.
+
+    복원 전 현재 상태를 새 버전 스냅샷으로 저장 → 복원 자체도 이력에 남음.
+    """
+    _require_writer(current_user)
+    article = await _get_or_404(db, current_user.tenant_id, kb_id)
+
+    ver = (
+        await db.execute(
+            select(KbArticleVersion).where(
+                and_(
+                    KbArticleVersion.article_id == kb_id,
+                    KbArticleVersion.tenant_id == current_user.tenant_id,
+                    KbArticleVersion.version_no == version_no,
+                )
+            )
+        )
+    ).scalar_one_or_none()
+    if ver is None:
+        raise HTTPException(status_code=404, detail=f"버전 {version_no}을 찾을 수 없습니다.")
+
+    # 현재 상태 스냅샷 저장 (복원 직전)
+    await _snapshot_kb_version(db, article, current_user)
+
+    # 버전 내용으로 복원
+    article.title = ver.title
+    article.content = ver.content
+    article.tags = list(ver.tags or [])
+
+    await db.commit()
+    await db.refresh(article)
+
+    await search_service.index_kb(_to_kb_doc(article, current_user.name))
+
+    return KbArticleResponse.model_validate(article)

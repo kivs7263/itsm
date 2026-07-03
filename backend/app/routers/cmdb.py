@@ -841,3 +841,265 @@ async def _record_import_run(
         logger.error("import_run 기록 실패 (upsert는 이미 커밋됨): %s", exc)
         # 이력 기록 실패 시 run 객체는 id만 있어도 응답 가능 (graceful)
     return run
+
+
+# ==================================================================
+# [RA-C10-A] CMDB SNMP Discovery — 프레임워크 MVP
+#
+# ⚠️ 네트워크 의존성 고지:
+#   SNMP 스캔은 UDP 161 포트에 실제 SNMP 에이전트가 응답해야 동작한다.
+#   컨테이너 내부에 SNMP 에이전트가 없으면 probe=failed 가 정상 경로.
+#   run status=failed + errors 기록 후 graceful 반환. 앱은 절대 죽지 않음.
+# ==================================================================
+
+from app.models.cmdb_discovery import DiscoveryRun  # noqa: E402
+
+
+class DiscoveryStartRequest(BaseModel):
+    target: str = Field(
+        ...,
+        description="단일 호스트(IP/FQDN) 또는 CIDR 범위. 예: 192.168.1.1 / 192.168.1.0/24",
+        max_length=500,
+    )
+    community: str = Field(default="public", max_length=100)
+    port: int = Field(default=161, ge=1, le=65535)
+    timeout: float = Field(default=3.0, ge=0.5, le=30.0)
+
+
+class DiscoveryRunOut(BaseModel):
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    target: str
+    status: str
+    started_at: datetime | None
+    finished_at: datetime | None
+    discovered_count: int
+    error_count: int
+    errors: list[dict]
+    created_by: uuid.UUID | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+@router.post(
+    "/discovery",
+    response_model=DiscoveryRunOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="[RA-C10-A] CMDB SNMP 디스커버리 시작 (admin/team_lead)",
+)
+async def start_cmdb_discovery(
+    tenant_slug: str,
+    body: DiscoveryStartRequest,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> DiscoveryRunOut:
+    """SNMP 디스커버리를 background로 실행하고 run 레코드를 즉시 반환(202).
+
+    단일 호스트: 동기 프로브.
+    CIDR 범위: 비동기 gather (최대 /24 = 254호스트).
+
+    실제 SNMP 대상이 없으면 run status=failed + errors 기록 (graceful).
+    """
+    require_roles([UserRole.admin, UserRole.team_lead])(current_user)
+
+    # Discovery Run 레코드 생성 (pending)
+    run = DiscoveryRun(
+        id=uuid.uuid4(),
+        tenant_id=current_user.tenant_id,
+        target=body.target,
+        status="pending",
+        created_by=current_user.id,
+    )
+    db.add(run)
+    await db.commit()
+    await db.refresh(run)
+
+    # Background 실행 (FastAPI background_tasks 미사용 — asyncio.create_task)
+    import asyncio
+    asyncio.create_task(
+        _run_discovery_background(
+            run_id=run.id,
+            tenant_id=current_user.tenant_id,
+            target=body.target,
+            community=body.community,
+            port=body.port,
+            timeout=body.timeout,
+        )
+    )
+
+    return DiscoveryRunOut.model_validate(run)
+
+
+async def _run_discovery_background(
+    *,
+    run_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    target: str,
+    community: str,
+    port: int,
+    timeout: float,
+) -> None:
+    """Discovery run 백그라운드 실행 — 별도 DB 세션 사용."""
+    import asyncio
+    from app.services.snmp_probe import expand_targets, probe_host, map_to_ci_type
+    from app.core.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as bg_db:
+        run = (
+            await bg_db.execute(
+                select(DiscoveryRun).where(DiscoveryRun.id == run_id)
+            )
+        ).scalar_one_or_none()
+        if run is None:
+            logger.error("Discovery run %s not found in background task", run_id)
+            return
+
+        # running 상태로 전환
+        from app.models.base import utcnow
+        run.status = "running"
+        run.started_at = utcnow()
+        await bg_db.commit()
+
+        discovered_count = 0
+        error_count = 0
+        errors: list[dict] = []
+
+        try:
+            hosts = expand_targets(target)
+            # 동시성 제한 — 최대 20 concurrent SNMP probes
+            semaphore = asyncio.Semaphore(20)
+
+            async def _probe_one(host: str):
+                nonlocal discovered_count, error_count
+                async with semaphore:
+                    result = await probe_host(
+                        host, community=community, port=port, timeout=timeout
+                    )
+                if result.success:
+                    # CI 생성/업데이트 (별도 세션 내부에서 직접 처리)
+                    ci_type_str = map_to_ci_type(result)
+                    ci_name = result.sys_name or host
+                    # 동일 tenant + IP 존재 여부 확인 (upsert)
+                    existing = (
+                        await bg_db.execute(
+                            select(ConfigurationItem).where(
+                                and_(
+                                    ConfigurationItem.tenant_id == tenant_id,
+                                    ConfigurationItem.ip_address == host,
+                                )
+                            )
+                        )
+                    ).scalar_one_or_none()
+
+                    if existing is None:
+                        ci = ConfigurationItem(
+                            id=uuid.uuid4(),
+                            tenant_id=tenant_id,
+                            ci_type=ci_type_str,
+                            name=ci_name,
+                            hostname=result.sys_name,
+                            ip_address=host,
+                            os_type=None,
+                            os_version=result.sys_descr[:200] if result.sys_descr else None,
+                            environment=CIEnvironment.production,
+                            status=CIStatus.active,
+                            criticality=CICriticality.medium,
+                            attributes={"snmp_sysDescr": result.sys_descr or "", "discovery_source": "snmp"},
+                        )
+                        bg_db.add(ci)
+                    else:
+                        # 기존 CI 업데이트 (이름·설명만)
+                        existing.hostname = result.sys_name or existing.hostname
+                        existing.attributes = {
+                            **(existing.attributes or {}),
+                            "snmp_sysDescr": result.sys_descr or "",
+                            "discovery_source": "snmp",
+                        }
+
+                    discovered_count += 1
+                else:
+                    error_count += 1
+                    errors.append({"host": host, "message": result.error or "unknown"})
+
+            await asyncio.gather(*[_probe_one(h) for h in hosts])
+            await bg_db.commit()
+
+            run.status = "completed" if error_count == 0 else (
+                "failed" if discovered_count == 0 else "completed"
+            )
+        except Exception as exc:
+            logger.exception("Discovery run %s 백그라운드 오류: %s", run_id, exc)
+            errors.append({"host": target, "message": str(exc)})
+            error_count += 1
+            run.status = "failed"
+
+        run.finished_at = utcnow()
+        run.discovered_count = discovered_count
+        run.error_count = error_count
+        run.errors = errors
+        await bg_db.commit()
+        logger.info(
+            "Discovery run %s 완료: status=%s discovered=%d errors=%d",
+            run_id, run.status, discovered_count, error_count,
+        )
+
+
+@router.get(
+    "/discovery/runs",
+    response_model=dict,
+    summary="[RA-C10-A] CMDB Discovery 실행 이력 목록",
+)
+async def list_discovery_runs(
+    tenant_slug: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    where_clause = DiscoveryRun.tenant_id == current_user.tenant_id
+    total = await db.scalar(
+        select(func.count()).select_from(DiscoveryRun).where(where_clause)
+    )
+    rows = (
+        await db.execute(
+            select(DiscoveryRun)
+            .where(where_clause)
+            .order_by(DiscoveryRun.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    ).scalars().all()
+
+    return {
+        "items": [DiscoveryRunOut.model_validate(r) for r in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.get(
+    "/discovery/runs/{run_id}",
+    response_model=DiscoveryRunOut,
+    summary="[RA-C10-A] CMDB Discovery 실행 상세",
+)
+async def get_discovery_run(
+    tenant_slug: str,
+    run_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> DiscoveryRunOut:
+    run = (
+        await db.execute(
+            select(DiscoveryRun).where(
+                and_(
+                    DiscoveryRun.id == run_id,
+                    DiscoveryRun.tenant_id == current_user.tenant_id,
+                )
+            )
+        )
+    ).scalar_one_or_none()
+    if run is None:
+        raise HTTPException(status_code=404, detail="Discovery run을 찾을 수 없습니다.")
+    return DiscoveryRunOut.model_validate(run)

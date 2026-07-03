@@ -6,7 +6,7 @@ from sqlalchemy import Boolean, Column, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
-from app.models.base import Base, TimestampMixin, gen_uuid, utcnow
+from app.models.base import Base, TimestampMixin, gen_uuid, utcnow  # noqa: F401 (utcnow used by TimestampMixin)
 
 
 class KbArticle(Base, TimestampMixin):
@@ -14,6 +14,8 @@ class KbArticle(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_kb_articles_tenant_id", "tenant_id"),
         Index("ix_kb_articles_tenant_published", "tenant_id", "is_published"),
+        # RA-C10: 마이그 055가 만든 복합 인덱스를 모델에도 선언(autogenerate 정합)
+        Index("ix_kb_articles_category_id", "tenant_id", "category_id"),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=gen_uuid)
@@ -49,6 +51,13 @@ class KbArticle(Base, TimestampMixin):
         nullable=True,
     )
     ki_status = Column(String(20), nullable=True, default="open")
+
+    # RA-C10-B: KB 카테고리 FK (migration 055)
+    category_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("kb_categories.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # TimestampMixin에서 created_at / updated_at 상속
     # 단, server_default 없이 Python default만 사용하므로 아래에서 명시 오버라이드

@@ -85,6 +85,9 @@ from app.models.service_catalog import (  # noqa: F401
     ServiceOfferingSubmission,
 )
 from app.models.problem import Problem, ProblemTicket  # noqa: F401
+from app.models.kb_category import KbCategory  # noqa: F401
+from app.models.kb_article_version import KbArticleVersion  # noqa: F401
+from app.models.cmdb_discovery import DiscoveryRun  # noqa: F401
 
 __all__ = [
     "Base",
@@ -189,4 +192,10 @@ __all__ = [
     # problem management (CA-P2-4)
     "Problem",
     "ProblemTicket",
+    # kb category (RA-C10-B)
+    "KbCategory",
+    # kb article versioning (RA-C10-B)
+    "KbArticleVersion",
+    # cmdb discovery runs (RA-C10-A)
+    "DiscoveryRun",
 ]
