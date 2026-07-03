@@ -120,7 +120,7 @@ RX-4 (데드코드 정리 + IA 재구조화)           마지막 · 회귀주의
 | `RX-2b` | Migration 059~061 — tickets/assets/contracts/CI에 company_id/site_id/requester_contact_id(NULLABLE) 추가 + 백필 + customers_compat 뷰. FK 미매핑 0 검증(060 division→parent 보정 포함) | M | `[ DONE 2026-07-04 ]` |
 | `RX-2c` | Backend 이중쓰기(Phase B) — customers/tickets/assets/contracts/cmdb create·update·delete가 companies/sites/contacts + FK컬럼 동기 쓰기. dual_write.py 헬퍼. READ는 customers_compat 뷰 | L | `[ DONE 2026-07-04 ]` |
 | `RX-2d` | 지점(Site) 속성(주소/시간대/본사) 관리 + 티켓 요청자 연락처 연결 — 비파괴 이중쓰기(division 경로 확장, sites row 동기). 프론트: 고객상세 지점 편집·티켓 요청자 Select/표시. **전면 계층 재구성(Company/Site/Contact 완전 분리 화면)은 파괴적 DROP 이후 후속** | L | `[ DONE 2026-07-04 ]` (reviewer 중) |
-| `RX-2-DROP` | 마이그레이션 — 구 customers/customer_contacts 컬럼·테이블 DROP. **이중쓰기 2주 검증 + DB스냅샷 후에만** (062는 FK교정으로 사용됨 → DROP은 063+) | M | `[ PENDING ]` (파괴적·보류) |
+| `RX-2-DROP` | 구 customers/customer_contacts DROP. **⚠️ 지금 실행 시 시스템 다운 확정** — 실측(2026-07-04): 구 customers 참조 FK **10개**(tickets·assets·contracts·CI·csat_surveys·recurring_alerts·portal_sessions·customer_notes·customer_contacts+self), 구 Customer 읽는 라우터 **7개**(customers.py에 select 18곳), assets/contracts.customer_id NOT NULL, 프론트·compat뷰 구 테이블 READ. **선행 필수 = READ 전면 이전**: ①10 FK 재배선(RX-2는 4개만 준비, csat/recurring/portal/notes 4개 company링크 미신설) ②7 라우터+프론트 companies/sites/contacts 재작성 ③검증 → 그다음 DROP(063+). 대형 별도 프로젝트·기능이득 0. **사용자 결정 대기** | L | `[ PENDING ]` (파괴적·READ이전 선행) |
 | `RX-2V` | reviewer(이중쓰기 정합·격리·원자성). BLOCKER1(account삭제 CASCADE 데이터손실→FK SET NULL 062)+높음3+중간3 발견·전건 수정·재배포. FK confdeltype=n 검증 | L | `[ DONE 2026-07-04 ]` |
 
 **성공 기준**: 다지점 고객사에서 지점별 자산·계약·티켓 필터 / 티켓이 요청자 개인에 연결 / 기존 데이터 무손실 이관.
