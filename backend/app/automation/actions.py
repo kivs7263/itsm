@@ -1,4 +1,4 @@
-"""자동화 액션 레지스트리 — Phase 1a 내부 액션 3개 + Phase 1b cross-product 액션 2개.
+"""자동화 액션 레지스트리 — Phase 1a 내부 액션 3개 + Phase 1b cross-product 2개 + Phase 1c 확장 3개.
 
 등록 액션:
 - notify_inbox: notification-service 통합 인박스 발행
@@ -6,6 +6,9 @@
 - assign_ticket: 티켓 담당자 배정
 - create_gw_approval_draft: GW 결재 draft 자동 기안 (WF-4 일반화, Phase 1b)
 - create_itsm_ticket: ITSM 후속 티켓 자동 생성 (WF-2 일반화, Phase 1b)
+- send_email: 고객/담당자/지정 수신자에게 이메일 발송 (Phase 1c, RA-C4)
+- add_comment: 티켓에 시스템 코멘트 자동 추가 (Phase 1c, RA-C4)
+- escalate_ticket: 지원팀 자동 이관 + 선택적 우선순위 상향 (Phase 1c, RA-C4)
 
 등록되지 않은 action_type은 실행 거부 (ActionError).
 각 액션은 Pydantic 파라미터 검증 후 실행.
@@ -109,6 +112,92 @@ class CreateItsmTicketParams(BaseModel):
     @classmethod
     def validate_priority(cls, v: str) -> str:
         if v not in _VALID_PRIORITIES:
+            raise ValueError(f"priority는 {_VALID_PRIORITIES} 중 하나여야 합니다")
+        return v
+
+
+# ---------------------------------------------------------------------------
+# Phase 1c — 확장 액션 파라미터 스키마 (RA-C4)
+# ---------------------------------------------------------------------------
+
+_VALID_RECIPIENT_TYPES = {"customer", "assignee", "custom"}
+_VALID_ESCALATION_REASONS = {
+    "technical_complexity", "permission_lack", "sla_breach",
+    "sla_warning", "customer_request", "manual", "other",
+}
+
+
+class SendEmailParams(BaseModel):
+    """send_email 파라미터.
+
+    recipient_type:
+      - "customer" : 티켓 고객 이메일 (primary contact 우선)
+      - "assignee" : 담당자 이메일
+      - "custom"   : to_email 직접 지정
+    subject, message: 자동화 룰 작성자가 직접 입력하는 제목/본문.
+    external_notif_service.queue_notification() + "automation_notify" 템플릿 재사용.
+    SMTP 미설정 시 graceful 실패.
+    """
+    recipient_type: str = Field("customer", description="customer|assignee|custom")
+    to_email: str | None = Field(None, description="recipient_type=custom 시 대상 이메일")
+    subject: str = Field(..., min_length=1, max_length=500, description="이메일 제목")
+    message: str = Field(..., min_length=1, description="이메일 본문 (HTML 허용)")
+
+    @field_validator("recipient_type")
+    @classmethod
+    def validate_recipient_type(cls, v: str) -> str:
+        if v not in _VALID_RECIPIENT_TYPES:
+            raise ValueError(f"recipient_type은 {_VALID_RECIPIENT_TYPES} 중 하나여야 합니다")
+        return v
+
+
+class AddCommentParams(BaseModel):
+    """add_comment 파라미터.
+
+    TicketComment(source='automation', author_id=None) 생성.
+    is_internal=True  → 담당자 전용 내부 메모 (고객 포털에 비공개).
+    is_internal=False → 고객 공개 코멘트.
+    """
+    body: str = Field(..., min_length=1, description="코멘트 내용")
+    is_internal: bool = Field(True, description="True=담당자 전용 내부 메모 / False=고객 공개")
+
+
+class EscalateTicketParams(BaseModel):
+    """escalate_ticket 파라미터.
+
+    TicketEscalation 자동 생성 + 티켓 escalation_level 증가.
+    priority 지정 시 우선순위도 함께 상향.
+    notify_customer=True이면 ticket_escalated 이메일 큐 등록 (SMTP 미설정 시 graceful 실패).
+    """
+    to_team_id: str = Field(..., description="이관 대상 지원팀 UUID")
+    reason: str = Field(
+        "sla_warning",
+        description="에스컬레이션 사유 (sla_breach|sla_warning|technical_complexity|permission_lack|customer_request|manual|other)",
+    )
+    handover_memo: str = Field(..., min_length=5, description="인계 메모 (최소 5자)")
+    priority: str | None = Field(None, description="우선순위 상향 (None=유지, high|critical)")
+    notify_customer: bool = Field(False, description="True=고객 이메일 알림 발송")
+
+    @field_validator("to_team_id")
+    @classmethod
+    def validate_team_uuid(cls, v: str) -> str:
+        try:
+            uuid.UUID(v)
+        except ValueError as exc:
+            raise ValueError(f"to_team_id는 유효한 UUID여야 합니다: {v!r}") from exc
+        return v
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, v: str) -> str:
+        if v not in _VALID_ESCALATION_REASONS:
+            raise ValueError(f"reason은 {_VALID_ESCALATION_REASONS} 중 하나여야 합니다")
+        return v
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, v: str | None) -> str | None:
+        if v is not None and v not in _VALID_PRIORITIES:
             raise ValueError(f"priority는 {_VALID_PRIORITIES} 중 하나여야 합니다")
         return v
 
@@ -432,6 +521,295 @@ async def _handle_create_itsm_ticket(
 
 
 # ---------------------------------------------------------------------------
+# Phase 1c — 확장 액션 핸들러 (RA-C4)
+# ---------------------------------------------------------------------------
+
+
+async def _handle_send_email(
+    params_raw: dict[str, Any],
+    payload: dict[str, Any],
+    db: AsyncSession,
+    depth: int = 0,
+) -> dict[str, Any]:
+    """고객/담당자/지정 수신자에게 이메일 발송.
+
+    external_notif_service.queue_notification() + "automation_notify" 템플릿 재사용.
+    실제 발송은 SLA worker 루프의 process_pending()이 수행 (지수 백오프 재시도 포함).
+    SMTP 미설정 시 graceful 실패 (pending row는 생성되나 worker에서 즉시 failed 처리).
+    """
+    try:
+        params = SendEmailParams.model_validate(params_raw)
+    except Exception as exc:
+        return {"status": "error", "error": f"파라미터 검증 실패: {exc}"}
+
+    ticket_id_raw = payload.get("ticket_id")
+    tenant_id_raw = payload.get("tenant_id")
+    if not ticket_id_raw or not tenant_id_raw:
+        return {"status": "skipped", "reason": "payload에 ticket_id 또는 tenant_id 없음"}
+
+    try:
+        from app.models.ticket import Ticket
+        from app.models.user import User
+        from app.services.external_notif_service import queue_notification, resolve_customer_email
+
+        tenant_id = uuid.UUID(str(tenant_id_raw))
+        ticket = await db.get(Ticket, uuid.UUID(str(ticket_id_raw)))
+        if not ticket:
+            return {"status": "skipped", "reason": f"ticket {ticket_id_raw} 미발견"}
+
+        # 수신자 결정
+        to_email: str | None = None
+        recipient_name: str = "담당자"
+
+        if params.recipient_type == "customer":
+            to_email, recipient_name = await resolve_customer_email(db, ticket)
+            if not to_email:
+                return {"status": "skipped", "reason": "고객 이메일 없음"}
+        elif params.recipient_type == "assignee":
+            if not ticket.assigned_to:
+                return {"status": "skipped", "reason": "담당자 미배정"}
+            user = await db.get(User, ticket.assigned_to)
+            if not user or not user.email:
+                return {"status": "skipped", "reason": "담당자 이메일 없음"}
+            to_email = user.email
+            recipient_name = user.name
+        elif params.recipient_type == "custom":
+            if not params.to_email:
+                return {"status": "error", "error": "recipient_type=custom이면 to_email 필수"}
+            to_email = params.to_email
+            recipient_name = "수신자"
+
+        await queue_notification(
+            db,
+            tenant_id=tenant_id,
+            ticket_id=ticket.id,
+            escalation_id=None,
+            channel="email",
+            event_type="automation_notify",
+            recipient=to_email,
+            payload={
+                "ticket_number": ticket.ticket_number or str(ticket.id)[:8],
+                "ticket_title": ticket.title,
+                "customer_name": recipient_name,
+                "custom_subject": params.subject,
+                "custom_body": params.message,
+            },
+        )
+        logger.info("send_email queued: ticket=%s recipient_type=%s to=%s", ticket_id_raw, params.recipient_type, to_email)
+        return {"status": "ok", "to": to_email, "recipient_type": params.recipient_type}
+    except Exception as exc:
+        logger.warning("send_email 실패 (graceful): %s", exc)
+        return {"status": "error", "error": str(exc)}
+
+
+async def _handle_add_comment(
+    params_raw: dict[str, Any],
+    payload: dict[str, Any],
+    db: AsyncSession,
+    depth: int = 0,
+) -> dict[str, Any]:
+    """티켓에 시스템 자동 코멘트 추가.
+
+    source='automation', author_id=None (시스템 발신).
+    activity_service.record()로 ticket_activities에도 기록.
+    """
+    try:
+        params = AddCommentParams.model_validate(params_raw)
+    except Exception as exc:
+        return {"status": "error", "error": f"파라미터 검증 실패: {exc}"}
+
+    ticket_id_raw = payload.get("ticket_id")
+    tenant_id_raw = payload.get("tenant_id")
+    if not ticket_id_raw or not tenant_id_raw:
+        return {"status": "skipped", "reason": "payload에 ticket_id 또는 tenant_id 없음"}
+
+    try:
+        from app.models.ticket import Ticket, TicketComment
+        from app.services import activity_service
+
+        ticket_id = uuid.UUID(str(ticket_id_raw))
+        tenant_id = uuid.UUID(str(tenant_id_raw))
+
+        ticket = await db.get(Ticket, ticket_id)
+        if not ticket:
+            return {"status": "skipped", "reason": f"ticket {ticket_id_raw} 미발견"}
+
+        comment = TicketComment(
+            tenant_id=tenant_id,
+            ticket_id=ticket_id,
+            author_id=None,          # 시스템 자동 발신
+            body=params.body,
+            is_internal=params.is_internal,
+            source="automation",
+        )
+        db.add(comment)
+        await db.flush()
+
+        await activity_service.record(
+            db,
+            tenant_id=tenant_id,
+            ticket_id=ticket_id,
+            actor_id=None,
+            event_type="comment_added",
+            to_value=params.body[:100],
+            meta={"source": "automation", "is_internal": params.is_internal},
+        )
+
+        logger.info(
+            "add_comment: ticket=%s comment_id=%s is_internal=%s",
+            ticket_id_raw, comment.id, params.is_internal,
+        )
+        return {"status": "ok", "comment_id": str(comment.id), "is_internal": params.is_internal}
+    except Exception as exc:
+        logger.warning("add_comment 실패: %s", exc)
+        raise ActionError(str(exc)) from exc
+
+
+async def _handle_escalate_ticket(
+    params_raw: dict[str, Any],
+    payload: dict[str, Any],
+    db: AsyncSession,
+    depth: int = 0,
+) -> dict[str, Any]:
+    """자동 에스컬레이션 — 지원팀 이관 + 선택적 우선순위 상향.
+
+    TicketEscalation 생성 + 티켓 escalation_level/count/last_escalated_at 갱신.
+    triggered_by=None (시스템 자동 에스컬레이션).
+    notify_customer=True이면 ticket_escalated 이메일 큐 등록 (graceful).
+    EscalationReason 허용값 위반 시 DB IntegrityError → ActionError 상승.
+    """
+    try:
+        params = EscalateTicketParams.model_validate(params_raw)
+    except Exception as exc:
+        return {"status": "error", "error": f"파라미터 검증 실패: {exc}"}
+
+    ticket_id_raw = payload.get("ticket_id")
+    tenant_id_raw = payload.get("tenant_id")
+    if not ticket_id_raw or not tenant_id_raw:
+        return {"status": "skipped", "reason": "payload에 ticket_id 또는 tenant_id 없음"}
+
+    try:
+        from sqlalchemy import select as _select
+        from app.models.ticket import Ticket, TicketPriority
+        from app.models.escalation import TicketEscalation, SupportTeam
+        from app.services import activity_service
+
+        ticket_id = uuid.UUID(str(ticket_id_raw))
+        tenant_id = uuid.UUID(str(tenant_id_raw))
+        to_team_id = uuid.UUID(params.to_team_id)
+
+        ticket = await db.get(Ticket, ticket_id)
+        if not ticket:
+            return {"status": "skipped", "reason": f"ticket {ticket_id_raw} 미발견"}
+
+        # 팀 존재 + 테넌트 소속 + 활성 확인
+        team = await db.scalar(
+            _select(SupportTeam).where(
+                SupportTeam.id == to_team_id,
+                SupportTeam.tenant_id == tenant_id,
+                SupportTeam.is_active.is_(True),
+            )
+        )
+        if not team:
+            return {"status": "error", "error": f"지원팀 {params.to_team_id} 미발견 또는 비활성"}
+
+        from_level = getattr(ticket, "escalation_level", None) or 1
+        to_level = from_level + 1
+
+        esc = TicketEscalation(
+            id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            ticket_id=ticket_id,
+            from_level=from_level,
+            to_level=to_level,
+            from_assigned=ticket.assigned_to,
+            to_team_id=to_team_id,
+            to_assigned=None,
+            reason=params.reason,
+            handover_memo=params.handover_memo,
+            customer_summary=None,
+            triggered_by=None,   # 시스템 자동 에스컬레이션
+        )
+        db.add(esc)
+
+        # 티켓 비정규화 컬럼 업데이트 (컬럼 존재 여부 방어 — migration 선반영 시 동작)
+        if hasattr(ticket, "escalation_level"):
+            ticket.escalation_level = to_level
+        if hasattr(ticket, "escalation_count"):
+            ticket.escalation_count = (getattr(ticket, "escalation_count", 0) or 0) + 1
+        if hasattr(ticket, "last_escalated_at"):
+            ticket.last_escalated_at = datetime.now(timezone.utc)
+
+        # 우선순위 상향 (요청 시)
+        prev_priority: str | None = None
+        if params.priority:
+            prev_priority = str(
+                ticket.priority.value if hasattr(ticket.priority, "value") else ticket.priority
+            )
+            ticket.priority = TicketPriority(params.priority)
+
+        await db.flush()
+
+        await activity_service.record(
+            db,
+            tenant_id=tenant_id,
+            ticket_id=ticket_id,
+            actor_id=None,
+            event_type="escalated",
+            from_value=str(from_level),
+            to_value=str(to_level),
+            meta={
+                "reason": params.reason,
+                "to_team_id": str(to_team_id),
+                "source": "automation",
+                "priority_changed": prev_priority is not None,
+            },
+        )
+
+        # 선택적 고객 이메일 알림 (graceful — SMTP 미설정/실패 무시)
+        if params.notify_customer and ticket.customer_id:
+            try:
+                from app.services.external_notif_service import queue_notification, resolve_customer_email
+                customer_email, customer_name = await resolve_customer_email(db, ticket)
+                if customer_email:
+                    await queue_notification(
+                        db,
+                        tenant_id=tenant_id,
+                        ticket_id=ticket_id,
+                        escalation_id=esc.id,
+                        channel="email",
+                        event_type="ticket_escalated",
+                        recipient=customer_email,
+                        payload={
+                            "ticket_title": ticket.title,
+                            "ticket_number": ticket.ticket_number or str(ticket_id)[:8],
+                            "customer_name": customer_name,
+                            "customer_summary": "",
+                        },
+                    )
+            except Exception as exc_notify:
+                logger.warning("escalate_ticket 고객 알림 큐 실패 (무시): %s", exc_notify)
+
+        logger.info(
+            "automation escalate_ticket: ticket=%s %d→%d team=%s priority_changed=%s",
+            ticket_id_raw, from_level, to_level, params.to_team_id, prev_priority is not None,
+        )
+        return {
+            "status": "ok",
+            "from_level": from_level,
+            "to_level": to_level,
+            "to_team_id": params.to_team_id,
+            "priority_changed": prev_priority is not None,
+            "new_priority": params.priority,
+        }
+    except ActionError:
+        raise
+    except Exception as exc:
+        logger.warning("escalate_ticket 실패 (graceful): %s", exc)
+        return {"status": "error", "error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
 # 레지스트리
 # ---------------------------------------------------------------------------
 
@@ -443,6 +821,10 @@ _REGISTRY: dict[str, Any] = {
     # Phase 1b — cross-product 비동기 액션 (graceful, fire-and-forget)
     "create_gw_approval_draft": _handle_create_gw_approval_draft,
     "create_itsm_ticket": _handle_create_itsm_ticket,
+    # Phase 1c — 확장 액션 (RA-C4: 이메일·코멘트·에스컬레이션)
+    "send_email": _handle_send_email,
+    "add_comment": _handle_add_comment,
+    "escalate_ticket": _handle_escalate_ticket,
 }
 
 

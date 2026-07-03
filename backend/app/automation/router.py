@@ -46,6 +46,7 @@ SUPPORTED_TRIGGERS = {
     "ticket.status_changed",
     "ticket.sla_breach_warning",
     "ticket.created",
+    "ticket.assigned",   # Phase 1c: 담당자 배정 시 발화 (tickets.py PATCH 훅 배선 완료)
 }
 
 

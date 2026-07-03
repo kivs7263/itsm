@@ -786,6 +786,31 @@ async def update_ticket(
             except Exception:
                 pass
 
+    # ADR-050 자동화 룰 엔진 — ticket.assigned 트리거 (graceful, Phase 1c)
+    # 담당자가 실제로 변경된 경우에만 발화
+    _update_fields = data.model_dump(exclude_unset=True)
+    if "assigned_to" in _update_fields and _update_fields.get("assigned_to"):
+        try:
+            from app.automation.engine import dispatch as _auto_dispatch
+            await _auto_dispatch(
+                "ticket.assigned",
+                {
+                    "ticket_id": str(ticket.id),
+                    "assignee_id": str(ticket.assigned_to),
+                    "prev_assignee_id": _prev_assigned,
+                    "tenant_id": str(current_user.tenant_id),
+                    "actor_id": str(current_user.id),
+                },
+                db,
+                depth=0,
+            )
+            await db.commit()
+        except Exception:
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
     return _ticket_out
 
 

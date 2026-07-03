@@ -112,6 +112,14 @@ _TEMPLATES: dict[str, dict[str, str]] = {
             "<span style='color:#999;font-size:12px;'>본 링크는 7일 후 만료됩니다.</span>"
         ),
     },
+    # payload: custom_subject, custom_body, customer_name (optional), ticket_number (optional)
+    # send_email 자동화 액션 전용 — 룰 작성자가 제목·본문 직접 지정.
+    # heading은 render_email이 렌더링 없이 _LAYOUT에 직접 전달하므로 고정 문자열 사용.
+    "automation_notify": {
+        "subject": "{{ custom_subject }}",
+        "heading": "자동화 알림",
+        "body": "<b>{{ custom_subject }}</b><br><br>{{ custom_body }}",
+    },
 }
 
 
