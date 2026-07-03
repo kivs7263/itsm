@@ -51,3 +51,14 @@ class Asset(Base):
     license_end = Column(Date, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+    # ADR-043 Phase 3 (마이그레이션 059 — 이중쓰기 기간)
+    company_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("companies.id", ondelete="SET NULL"),  # 062: division 소속 자산 보존
+        nullable=True,
+    )
+    site_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("sites.id", ondelete="SET NULL"),
+        nullable=True,
+    )

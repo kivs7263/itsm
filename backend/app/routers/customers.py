@@ -28,12 +28,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, or_, select, text, update
+from sqlalchemy import and_, delete as sa_delete, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_roles
-from app.models import Customer, CustomerContact, CustomerNote, User, UserRole
+from app.models import Company, Contact, Customer, CustomerContact, CustomerNote, Site, User, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -293,6 +293,25 @@ async def create_customer(
         kind=data.kind,
     )
     db.add(customer)
+
+    # ── 이중쓰기: 신 테이블 동기 INSERT (같은 트랜잭션) ──────────────
+    if data.kind == "account":
+        db.add(Company(
+            id=customer.id,
+            tenant_id=current_user.tenant_id,
+            name=data.name,
+            contract_grade=data.contract_grade,
+            linked_business_id=None,
+        ))
+    elif data.kind == "division" and data.parent_id is not None:
+        db.add(Site(
+            id=customer.id,
+            tenant_id=current_user.tenant_id,
+            company_id=data.parent_id,
+            name=data.name,
+        ))
+    # division + parent_id IS NULL → 고아 division: Site 생성 불가(company_id NOT NULL), 스킵
+
     await db.commit()
     await db.refresh(customer)
     return CustomerOut.model_validate(customer)
@@ -362,8 +381,45 @@ async def update_customer(
         await _check_cycle(db, current_user.tenant_id, customer_id, data.parent_id)
         await _check_depth(db, current_user.tenant_id, data.parent_id)
 
-    for field, value in data.model_dump(exclude_unset=True).items():
+    update_fields = data.model_dump(exclude_unset=True)
+    # H2/H3: kind 전환·division orphan화는 신 스키마(sites.company_id NOT NULL)와 충돌 → 차단
+    if "kind" in update_fields and update_fields["kind"] != customer.kind:
+        raise HTTPException(status_code=400, detail="고객 유형(kind) 변경은 지원하지 않습니다.")
+    if (
+        customer.kind == "division"
+        and "parent_id" in update_fields
+        and update_fields["parent_id"] is None
+    ):
+        raise HTTPException(status_code=400, detail="부서의 상위 고객사(parent_id)는 비울 수 없습니다.")
+    for field, value in update_fields.items():
         setattr(customer, field, value)
+
+    # ── 이중쓰기: 신 테이블 동기 UPDATE (같은 트랜잭션) ──────────────
+    # kind 변경은 별도 마이그레이션 필요 — 여기서는 현재 kind 기준으로 동기
+    if customer.kind == "account":
+        _company_vals: dict = {}
+        if "name" in update_fields:
+            _company_vals["name"] = update_fields["name"]
+        if "contract_grade" in update_fields:
+            _company_vals["contract_grade"] = update_fields["contract_grade"]
+        if _company_vals:
+            await db.execute(
+                update(Company)
+                .where(Company.id == customer_id, Company.tenant_id == current_user.tenant_id)
+                .values(**_company_vals)
+            )
+    elif customer.kind == "division":
+        _site_vals: dict = {}
+        if "name" in update_fields:
+            _site_vals["name"] = update_fields["name"]
+        if "parent_id" in update_fields and update_fields["parent_id"] is not None:
+            _site_vals["company_id"] = update_fields["parent_id"]
+        if _site_vals:
+            await db.execute(
+                update(Site)
+                .where(Site.id == customer_id, Site.tenant_id == current_user.tenant_id)
+                .values(**_site_vals)
+            )
 
     await db.commit()
     await db.refresh(customer)
@@ -387,6 +443,35 @@ async def delete_customer(
     db: AsyncSession = Depends(get_db),
 ) -> None:
     customer = await _get_or_404(db, current_user.tenant_id, customer_id)
+
+    # ── 이중쓰기: 신 테이블 동기 DELETE (같은 트랜잭션) ──────────────
+    if customer.kind == "account":
+        # Company 삭제 → CASCADE: sites, contacts (FK ondelete=CASCADE)
+        # assets.company_id / contracts.company_id 도 CASCADE — 기존 customer CASCADE와 동일 효과
+        await db.execute(
+            sa_delete(Company).where(
+                Company.id == customer_id,
+                Company.tenant_id == current_user.tenant_id,
+            )
+        )
+    elif customer.kind == "division":
+        # 이 division의 CustomerContact ID 수집 (contacts 동기 삭제용)
+        _cc_ids = (await db.execute(
+            select(CustomerContact.id).where(
+                CustomerContact.customer_id == customer_id,
+                CustomerContact.tenant_id == current_user.tenant_id,
+            )
+        )).scalars().all()
+        if _cc_ids:
+            await db.execute(sa_delete(Contact).where(Contact.id.in_(_cc_ids)))
+        # Site 삭제 (contacts.site_id → SET NULL, 삭제되지 않음)
+        await db.execute(
+            sa_delete(Site).where(
+                Site.id == customer_id,
+                Site.tenant_id == current_user.tenant_id,
+            )
+        )
+
     await db.delete(customer)
     await db.commit()
 
@@ -422,6 +507,15 @@ async def create_division(
         kind="division",
     )
     db.add(division)
+
+    # ── 이중쓰기: sites INSERT (같은 트랜잭션) ─────────────────────────
+    db.add(Site(
+        id=division.id,
+        tenant_id=current_user.tenant_id,
+        company_id=parent.id,
+        name=data.name,
+    ))
+
     await db.commit()
     await db.refresh(division)
     return CustomerOut.model_validate(division)
@@ -777,10 +871,21 @@ async def create_contact(
     current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead, UserRole.engineer))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> ContactOut:
-    await _get_or_404(db, current_user.tenant_id, customer_id)
+    cust = await _get_or_404(db, current_user.tenant_id, customer_id)
 
     # is_primary=True이면 기존 primary를 먼저 False로 전환
     if data.is_primary:
+        # 기존 primary ID 수집 (contacts 동기화용)
+        _old_primary_ids = (await db.execute(
+            select(CustomerContact.id).where(
+                and_(
+                    CustomerContact.customer_id == customer_id,
+                    CustomerContact.tenant_id == current_user.tenant_id,
+                    CustomerContact.is_primary.is_(True),
+                )
+            )
+        )).scalars().all()
+
         await db.execute(
             update(CustomerContact)
             .where(
@@ -792,6 +897,14 @@ async def create_contact(
             )
             .values(is_primary=False)
         )
+
+        # ── 이중쓰기: 기존 primary contacts도 동기 해제 ──────────────
+        if _old_primary_ids:
+            await db.execute(
+                update(Contact)
+                .where(Contact.id.in_(_old_primary_ids))
+                .values(is_primary=False)
+            )
 
     contact = CustomerContact(
         id=uuid.uuid4(),
@@ -806,6 +919,32 @@ async def create_contact(
     )
     db.add(contact)
     await db.flush()  # contact.id 확보
+
+    # ── 이중쓰기: contacts INSERT (같은 트랜잭션) ─────────────────────
+    # company_id 결정: account → cust.id, division → cust.parent_id
+    if cust.kind == "account":
+        _company_id: uuid.UUID | None = cust.id
+        _site_id: uuid.UUID | None = None
+    elif cust.kind == "division" and cust.parent_id is not None:
+        _company_id = cust.parent_id
+        _site_id = cust.id
+    else:
+        _company_id = None
+        _site_id = None
+
+    if _company_id is not None:
+        db.add(Contact(
+            id=contact.id,
+            tenant_id=current_user.tenant_id,
+            company_id=_company_id,
+            site_id=_site_id,
+            name=data.name,
+            role=data.role,
+            email=data.email,
+            phone=data.phone,
+            is_primary=data.is_primary,
+            memo=data.memo,
+        ))
 
     if data.is_primary:
         await _sync_primary_to_customer(db, customer_id, contact)
@@ -836,8 +975,22 @@ async def update_contact(
     await _get_or_404(db, current_user.tenant_id, customer_id)
     contact = await _get_contact_or_404(db, current_user.tenant_id, customer_id, contact_id)
 
-    for field, value in data.model_dump(exclude_unset=True).items():
+    contact_update_fields = data.model_dump(exclude_unset=True)
+    for field, value in contact_update_fields.items():
         setattr(contact, field, value)
+
+    # ── 이중쓰기: contacts 동기 UPDATE (같은 트랜잭션) ───────────────
+    if contact_update_fields:
+        _contact_sync: dict = {
+            k: v for k, v in contact_update_fields.items()
+            if k in {"name", "role", "email", "phone", "memo"}
+        }
+        if _contact_sync:
+            await db.execute(
+                update(Contact)
+                .where(Contact.id == contact_id)
+                .values(**_contact_sync)
+            )
 
     await db.commit()
     await db.refresh(contact)
@@ -869,6 +1022,9 @@ async def delete_contact(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="다른 주 연락처를 지정한 후 삭제하세요.",
         )
+
+    # ── 이중쓰기: contacts 동기 DELETE (같은 트랜잭션) ──────────────
+    await db.execute(sa_delete(Contact).where(Contact.id == contact_id))
 
     await db.delete(contact)
     await db.commit()
@@ -1075,6 +1231,30 @@ async def set_primary_contact(
 
     # customers.email/phone 동기화
     await _sync_primary_to_customer(db, customer_id, contact)
+
+    # ── 이중쓰기: contacts is_primary 동기 (같은 트랜잭션) ────────────
+    # 이 customer의 다른 모든 ContactContact → False
+    _other_cc_ids = (await db.execute(
+        select(CustomerContact.id).where(
+            and_(
+                CustomerContact.customer_id == customer_id,
+                CustomerContact.tenant_id == current_user.tenant_id,
+                CustomerContact.id != contact_id,
+            )
+        )
+    )).scalars().all()
+    if _other_cc_ids:
+        await db.execute(
+            update(Contact)
+            .where(Contact.id.in_(_other_cc_ids))
+            .values(is_primary=False)
+        )
+    # 대상 Contact → True
+    await db.execute(
+        update(Contact)
+        .where(Contact.id == contact_id)
+        .values(is_primary=True)
+    )
 
     await db.commit()
     await db.refresh(contact)

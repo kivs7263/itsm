@@ -119,6 +119,22 @@ class Ticket(Base):
         ForeignKey("service_offerings.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # ADR-043 Phase 3: 신 테이블 FK 컬럼 (마이그레이션 059 — 이중쓰기 기간)
+    company_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("companies.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    site_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("sites.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    requester_contact_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("contacts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
 
 class TicketComment(Base):

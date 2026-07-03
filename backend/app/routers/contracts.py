@@ -189,6 +189,10 @@ async def create_contract(
     if cust is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="고객을 찾을 수 없습니다.")
 
+    # ADR-043 이중쓰기: customer_id → company_id 결정 (contracts는 site_id 없음)
+    from app.services.dual_write import resolve_company_site as _resolve
+    _company_id, _ = await _resolve(db, current_user.tenant_id, data.customer_id)
+
     contract = Contract(
         id=uuid.uuid4(),
         tenant_id=current_user.tenant_id,
@@ -202,6 +206,8 @@ async def create_contract(
         support_hours=data.support_hours,
         memo=data.memo,
         linked_business_id=data.linked_business_id,
+        # 신 테이블 FK 컬럼 (마이그레이션 059)
+        company_id=_company_id,
     )
     db.add(contract)
     await db.commit()
@@ -248,8 +254,17 @@ async def update_contract(
 ) -> ContractOut:
     contract = await _get_or_404(db, current_user.tenant_id, contract_id)
 
-    for field, value in data.model_dump(exclude_unset=True).items():
+    contract_update_fields = data.model_dump(exclude_unset=True)
+    for field, value in contract_update_fields.items():
         setattr(contract, field, value)
+
+    # ADR-043 이중쓰기: customer_id 변경 시 company_id 재계산
+    if "customer_id" in contract_update_fields:
+        from app.services.dual_write import resolve_company_site as _resolve
+        _company_id, _ = await _resolve(
+            db, current_user.tenant_id, contract_update_fields["customer_id"]
+        )
+        contract.company_id = _company_id
 
     await db.commit()
     await db.refresh(contract)

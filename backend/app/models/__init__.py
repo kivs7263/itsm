@@ -8,6 +8,10 @@ from app.models.user import User, UserRole  # noqa: F401
 from app.models.team import Team, TeamMember  # noqa: F401
 from app.models.customer import Customer, CustomerNote  # noqa: F401
 from app.models.customer_contact import CustomerContact  # noqa: F401
+# ADR-043: 3정규화 신 모델 (마이그레이션 057)
+from app.models.company import Company  # noqa: F401
+from app.models.site import Site  # noqa: F401
+from app.models.contact import Contact  # noqa: F401
 from app.models.asset import Asset, AssetType  # noqa: F401
 from app.models.contract import Contract, ContractType  # noqa: F401
 from app.models.ticket import (  # noqa: F401
@@ -100,10 +104,14 @@ __all__ = [
     # team
     "Team",
     "TeamMember",
-    # customer
+    # customer (기존 — 이중쓰기 기간 유지)
     "Customer",
     "CustomerNote",
     "CustomerContact",
+    # company / site / contact (ADR-043 신규 — 마이그레이션 057)
+    "Company",
+    "Site",
+    "Contact",
     # asset
     "Asset",
     "AssetType",

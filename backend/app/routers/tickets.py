@@ -77,6 +77,7 @@ class TicketCreate(BaseModel):
     source: str | None = None         # customer_direct | customer_relay | engineer_found | monitoring
     request_type: str | None = None   # incident | service_request | installation | upgrade | technical_inquiry | maintenance
     parent_ticket_id: uuid.UUID | None = None
+    requester_contact_id: uuid.UUID | None = None  # ADR-043: 신 contacts 테이블 직접 연결
 
 
 class TicketUpdate(BaseModel):
@@ -85,6 +86,7 @@ class TicketUpdate(BaseModel):
     priority: TicketPriority | None = None
     status: TicketStatus | None = None
     assigned_to: uuid.UUID | None = None
+    customer_id: uuid.UUID | None = None  # ADR-043: customer 변경 시 company_id/site_id 재계산
     contract_id: uuid.UUID | None = None
     source: str | None = None
     request_type: str | None = None
@@ -453,6 +455,22 @@ async def create_ticket(
     sla_response_deadline, sla_resolution_deadline = await _compute_sla_deadlines(
         db, current_user.tenant_id, data.contract_id, now
     )
+    # ADR-043 이중쓰기: customer_id → company_id/site_id 결정
+    from app.services.dual_write import resolve_company_site as _resolve
+    _company_id, _site_id = await _resolve(db, current_user.tenant_id, data.customer_id)
+
+    # H1: requester_contact_id 크로스테넌트 방지 — 자기 테넌트 contact만 허용
+    if data.requester_contact_id is not None:
+        from app.models import Contact
+        _ct = await db.scalar(
+            select(Contact).where(
+                Contact.id == data.requester_contact_id,
+                Contact.tenant_id == current_user.tenant_id,
+            )
+        )
+        if _ct is None:
+            raise HTTPException(status_code=400, detail="요청자 연락처를 찾을 수 없습니다.")
+
     ticket = Ticket(
         id=uuid.uuid4(),
         tenant_id=current_user.tenant_id,
@@ -470,6 +488,10 @@ async def create_ticket(
         ticket_number=ticket_number,
         sla_response_deadline=sla_response_deadline,
         sla_resolution_deadline=sla_resolution_deadline,
+        # 신 테이블 FK 컬럼 (마이그레이션 059)
+        company_id=_company_id,
+        site_id=_site_id,
+        requester_contact_id=data.requester_contact_id,
     )
     db.add(ticket)
     await activity_service.record(
@@ -696,6 +718,15 @@ async def update_ticket(
         )
         ticket.sla_response_deadline = r_dl
         ticket.sla_resolution_deadline = res_dl
+
+    # ADR-043 이중쓰기: customer_id 변경 시 company_id/site_id 재계산
+    if "customer_id" in update_fields:
+        from app.services.dual_write import resolve_company_site as _resolve
+        _company_id, _site_id = await _resolve(
+            db, current_user.tenant_id, update_fields["customer_id"]
+        )
+        ticket.company_id = _company_id
+        ticket.site_id = _site_id
 
     # 활동 이벤트 기록
     _new_status   = str(ticket.status.value if hasattr(ticket.status, "value") else ticket.status)

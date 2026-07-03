@@ -333,6 +333,10 @@ async def create_ci(
         )
         if cust is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="고객을 찾을 수 없습니다.")
+    # ADR-043 이중쓰기: customer_id → company_id/site_id 결정
+    from app.services.dual_write import resolve_company_site as _resolve
+    _company_id, _site_id = await _resolve(db, current_user.tenant_id, data.customer_id)
+
     ci = ConfigurationItem(
         id=uuid.uuid4(),
         tenant_id=current_user.tenant_id,
@@ -349,6 +353,9 @@ async def create_ci(
         customer_id=data.customer_id,
         asset_id=data.asset_id,
         attributes=data.attributes or {},
+        # 신 테이블 FK 컬럼 (마이그레이션 059)
+        company_id=_company_id,
+        site_id=_site_id,
     )
     db.add(ci)
     await db.commit()
@@ -475,6 +482,15 @@ async def update_ci(
     # 실제 업데이트
     for field, value in update_fields.items():
         setattr(ci, field, value)
+
+    # ADR-043 이중쓰기: customer_id 변경 시 company_id/site_id 재계산
+    if "customer_id" in update_fields:
+        from app.services.dual_write import resolve_company_site as _resolve
+        _company_id, _site_id = await _resolve(
+            db, current_user.tenant_id, update_fields["customer_id"]
+        )
+        ci.company_id = _company_id
+        ci.site_id = _site_id
 
     await db.commit()
     await db.refresh(ci)
@@ -1019,6 +1035,9 @@ async def _run_discovery_background(
                     ).scalar_one_or_none()
 
                     if existing is None:
+                        # M3: 이중쓰기 — customer_id → company_id/site_id (create_ci와 동일)
+                        from app.services.dual_write import resolve_company_site as _resolve_cs
+                        _disc_company_id, _disc_site_id = await _resolve_cs(bg_db, tenant_id, customer_id)
                         ci = ConfigurationItem(
                             id=uuid.uuid4(),
                             tenant_id=tenant_id,
@@ -1032,6 +1051,8 @@ async def _run_discovery_background(
                             status=CIStatus.active,
                             criticality=CICriticality.medium,
                             customer_id=customer_id,
+                            company_id=_disc_company_id,
+                            site_id=_disc_site_id,
                             attributes={"snmp_sysDescr": result.sys_descr or "", "discovery_source": "snmp"},
                         )
                         bg_db.add(ci)
