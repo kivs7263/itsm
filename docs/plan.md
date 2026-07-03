@@ -118,10 +118,10 @@ RX-4 (데드코드 정리 + IA 재구조화)           마지막 · 회귀주의
 | `RX-2-ADR` | ADR 작성 — Company/Site/Contact 3분리 스키마 + 마이그레이션 전략. → **[ADR-043](adr/ADR-043-customer-data-model-redesign.md)** 완료. 마이그레이션 057~062 6단계(신테이블→백필→FK→호환뷰→2주 이중쓰기→구컬럼 DROP), 리스크 Top3(고아 division·autogen drift·이중쓰기 누락) | M | `[ DONE 2026-07-03 ]` |
 | `RX-2a` | Migration 057~058 — `companies`(구 account)·`sites`(구 division)·`contacts`(구 customer_contacts) CREATE + 백필. 라이브 적용·검증(companies3=account3, sites3=division3) | L | `[ DONE 2026-07-04 ]` |
 | `RX-2b` | Migration 059~061 — tickets/assets/contracts/CI에 company_id/site_id/requester_contact_id(NULLABLE) 추가 + 백필 + customers_compat 뷰. FK 미매핑 0 검증(060 division→parent 보정 포함) | M | `[ DONE 2026-07-04 ]` |
-| `RX-2c` | Backend 이중쓰기(Phase B) — customers/tickets/assets/contracts/cmdb create·update·delete가 companies/sites/contacts + FK컬럼 동기 쓰기. READ는 customers_compat 뷰로 하위호환 | L | `[ IN PROGRESS ]` |
+| `RX-2c` | Backend 이중쓰기(Phase B) — customers/tickets/assets/contracts/cmdb create·update·delete가 companies/sites/contacts + FK컬럼 동기 쓰기. dual_write.py 헬퍼. READ는 customers_compat 뷰 | L | `[ DONE 2026-07-04 ]` |
 | `RX-2d` | Frontend — 고객 목록·상세를 Company→Site→Contact 계층으로 재구성 | L | `[ PENDING ]` (후속 웨이브) |
-| `RX-2-DROP` | Migration 062 — 구 customers/customer_contacts 컬럼·테이블 DROP. **이중쓰기 2주 검증 + DB스냅샷 후에만** | M | `[ PENDING ]` (파괴적·보류) |
-| `RX-2V` | reviewer(이중쓰기 정합·격리·트랜잭션 원자성) | L | `[ PENDING ]` |
+| `RX-2-DROP` | 마이그레이션 — 구 customers/customer_contacts 컬럼·테이블 DROP. **이중쓰기 2주 검증 + DB스냅샷 후에만** (062는 FK교정으로 사용됨 → DROP은 063+) | M | `[ PENDING ]` (파괴적·보류) |
+| `RX-2V` | reviewer(이중쓰기 정합·격리·원자성). BLOCKER1(account삭제 CASCADE 데이터손실→FK SET NULL 062)+높음3+중간3 발견·전건 수정·재배포. FK confdeltype=n 검증 | L | `[ DONE 2026-07-04 ]` |
 
 **성공 기준**: 다지점 고객사에서 지점별 자산·계약·티켓 필터 / 티켓이 요청자 개인에 연결 / 기존 데이터 무손실 이관.
 **진행**: Phase A(비파괴 스키마+백필) 라이브 적용 완료(head 061, 미매핑 FK 0). Phase B 이중쓰기 진행. 파괴적 DROP(062)·프론트 계층 UI는 이연.
