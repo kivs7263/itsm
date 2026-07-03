@@ -102,7 +102,7 @@ RX-4 (데드코드 정리 + IA 재구조화)           마지막 · 회귀주의
 | `RX-1c` | 자산+CMDB **단일 `/inventory` 페이지**(탭: 자산/CI/관계맵). `/assets`·`/cmdb` 리다이렉트, Sidebar 단일 "인프라" 항목, 기존 기능 전량 보존 | L | `[ DONE 2026-07-03 ]` |
 | `RX-1d` | 고객 360 SLA 탭/카드(전사 준수율+고객 에스컬레이션 티켓, 고객별 SLA 집계 API는 후속) + 연락처 헤더 전화/메일 CTA | M | `[ DONE 2026-07-03 ]` |
 | `RX-1e` | 자산 유형 정합 — hw/sw 대분류(enum) + `category` 세부(location JSONB). 생성/상세/EditModal 일치. `lib/assetTypes.ts` 공유 | S | `[ DONE 2026-07-03 ]` |
-| `RX-1V` | reviewer 스폰(보안·권한·테넌트 격리) + health 검증 | M | `[ IN PROGRESS ]` |
+| `RX-1V` | reviewer 스폰(보안·권한·테넌트 격리) + health 검증. BLOCKER 1(discovery RBAC 무력화)+높음2+중간2 발견·전건 수정·재배포. 스모크 403 확인 | M | `[ DONE 2026-07-03 ]` |
 
 **성공 기준**: 고객 상세에서 서버/자산 1대를 등록·삭제 가능 / SNMP 발견 자산이 해당 고객 화면에 표시(customer_id) / 인프라 단일 페이지에서 자산·구성·관계맵 통합 조회. ✅ health 200·tsc 0·build 0.
 **후속 발견**: 백엔드 `/sla/dashboard`에 고객별 필터 부재 → RX-1d는 전사 지표+고객 에스컬레이션으로 최소 충족. 고객별 SLA 집계 API 신설을 백로그로.
