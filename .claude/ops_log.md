@@ -151,3 +151,20 @@ echo "===== 최신 500 trace (방금 호출) ====="; docker logs itsm_back | ✅
 | 2026-06-21 11:59 | build | echo "===== ① 실제 발동 패턴 hit ====="
 bash ~/.claude/hooks/_manual/pattern_hit.sh ba | ✅ | itsm | build-hook |
 | 2026-06-21 12:03 | session_close | ITSM ALVEO phase + reports/summary 500 수정 + 빌드규칙 교정 / ★★:104개 | ✅ | itsm | leader |
+| 2026-07-03 22:51 | build | set -e
+echo "=== docker cp 백엔드 파일 ==="
+docker cp backend/app/models/asset.py its | ✅ | itsm | build-hook |
+| 2026-07-03 22:51 | build | set -e
+docker cp backend/alembic/versions/056_assets_status.py itsm_backend:/app | ✅ | itsm | build-hook |
+| 2026-07-03 23:40 | build | ls .next/BUILD_ID 2>/dev/null && cat .next/BUILD_ID
+echo "---git log frontend bu | ✅ | itsm | build-hook |
+| 2026-07-03 23:59 | build | cd /teamwork/itsm
+echo "=== 마이그레이션 파일 주입 ==="
+for m in 057_companies_sites_conta | ✅ | itsm | build-hook |
+| 2026-07-03 23:59 | build | cd /teamwork/itsm
+PG_PW=$(grep POSTGRES_PASSWORD .env | cut -d= -f2)
+echo "=== 0 | ✅ | itsm | build-hook |
+| 2026-07-04 00:26 | build | cd /teamwork/itsm
+echo "=== 문법 ==="
+for f in backend/alembic/versions/062_fix_co | ✅ | itsm | build-hook |
+| 2026-07-04 00:51 | session_close | ITSM 전면개편 RX-0~4c+RX-2(A/B)+RX-2d 완료 / ★★:116개 | ✅ | itsm | leader |
