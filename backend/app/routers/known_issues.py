@@ -102,6 +102,7 @@ async def suggest_known_issues(
                 and_(
                     KbArticle.tenant_id == current_user.tenant_id,
                     KbArticle.is_known_issue.is_(True),
+                    KbArticle.is_published.is_(True),  # RA-D7: 미게시 이슈 제안 차단
                     KbArticle.ki_symptom_category_id == symptom_category_id,
                     KbArticle.ki_status != "resolved",
                 )
@@ -126,6 +127,7 @@ async def list_known_issues(
     conditions = [
         KbArticle.tenant_id == current_user.tenant_id,
         KbArticle.is_known_issue.is_(True),
+        KbArticle.is_published.is_(True),  # RA-D7: 미게시 이슈 엔지니어 노출 차단
     ]
     if ki_status is not None:
         conditions.append(KbArticle.ki_status == ki_status)

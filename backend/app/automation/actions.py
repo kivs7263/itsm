@@ -14,6 +14,7 @@ cross-product 액션은 graceful: 외부 서비스 실패가 룰 실행/티켓 �
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -243,7 +244,10 @@ async def _gen_ticket_number_for_action(db: AsyncSession, tenant_id: uuid.UUID) 
 
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
     prefix = f"TKT-{today}-"
-    lock_key = abs(hash(f"{tenant_id}:{today}")) % (2 ** 31)
+    # RA-D8: abs(hash()) 는 PYTHONHASHSEED 랜덤 → 멀티워커 advisory_lock 키 불일치.
+    # hashlib.sha256 결정론 해시로 교체 (프로세스·재시작 무관 동일 키 보장).
+    _lock_raw = f"{tenant_id}:{today}".encode()
+    lock_key = int.from_bytes(hashlib.sha256(_lock_raw).digest()[:8], "big", signed=True)
     await db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
 
     result = await db.execute(

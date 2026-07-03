@@ -172,7 +172,7 @@ async def _build_summary_data(
                 month_expr.label("month"),
                 func.count().label("cnt"),
             )
-            .where(and_(Ticket.tenant_id == tenant_id))
+            .where(and_(*base_where))
             .group_by(month_expr)
             .order_by(month_expr.desc())
             .limit(12)
