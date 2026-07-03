@@ -13,7 +13,7 @@ import {
   X, Link2, UserMinus,
 } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
-import type { Ticket, TicketComment, EscalationOut, TicketPriority, TicketStatus, KnownIssue } from '@/lib/types';
+import type { Ticket, TicketComment, EscalationOut, TicketPriority, TicketStatus, KnownIssue, TicketWithRequester } from '@/lib/types';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { SlaBadge } from '@/components/tickets/SlaBadge';
 import { EscalationEventCard } from '@/components/tickets/EscalationEventCard';
@@ -305,7 +305,7 @@ export default function TicketDetailPage() {
 
   // 티켓 상세 조회
   const { data: ticketDetail, isLoading: ticketLoading, isError: ticketError, refetch: refetchTicket } = useQuery<{
-    ticket: Ticket;
+    ticket: TicketWithRequester;
     comments: TicketComment[];
   }>({
     queryKey: ['ticket-detail-full', tenantSlug, ticketId],
@@ -313,9 +313,9 @@ export default function TicketDetailPage() {
       const r = await api.get(`/${tenantSlug}/tickets/${ticketId}`);
       // API가 { ticket, comments } 형태로 반환하거나 단순 Ticket 반환
       const d = r.data;
-      if (d?.ticket) return d as { ticket: Ticket; comments: TicketComment[] };
+      if (d?.ticket) return d as { ticket: TicketWithRequester; comments: TicketComment[] };
       // 단순 Ticket 형태인 경우 래핑
-      return { ticket: d as Ticket, comments: [] };
+      return { ticket: d as TicketWithRequester, comments: [] };
     },
     staleTime: 30 * 1000,
     enabled: !!ticketId,
@@ -814,6 +814,15 @@ export default function TicketDetailPage() {
                     <span className="text-text-primary font-medium">{ticket.contract_id}</span>
                   ) : (
                     <span className="text-text-disabled">없음</span>
+                  )}
+                </div>
+                {/* RX-2d: 티켓 요청자 연락처 */}
+                <div className="flex justify-between text-sm">
+                  <span className="text-text-secondary">요청자</span>
+                  {ticket.requester_contact_name ? (
+                    <span className="text-text-primary font-medium">{ticket.requester_contact_name}</span>
+                  ) : (
+                    <span className="text-text-disabled">미지정</span>
                   )}
                 </div>
               </div>

@@ -66,12 +66,20 @@ class CustomerUpdate(BaseModel):
     contract_grade: str | None = Field(None, max_length=50)
     parent_id: uuid.UUID | None = None
     kind: str | None = Field(None, pattern="^(account|division)$")
+    # Site 속성 (kind=division 전용 — account는 무시됨)
+    address: dict | None = None
+    timezone: str | None = Field(None, max_length=100)
+    is_headquarters: bool | None = None
 
 
 class DivisionCreate(BaseModel):
     name: str = Field(..., max_length=200)
     email: str | None = Field(None, max_length=255)
     phone: str | None = Field(None, max_length=50)
+    # Site 속성 (지점 주소·연락처·시간대·본사 여부)
+    address: dict | None = None
+    timezone: str | None = Field(None, max_length=100)
+    is_headquarters: bool = False
 
 
 class CustomerOut(BaseModel):
@@ -86,6 +94,10 @@ class CustomerOut(BaseModel):
     kind: str
     created_at: datetime
     updated_at: datetime
+    # Site 속성 (kind=division 전용, 기타·고아 division은 None)
+    address: dict | None = None
+    timezone: str | None = None
+    is_headquarters: bool | None = None
 
     model_config = {"from_attributes": True}
 
@@ -94,6 +106,10 @@ class CustomerTreeNode(BaseModel):
     id: uuid.UUID
     name: str
     kind: str
+    # Site 속성 (kind=division 전용)
+    address: dict | None = None
+    timezone: str | None = None
+    is_headquarters: bool | None = None
     children: list["CustomerTreeNode"] = []
 
     model_config = {"from_attributes": True}
@@ -215,6 +231,16 @@ async def _check_depth(
         )
 
 
+def _customer_out_with_site(customer: Customer, site: Site | None = None) -> CustomerOut:
+    """CustomerOut을 생성하고, kind=division이면 site 속성을 병합한다."""
+    out = CustomerOut.model_validate(customer)
+    if site is not None and customer.kind == "division":
+        out.address = site.address
+        out.timezone = site.timezone
+        out.is_headquarters = site.is_headquarters
+    return out
+
+
 # ------------------------------------------------------------------
 # 목록
 # ------------------------------------------------------------------
@@ -333,13 +359,34 @@ async def get_all_customers_tree(
     current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db),
 ) -> list[CustomerTreeNode]:
-    """테넌트 내 모든 고객사를 parent_id 기준 트리로 반환."""
+    """테넌트 내 모든 고객사를 parent_id 기준 트리로 반환. kind=division에는 site 속성 포함."""
     result = await db.execute(
-        select(Customer.id, Customer.name, Customer.kind, Customer.parent_id)  # type: ignore[arg-type]
+        select(  # type: ignore[arg-type]
+            Customer.id,
+            Customer.name,
+            Customer.kind,
+            Customer.parent_id,
+            Site.address,
+            Site.timezone,
+            Site.is_headquarters,
+        )
+        .select_from(Customer)
+        .join(Site, and_(Site.id == Customer.id, Site.tenant_id == Customer.tenant_id), isouter=True)
         .where(Customer.tenant_id == current_user.tenant_id)
         .order_by(Customer.name)
     )
-    nodes = [{"id": r.id, "name": r.name, "kind": r.kind, "parent_id": r.parent_id} for r in result]
+    nodes = [
+        {
+            "id": r.id,
+            "name": r.name,
+            "kind": r.kind,
+            "parent_id": r.parent_id,
+            "address": r.address,
+            "timezone": r.timezone,
+            "is_headquarters": r.is_headquarters,
+        }
+        for r in result
+    ]
     return _build_tree(nodes, None)
 
 
@@ -356,7 +403,17 @@ async def get_customer(
     db: AsyncSession = Depends(get_db),
 ) -> CustomerOut:
     customer = await _get_or_404(db, current_user.tenant_id, customer_id)
-    return CustomerOut.model_validate(customer)
+
+    # kind=division이면 sites row에서 추가 속성 조회
+    site = None
+    if customer.kind == "division":
+        site = await db.scalar(
+            select(Site).where(
+                Site.id == customer_id,
+                Site.tenant_id == current_user.tenant_id,
+            )
+        )
+    return _customer_out_with_site(customer, site)
 
 
 # ------------------------------------------------------------------
@@ -391,7 +448,12 @@ async def update_customer(
         and update_fields["parent_id"] is None
     ):
         raise HTTPException(status_code=400, detail="부서의 상위 고객사(parent_id)는 비울 수 없습니다.")
+
+    # Customer 모델에 없는 site 전용 필드 분리 (address/timezone/is_headquarters는 sites 테이블 컬럼)
+    _SITE_ONLY_FIELDS = frozenset({"address", "timezone", "is_headquarters"})
     for field, value in update_fields.items():
+        if field in _SITE_ONLY_FIELDS:
+            continue
         setattr(customer, field, value)
 
     # ── 이중쓰기: 신 테이블 동기 UPDATE (같은 트랜잭션) ──────────────
@@ -414,7 +476,18 @@ async def update_customer(
             _site_vals["name"] = update_fields["name"]
         if "parent_id" in update_fields and update_fields["parent_id"] is not None:
             _site_vals["company_id"] = update_fields["parent_id"]
+        # phone: customers와 sites 모두 동기
+        if "phone" in update_fields:
+            _site_vals["phone"] = update_fields["phone"]
+        # site 전용 속성
+        if "address" in update_fields:
+            _site_vals["address"] = update_fields["address"]
+        if "timezone" in update_fields:
+            _site_vals["timezone"] = update_fields["timezone"]
+        if "is_headquarters" in update_fields:
+            _site_vals["is_headquarters"] = update_fields["is_headquarters"]
         if _site_vals:
+            # 고아 division(site 없음)이면 UPDATE 0건 — graceful
             await db.execute(
                 update(Site)
                 .where(Site.id == customer_id, Site.tenant_id == current_user.tenant_id)
@@ -423,7 +496,17 @@ async def update_customer(
 
     await db.commit()
     await db.refresh(customer)
-    return CustomerOut.model_validate(customer)
+
+    # kind=division이면 최신 site row 포함하여 반환
+    _site = None
+    if customer.kind == "division":
+        _site = await db.scalar(
+            select(Site).where(
+                Site.id == customer_id,
+                Site.tenant_id == current_user.tenant_id,
+            )
+        )
+    return _customer_out_with_site(customer, _site)
 
 
 # ------------------------------------------------------------------
@@ -514,11 +597,23 @@ async def create_division(
         tenant_id=current_user.tenant_id,
         company_id=parent.id,
         name=data.name,
+        phone=data.phone,
+        address=data.address,
+        timezone=data.timezone,
+        is_headquarters=data.is_headquarters,
     ))
 
     await db.commit()
     await db.refresh(division)
-    return CustomerOut.model_validate(division)
+
+    # site 속성 포함 응답 (방금 생성한 row를 re-fetch)
+    _new_site = await db.scalar(
+        select(Site).where(
+            Site.id == division.id,
+            Site.tenant_id == current_user.tenant_id,
+        )
+    )
+    return _customer_out_with_site(division, _new_site)
 
 
 # ------------------------------------------------------------------
@@ -533,6 +628,9 @@ def _build_tree(nodes: list[dict], parent_id: uuid.UUID | None) -> list[Customer
             id=n["id"],
             name=n["name"],
             kind=n["kind"],
+            address=n.get("address"),
+            timezone=n.get("timezone"),
+            is_headquarters=n.get("is_headquarters"),
             children=_build_tree(nodes, n["id"]),
         )
         for n in children
@@ -561,10 +659,25 @@ async def get_customer_tree(
             JOIN subtree s ON c.parent_id = s.id
             WHERE c.tenant_id = :tid
         )
-        SELECT id, name, kind, parent_id FROM subtree
+        SELECT
+            sub.id, sub.name, sub.kind, sub.parent_id,
+            si.address, si.timezone, si.is_headquarters
+        FROM subtree sub
+        LEFT JOIN sites si ON si.id = sub.id AND si.tenant_id = :tid
     """)
     result = await db.execute(cte_sql, {"root_id": customer_id, "tid": current_user.tenant_id})
-    nodes = [{"id": r.id, "name": r.name, "kind": r.kind, "parent_id": r.parent_id} for r in result]
+    nodes = [
+        {
+            "id": r.id,
+            "name": r.name,
+            "kind": r.kind,
+            "parent_id": r.parent_id,
+            "address": r.address,
+            "timezone": r.timezone,
+            "is_headquarters": r.is_headquarters,
+        }
+        for r in result
+    ]
     return _build_tree(nodes, None)
 
 

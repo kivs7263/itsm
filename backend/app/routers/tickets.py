@@ -32,6 +32,7 @@ from app.core.dependencies import get_current_user, require_roles
 from app.services import gw_approval_service
 from app.models import (
     CauseCategory,
+    Contact,
     SymptomCategory,
     Ticket,
     TicketCause,
@@ -90,6 +91,7 @@ class TicketUpdate(BaseModel):
     contract_id: uuid.UUID | None = None
     source: str | None = None
     request_type: str | None = None
+    requester_contact_id: uuid.UUID | None = None  # ADR-043 RX-2d: 요청자 연락처 변경
 
 
 class TicketOut(BaseModel):
@@ -119,6 +121,9 @@ class TicketOut(BaseModel):
     # WF-1 (ADR-048): GW 결재 연동 필드
     gw_approval_doc_id: str | None = None
     gw_approval_status: str | None = None
+    # ADR-043 Phase RX-2d: 요청자 연락처 (티켓 상세 전용)
+    requester_contact_id: uuid.UUID | None = None
+    requester_contact_name: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -461,7 +466,6 @@ async def create_ticket(
 
     # H1: requester_contact_id 크로스테넌트 방지 — 자기 테넌트 contact만 허용
     if data.requester_contact_id is not None:
-        from app.models import Contact
         _ct = await db.scalar(
             select(Contact).where(
                 Contact.id == data.requester_contact_id,
@@ -651,8 +655,19 @@ async def get_ticket(
         )
     ).scalars().all()
 
+    # ADR-043 RX-2d: 요청자 연락처 이름 조회 (동일 테넌트 contacts 테이블)
+    ticket_out = TicketOut.model_validate(ticket)
+    if ticket.requester_contact_id is not None:
+        _contact = await db.scalar(
+            select(Contact).where(
+                Contact.id == ticket.requester_contact_id,
+                Contact.tenant_id == current_user.tenant_id,
+            )
+        )
+        ticket_out.requester_contact_name = _contact.name if _contact else None
+
     return {
-        "ticket": TicketOut.model_validate(ticket),
+        "ticket": ticket_out,
         "comments": [CommentOut.model_validate(c) for c in comments],
     }
 
@@ -678,6 +693,17 @@ async def update_ticket(
 
     update_fields = data.model_dump(exclude_unset=True)
     new_contract_id = update_fields.get("contract_id", _SENTINEL)
+
+    # ADR-043 RX-2d: requester_contact_id 변경 시 동일 테넌트 검증 (setattr 이전)
+    if "requester_contact_id" in update_fields and update_fields["requester_contact_id"] is not None:
+        _ct_check = await db.scalar(
+            select(Contact).where(
+                Contact.id == update_fields["requester_contact_id"],
+                Contact.tenant_id == current_user.tenant_id,
+            )
+        )
+        if _ct_check is None:
+            raise HTTPException(status_code=400, detail="요청자 연락처를 찾을 수 없습니다.")
 
     # 변경 전 값 스냅샷 (활동 기록용)
     _prev_status   = str(ticket.status.value if hasattr(ticket.status, "value") else ticket.status)

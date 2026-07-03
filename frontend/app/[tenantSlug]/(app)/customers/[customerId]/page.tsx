@@ -11,7 +11,6 @@ import {
   Pencil,
   Trash2,
   Building2,
-  Users,
   FileText,
   Package,
   ScrollText,
@@ -31,15 +30,18 @@ import {
   RefreshCw,
   ShieldCheck,
   ShieldAlert,
+  MapPin,
+  Landmark,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type {
-  Customer,
-  CustomerTreeNode,
+  CustomerTreeNodeWithSite,
+  CustomerWithSite,
   CustomerRollup,
   CustomerNote,
   CustomerContact,
+  SiteAddress,
   Ticket,
   Asset,
   Contract,
@@ -83,7 +85,7 @@ function KpiStrip({ rollup, slaComplianceRate }: { rollup: CustomerRollup; slaCo
 }
 
 // -----------------------------------------------------------------------
-// 부서 트리
+// 지점 트리
 // -----------------------------------------------------------------------
 function TreeNode({
   node,
@@ -92,7 +94,7 @@ function TreeNode({
   onAddChild,
   depth,
 }: {
-  node: CustomerTreeNode;
+  node: CustomerTreeNodeWithSite;
   selectedId: string;
   onSelect: (id: string) => void;
   onAddChild: (parentId: string, parentName: string) => void;
@@ -127,13 +129,18 @@ function TreeNode({
           {node.kind === 'account' ? (
             <Building2 size={13} className="shrink-0" />
           ) : (
-            <Users size={13} className="shrink-0" />
+            <MapPin size={13} className="shrink-0" />
           )}
           <span className="truncate">{node.name}</span>
+          {node.kind === 'division' && node.is_headquarters && (
+            <span title="본사" className="shrink-0 text-amber-500">
+              <Landmark size={11} />
+            </span>
+          )}
         </button>
         <button
           type="button"
-          title="하위 부서 추가"
+          title="하위 지점 추가"
           className="absolute right-1.5 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center justify-center w-5 h-5 rounded hover:bg-surface-raised text-text-disabled hover:text-text-primary transition-colors"
           onClick={(e) => { e.stopPropagation(); onAddChild(node.id, node.name); }}
         >
@@ -186,6 +193,70 @@ interface InfoFormState {
   phone: string;
   contract_grade: string;
   kind: string;
+  // RX-2d: 지점(Site) 속성 — kind='division'일 때만 사용
+  address_line1: string;
+  address_city: string;
+  address_state: string;
+  address_postal_code: string;
+  address_country: string;
+  timezone: string;
+  is_headquarters: boolean;
+}
+
+// RX-2d: Customer(+Site 속성) → 폼 초기값 변환 (초기 useState/useEffect 공용)
+function buildInfoForm(customer: CustomerWithSite): InfoFormState {
+  const address = customer.address ?? null;
+  return {
+    name: customer.name ?? '',
+    company: (customer as { company?: string }).company ?? '',
+    email: customer.email ?? '',
+    phone: customer.phone ?? '',
+    contract_grade: customer.contract_grade ?? '',
+    kind: customer.kind ?? 'account',
+    address_line1: address?.line1 ?? '',
+    address_city: address?.city ?? '',
+    address_state: address?.state ?? '',
+    address_postal_code: address?.postal_code ?? '',
+    address_country: address?.country ?? '',
+    timezone: customer.timezone ?? '',
+    is_headquarters: customer.is_headquarters ?? false,
+  };
+}
+
+// RX-2d: 지점 주소 한 줄 표기
+function formatSiteAddress(addr?: SiteAddress | null): string | null {
+  if (!addr) return null;
+  const parts = [addr.line1, addr.line2, addr.city, addr.state, addr.postal_code, addr.country].filter(
+    (v): v is string => !!v && v.trim().length > 0,
+  );
+  return parts.length ? parts.join(', ') : null;
+}
+
+// RX-2d: 폼 → PATCH 바디 변환 (division일 때만 site 필드 포함)
+function toCustomerPatchBody(form: InfoFormState): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    name: form.name,
+    company: form.company || null,
+    email: form.email || null,
+    phone: form.phone || null,
+    contract_grade: form.contract_grade || null,
+    kind: form.kind,
+  };
+  if (form.kind === 'division') {
+    const hasAddress = form.address_line1 || form.address_city || form.address_state || form.address_postal_code || form.address_country;
+    body.address = hasAddress
+      ? {
+          line1: form.address_line1 || null,
+          city: form.address_city || null,
+          state: form.address_state || null,
+          postal_code: form.address_postal_code || null,
+          country: form.address_country || null,
+        }
+      : null;
+    body.timezone = form.timezone || null;
+    body.is_headquarters = form.is_headquarters;
+  }
+  return body;
 }
 
 function InfoTab({
@@ -196,39 +267,26 @@ function InfoTab({
 }: {
   tenantSlug: string;
   customerId: string;
-  customer: Customer;
+  customer: CustomerWithSite;
   onCustomerUpdated: () => void;
 }) {
   const queryClient = useQueryClient();
   const user = getUser();
   const canWrite = isEngineerOrAbove(user?.role);
   const canDelete = isTeamLeadOrAbove(user?.role);
+  const isSite = customer.kind === 'division';
 
   // ---- 기본 정보 편집 ----
   const [isEditing, setIsEditing] = useState(false);
-  const [infoForm, setInfoForm] = useState<InfoFormState>({
-    name: customer.name ?? '',
-    company: (customer as { company?: string }).company ?? '',
-    email: customer.email ?? '',
-    phone: customer.phone ?? '',
-    contract_grade: customer.contract_grade ?? '',
-    kind: customer.kind ?? 'account',
-  });
+  const [infoForm, setInfoForm] = useState<InfoFormState>(() => buildInfoForm(customer));
 
   useEffect(() => {
-    setInfoForm({
-      name: customer.name ?? '',
-      company: (customer as { company?: string }).company ?? '',
-      email: customer.email ?? '',
-      phone: customer.phone ?? '',
-      contract_grade: customer.contract_grade ?? '',
-      kind: customer.kind ?? 'account',
-    });
+    setInfoForm(buildInfoForm(customer));
   }, [customer]);
 
   const patchMutation = useMutation({
-    mutationFn: (data: Partial<InfoFormState>) =>
-      api.patch(`/${tenantSlug}/customers/${customerId}`, data).then((r) => r.data),
+    mutationFn: (data: InfoFormState) =>
+      api.patch(`/${tenantSlug}/customers/${customerId}`, toCustomerPatchBody(data)).then((r) => r.data),
     onSuccess: () => {
       toast.success('고객 정보가 수정되었습니다.');
       setIsEditing(false);
@@ -342,8 +400,14 @@ function InfoTab({
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-base text-text-primary">{customer.name}</span>
             <span className="text-xs text-text-disabled bg-surface-raised border border-border-subtle rounded px-2 py-0.5">
-              {customer.kind === 'account' ? '고객사' : '부서'}
+              {customer.kind === 'account' ? '고객사' : '지점'}
             </span>
+            {isSite && customer.is_headquarters && (
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">
+                <Landmark size={11} />
+                본사
+              </span>
+            )}
             {customer.contract_grade && (
               <span className="text-xs font-medium text-text-secondary bg-surface-raised border border-border-subtle rounded-full px-2 py-0.5 capitalize">
                 {customer.contract_grade}
@@ -423,12 +487,86 @@ function InfoTab({
                   onChange={(e) => setInfoForm((f) => ({ ...f, kind: e.target.value }))}
                 >
                   <option value="account">최상위 고객사</option>
-                  <option value="division">하위 부서</option>
+                  <option value="division">하위 지점</option>
                 </select>
               </div>
             </div>
+
+            {/* RX-2d: 지점(Site) 속성 — 종류가 하위 지점일 때만 노출 */}
+            {infoForm.kind === 'division' && (
+              <div className="border-t border-border-subtle pt-3 flex flex-col gap-3">
+                <p className="text-xs font-medium text-text-secondary">지점 정보</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <label className="text-xs text-text-secondary mb-1 block">주소</label>
+                    <input
+                      className={inputCls}
+                      value={infoForm.address_line1}
+                      onChange={(e) => setInfoForm((f) => ({ ...f, address_line1: e.target.value }))}
+                      placeholder="도로명, 건물명"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-text-secondary mb-1 block">도시</label>
+                    <input
+                      className={inputCls}
+                      value={infoForm.address_city}
+                      onChange={(e) => setInfoForm((f) => ({ ...f, address_city: e.target.value }))}
+                      placeholder="서울"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-text-secondary mb-1 block">시/도</label>
+                    <input
+                      className={inputCls}
+                      value={infoForm.address_state}
+                      onChange={(e) => setInfoForm((f) => ({ ...f, address_state: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-text-secondary mb-1 block">우편번호</label>
+                    <input
+                      className={inputCls}
+                      value={infoForm.address_postal_code}
+                      onChange={(e) => setInfoForm((f) => ({ ...f, address_postal_code: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-text-secondary mb-1 block">국가</label>
+                    <input
+                      className={inputCls}
+                      value={infoForm.address_country}
+                      onChange={(e) => setInfoForm((f) => ({ ...f, address_country: e.target.value }))}
+                      placeholder="KR"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-text-secondary mb-1 block">시간대</label>
+                    <input
+                      className={inputCls}
+                      value={infoForm.timezone}
+                      onChange={(e) => setInfoForm((f) => ({ ...f, timezone: e.target.value }))}
+                      placeholder="Asia/Seoul"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="info-is-headquarters"
+                      type="checkbox"
+                      checked={infoForm.is_headquarters}
+                      onChange={(e) => setInfoForm((f) => ({ ...f, is_headquarters: e.target.checked }))}
+                      className="rounded border-border-default"
+                    />
+                    <label htmlFor="info-is-headquarters" className="text-sm text-text-secondary cursor-pointer">
+                      본사
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2 justify-end">
-              <Button variant="ghost" size="sm" onClick={() => { setIsEditing(false); setInfoForm({ name: customer.name ?? '', company: (customer as { company?: string }).company ?? '', email: customer.email ?? '', phone: customer.phone ?? '', contract_grade: customer.contract_grade ?? '', kind: customer.kind ?? 'account' }); }}>
+              <Button variant="ghost" size="sm" onClick={() => { setIsEditing(false); setInfoForm(buildInfoForm(customer)); }}>
                 취소
               </Button>
               <Button
@@ -461,6 +599,18 @@ function InfoTab({
               <dt className="text-xs text-text-secondary">생성</dt>
               <dd className="mt-0.5 text-sm text-text-primary">{formatRelativeTime(customer.created_at)}</dd>
             </div>
+            {isSite && (
+              <>
+                <div className="col-span-2">
+                  <dt className="text-xs text-text-secondary">주소</dt>
+                  <dd className="mt-0.5 text-sm text-text-primary">{formatSiteAddress(customer.address) ?? '-'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-text-secondary">시간대</dt>
+                  <dd className="mt-0.5 text-sm text-text-primary">{customer.timezone ?? '-'}</dd>
+                </div>
+              </>
+            )}
           </dl>
         )}
       </div>
@@ -2101,7 +2251,7 @@ export default function CustomerDetailPage() {
     mutationFn: ({ parentId, name }: { parentId: string; name: string }) =>
       api.post(`/${tenantSlug}/customers/${parentId}/divisions`, { name }),
     onSuccess: (res) => {
-      toast.success('하위 부서가 추가되었습니다.');
+      toast.success('하위 지점이 추가되었습니다.');
       queryClient.invalidateQueries({ queryKey: ['customer-tree', tenantSlug, customerId] });
       setSelectedNodeId(res.data.id);
       setAddDivision(null);
@@ -2110,14 +2260,14 @@ export default function CustomerDetailPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  const { data: customer, isLoading: customerLoading, isError: customerError, refetch: refetchCustomer } = useQuery<Customer>({
+  const { data: customer, isLoading: customerLoading, isError: customerError, refetch: refetchCustomer } = useQuery<CustomerWithSite>({
     queryKey: ['customer', tenantSlug, customerId],
     queryFn: () =>
       api.get(`/${tenantSlug}/customers/${customerId}`).then((r) => r.data),
     enabled: !!tenantSlug && !!customerId,
   });
 
-  const { data: tree, isLoading: treeLoading } = useQuery<CustomerTreeNode[]>({
+  const { data: tree, isLoading: treeLoading } = useQuery<CustomerTreeNodeWithSite[]>({
     queryKey: ['customer-tree', tenantSlug, customerId],
     queryFn: () =>
       api.get(`/${tenantSlug}/customers/${customerId}/tree`).then((r) => r.data),
@@ -2131,7 +2281,7 @@ export default function CustomerDetailPage() {
     enabled: !!tenantSlug && !!selectedNodeId,
   });
 
-  const { data: selectedCustomer } = useQuery<Customer>({
+  const { data: selectedCustomer } = useQuery<CustomerWithSite>({
     queryKey: ['customer', tenantSlug, selectedNodeId],
     queryFn: () =>
       api.get(`/${tenantSlug}/customers/${selectedNodeId}`).then((r) => r.data),
@@ -2198,7 +2348,7 @@ export default function CustomerDetailPage() {
     );
   }
 
-  const treeRoots: CustomerTreeNode[] = tree ?? [];
+  const treeRoots: CustomerTreeNodeWithSite[] = tree ?? [];
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -2250,7 +2400,7 @@ export default function CustomerDetailPage() {
 
       {/* 본문: 좌측 트리 + 우측 탭 */}
       <div className="flex flex-1 overflow-hidden min-h-0">
-        {/* 부서 트리 */}
+        {/* 지점 트리 */}
         <aside className="w-52 shrink-0 border-r border-border-subtle bg-surface overflow-y-auto flex flex-col">
           <div className="px-3 py-2.5 text-xs font-medium text-text-secondary border-b border-border-subtle">
             조직 구조
@@ -2274,11 +2424,11 @@ export default function CustomerDetailPage() {
             </ul>
           )}
 
-          {/* 하위 부서 추가 인라인 폼 */}
+          {/* 하위 지점 추가 인라인 폼 */}
           {addDivision && (
             <div className="px-3 py-3 border-t border-border-subtle bg-surface-raised flex flex-col gap-2">
               <p className="text-xs text-text-secondary truncate">
-                <span className="font-medium text-text-primary">{addDivision.parentName}</span> 하위 부서
+                <span className="font-medium text-text-primary">{addDivision.parentName}</span> 하위 지점
               </p>
               <input
                 autoFocus
@@ -2291,7 +2441,7 @@ export default function CustomerDetailPage() {
                   }
                   if (e.key === 'Escape') { setAddDivision(null); setNewDivisionName(''); }
                 }}
-                placeholder="부서명 입력"
+                placeholder="지점명 입력"
                 className="h-7 w-full rounded border border-border-default bg-surface px-2 text-xs text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-1 focus:ring-border-strong"
               />
               <div className="flex gap-1.5">

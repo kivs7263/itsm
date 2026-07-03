@@ -904,3 +904,35 @@ export interface AutomationRun {
   created_at: string;
   completed_at: string | null;
 }
+
+// -----------------------------------------------------------------------
+// RX-2d: 지점(Site) 속성 + 티켓 요청자 연락처
+// (append-only 블록 — 기존 Customer/CustomerTreeNode/Ticket 인터페이스는 편집하지 않고
+//  교차 타입으로 확장. 병행 백엔드 마이그레이션(ADR-043 companies/sites/contacts)과 연동)
+// -----------------------------------------------------------------------
+export interface SiteAddress {
+  line1?: string | null;
+  line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  postal_code?: string | null;
+}
+
+export interface SiteAttributes {
+  address?: SiteAddress | null;
+  phone?: string | null;
+  timezone?: string | null;
+  is_headquarters?: boolean;
+}
+
+// kind='division'(지점) 응답에 sites join으로 채워지는 필드 — Customer/CustomerTreeNode 교차 타입
+export type CustomerWithSite = Customer & Partial<SiteAttributes>;
+export type CustomerTreeNodeWithSite = CustomerTreeNode & Partial<SiteAttributes>;
+
+export interface TicketRequesterFields {
+  requester_contact_id?: string | null;
+  requester_contact_name?: string | null;
+}
+
+export type TicketWithRequester = Ticket & TicketRequesterFields;

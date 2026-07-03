@@ -18,7 +18,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
-import type { KnownIssue, SymptomCategory, Customer, Contract, ContractTier } from '@/lib/types';
+import type { KnownIssue, SymptomCategory, Customer, Contract, ContractTier, CustomerContact } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -110,6 +110,7 @@ const createTicketSchema = z.object({
   symptom_category_id: z.string().optional(),
   customer_id: z.string().optional(),
   contract_id: z.string().optional(),
+  requester_contact_id: z.string().optional(),
 });
 
 type CreateTicketValues = z.infer<typeof createTicketSchema>;
@@ -246,6 +247,18 @@ function TicketFormStep({
   // 선택된 계약
   const selectedContract = contracts.find((c) => c.id === selectedContractId) ?? null;
 
+  // RX-2d: 요청자 연락처 (고객 선택 후 활성화)
+  const { data: requesterContactsData } = useQuery<{ items: CustomerContact[] } | CustomerContact[]>({
+    queryKey: ['ticket-requester-contacts', tenantSlug, selectedCustomer?.id],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/customers/${selectedCustomer!.id}/contacts`).then((r) => r.data),
+    enabled: !!selectedCustomer,
+    staleTime: 30 * 1000,
+  });
+  const requesterContacts: CustomerContact[] = Array.isArray(requesterContactsData)
+    ? requesterContactsData
+    : (requesterContactsData?.items ?? []);
+
   // 연결된 SA 사업카드 이름 (계약에 linked_business_id 있을 때)
   const { data: businessesData } = useQuery<{ id: string; name: string }[]>({
     queryKey: ['businesses', tenantSlug],
@@ -263,6 +276,7 @@ function TicketFormStep({
     setCustomerQuery(customer.company ? `${customer.name} (${customer.company})` : customer.name);
     setCustomerDropdownOpen(false);
     setSelectedContractId('');
+    setValue('requester_contact_id', undefined);
   }
 
   // 고객 선택 해제
@@ -271,6 +285,7 @@ function TicketFormStep({
     setCustomerQuery('');
     setSelectedContractId('');
     setCustomerDropdownOpen(false);
+    setValue('requester_contact_id', undefined);
   }
 
   const {
@@ -291,6 +306,7 @@ function TicketFormStep({
   const channel = watch('channel');
   const source = watch('source');
   const symptomCategoryId = watch('symptom_category_id');
+  const requesterContactId = watch('requester_contact_id');
   const watchedTitle = watch('title');
   const watchedDescription = watch('description');
 
@@ -402,8 +418,12 @@ function TicketFormStep({
                   value={customerQuery}
                   onChange={(e) => {
                     setCustomerQuery(e.target.value);
-                    if (!selectedCustomer) setCustomerDropdownOpen(true);
-                    else setSelectedCustomer(null);
+                    if (!selectedCustomer) {
+                      setCustomerDropdownOpen(true);
+                    } else {
+                      setSelectedCustomer(null);
+                      setValue('requester_contact_id', undefined);
+                    }
                   }}
                   onFocus={() => {
                     if (!selectedCustomer && customerQuery.length > 0) setCustomerDropdownOpen(true);
@@ -483,6 +503,34 @@ function TicketFormStep({
                 </div>
               );
             })()}
+          </FormField>
+
+          {/* RX-2d: 요청자 연락처 선택 */}
+          <FormField label="요청자 연락처">
+            <Select
+              value={requesterContactId ?? ''}
+              onValueChange={(v) => setValue('requester_contact_id', v || undefined)}
+              disabled={!selectedCustomer}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={
+                    !selectedCustomer
+                      ? '고객을 먼저 선택하세요'
+                      : requesterContacts.length
+                        ? '요청자 선택 (선택)'
+                        : '등록된 연락처 없음'
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {requesterContacts.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}{c.role ? ` (${c.role})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </FormField>
 
           {/* 연결된 SA 사업카드 표시 (계약 선택 시) */}
