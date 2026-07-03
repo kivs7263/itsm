@@ -194,6 +194,14 @@ class Settings(BaseSettings):
     COOKIE_DOMAIN: str = ""  # .apistech.co.kr — 환경변수로 주입
 
     # ------------------------------------------------------------------
+    # [선택] CSRF 보호 (Double Submit Cookie, csrf.itsm 쿠키)
+    # .env 또는 docker-compose environment 에 CSRF_ENFORCE=true 배선 시 활성.
+    # 쿠키 인증이 아닌 엔드포인트(admin_bridge·external·internal·portal·v1 등)는
+    # middleware/csrf.py _SKIP_PREFIXES/_SKIP_PATH_FRAGMENTS 에서 자동 제외.
+    # ------------------------------------------------------------------
+    CSRF_ENFORCE: bool = False
+
+    # ------------------------------------------------------------------
     # [선택] 환경 / 로깅
     # ------------------------------------------------------------------
     ENVIRONMENT: Literal["development", "production"] = "production"

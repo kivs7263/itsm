@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -77,12 +78,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# CSRF 보호 — Double Submit Cookie (csrf.itsm)
+# enforce=True: CSRF_ENFORCE 환경변수 또는 settings.CSRF_ENFORCE 로 제어.
+# OS env 우선, 없으면 pydantic-settings(.env 파일) 값 사용.
+from app.middleware.csrf import CSRFMiddleware  # noqa: E402
+_csrf_enforce = os.getenv("CSRF_ENFORCE", str(settings.CSRF_ENFORCE)).lower() == "true"
+app.add_middleware(CSRFMiddleware, enforce=_csrf_enforce, cookie_name="csrf.itsm")
+
 # Prometheus 메트릭
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 
 # ------------------------------------------------------------------
-# 글로벌 예외 핸들러 — str(exc) 클라이언트 반환 금지
+# 글로벌 예외 핸들러 — 예외 원문 클라이언트 반환 금지 (generic 메시지만)
 # ------------------------------------------------------------------
 @app.exception_handler(Exception)
 async def _global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
