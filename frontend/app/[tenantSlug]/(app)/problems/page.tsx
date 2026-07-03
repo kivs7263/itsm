@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Bug, AlertCircle, RefreshCw, CheckCircle2, BellOff } from 'lucide-react';
+import { Plus, Search, Bug, AlertCircle, RefreshCw, CheckCircle2, BellOff, BookOpen, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type { Problem, ProblemStatus, ProblemPriority, ProblemsResponse, RecurringAlert, RecurringAlertsResponse } from '@/lib/types';
@@ -464,7 +464,8 @@ export default function ProblemsPage() {
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
-  const [knownErrorOnly, setKnownErrorOnly] = useState(false);
+  // RX-4c 잔여: KB "알려진 이슈" 탭(/kb?view=known-issues)에서 "?filter=known_error"로 진입 시 자동 필터
+  const [knownErrorOnly, setKnownErrorOnly] = useState(searchParams?.get('filter') === 'known_error');
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -612,6 +613,7 @@ export default function ProblemsPage() {
             <button
               type="button"
               onClick={handleKnownErrorToggle}
+              title="Known Error: 근본 원인이 파악된 Problem. 해결책이 KB 문서로 등록되면 '알려진 이슈'가 됩니다."
               className={cn(
                 'inline-flex items-center gap-1.5 h-8 rounded-md px-3 text-xs font-medium border transition-colors',
                 knownErrorOnly
@@ -621,6 +623,19 @@ export default function ProblemsPage() {
             >
               <AlertCircle size={13} />
               Known Error만
+            </button>
+          )}
+
+          {/* RX-4c 잔여: KB "알려진 이슈"(해결책 등록 완료)로 크로스링크 — Known Error(원인 파악)와는 계층이 다른 별개 데이터 */}
+          {knownErrorOnly && (
+            <button
+              type="button"
+              onClick={() => router.push(`/${tenantSlug}/kb?view=known-issues`)}
+              title="Known Error 중 해결책이 KB 문서로 등록된 항목은 '알려진 이슈' 목록에서 확인할 수 있습니다."
+              className="inline-flex items-center gap-1.5 h-8 rounded-md px-3 text-xs font-medium border border-border-default text-text-secondary hover:text-text-primary hover:border-border-strong transition-colors"
+            >
+              <BookOpen size={13} />
+              KB 알려진 이슈에서 해결책 찾기
             </button>
           )}
         </div>
@@ -638,7 +653,15 @@ export default function ProblemsPage() {
               {knownErrorOnly && (
                 <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary w-60">해결책(Workaround)</th>
               )}
-              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary w-20">KE</th>
+              <th
+                className="px-4 py-3 text-left text-xs font-medium text-text-secondary w-20"
+                title="KE(Known Error): 근본 원인이 파악된 Problem. KB에 해결책이 등록되면 '알려진 이슈'가 됩니다."
+              >
+                <span className="inline-flex items-center gap-1">
+                  KE
+                  <HelpCircle size={11} className="text-text-disabled" />
+                </span>
+              </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary w-28">생성일</th>
             </tr>
           </thead>

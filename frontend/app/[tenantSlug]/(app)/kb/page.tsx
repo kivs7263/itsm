@@ -1,14 +1,15 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, Search, AlertTriangle, Plus, AlertCircle, RefreshCw } from 'lucide-react';
+import { BookOpen, Search, AlertTriangle, Plus, AlertCircle, RefreshCw, HelpCircle, Bug, ExternalLink } from 'lucide-react';
 import { api } from '@/lib/api';
 import type {
   KbArticle,
   KbArticlesResponse,
   SemanticSearchResult,
+  KnownIssue,
 } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,9 +19,15 @@ import { isTeamLeadOrAbove, type UserRole } from '@/lib/auth';
 import { CreateKbModal } from '@/components/kb/CreateKbModal';
 
 // -----------------------------------------------------------------------
-// 탭 타입
+// 탭 타입 — RX-4c 잔여: 'known-issues' 탭 추가 (?view=known-issues 딥링크)
 // -----------------------------------------------------------------------
-type SearchTab = 'keyword' | 'semantic';
+type SearchTab = 'keyword' | 'semantic' | 'known-issues';
+
+const KI_STATUS_LABELS: Record<string, string> = {
+  open: '미해결',
+  in_progress: '조치중',
+  resolved: '해결됨',
+};
 
 // -----------------------------------------------------------------------
 // 작성자 역할 확인 (engineer 이상)
@@ -386,15 +393,114 @@ function SemanticTab({
 }
 
 // -----------------------------------------------------------------------
+// 알려진 이슈 탭 — RX-4c 잔여: KB "알려진 이슈"(해결책 등록 완료) ↔ Problem "Known Error"(원인 파악)
+// 계층이 다른 별개 데이터임을 명료화 + Problem 쪽으로 크로스링크
+// -----------------------------------------------------------------------
+function KnownIssuesTab({
+  tenantSlug,
+  onArticleClick,
+  onGoToProblems,
+}: {
+  tenantSlug: string;
+  onArticleClick: (id: string) => void;
+  onGoToProblems: () => void;
+}) {
+  const { data, isLoading, isError, refetch } = useQuery<KnownIssue[]>({
+    queryKey: ['kb-known-issues', tenantSlug],
+    queryFn: () =>
+      api.get(`/${tenantSlug}/kb/known-issues`).then((r) => {
+        const d = r.data;
+        return Array.isArray(d) ? (d as KnownIssue[]) : ((d?.items ?? []) as KnownIssue[]);
+      }),
+    enabled: !!tenantSlug,
+    staleTime: 30_000,
+  });
+
+  const items = data ?? [];
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* 용어 명료화 배너 */}
+      <div className="flex items-start gap-2 rounded-lg border border-border-subtle bg-surface-subtle px-4 py-3 text-xs text-text-secondary">
+        <HelpCircle size={14} className="mt-0.5 shrink-0 text-text-disabled" />
+        <span className="flex-1">
+          &quot;알려진 이슈&quot;는 해결책(Workaround)이 KB 문서로 등록 완료된 항목입니다.
+          아직 원인 조사 중이거나 해결책이 없는 항목은 문제 관리의 <strong>Known Error</strong>에서 확인하세요.
+        </span>
+        <button
+          type="button"
+          onClick={onGoToProblems}
+          className="shrink-0 inline-flex items-center gap-1 text-brand hover:underline font-medium whitespace-nowrap"
+        >
+          <Bug size={12} />
+          문제 관리에서 보기
+        </button>
+      </div>
+
+      {isLoading ? (
+        <SkeletonCards />
+      ) : isError ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <AlertCircle size={28} className="text-error" />
+          <p className="text-sm text-text-secondary">데이터를 불러오지 못했습니다.</p>
+          <button
+            onClick={() => refetch()}
+            className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+          >
+            <RefreshCw size={12} />
+            다시 시도
+          </button>
+        </div>
+      ) : items.length === 0 ? (
+        <EmptyState message="등록된 알려진 이슈가 없습니다." />
+      ) : (
+        <div className="space-y-2">
+          {items.map((ki) => (
+            <button
+              key={ki.id}
+              type="button"
+              onClick={() => onArticleClick(ki.id)}
+              className="w-full text-left bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 hover:bg-surface-hover hover:border-border-default transition-all duration-fast flex items-center justify-between gap-3"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-text-primary line-clamp-1 text-sm">
+                  {typeof ki.title === 'string' ? ki.title : '(제목 없음)'}
+                </p>
+                <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                  {ki.ki_severity && (
+                    <span className="inline-flex items-center rounded-full bg-error-bg px-2 py-0.5 text-[11px] font-medium text-error-text">
+                      {ki.ki_severity}
+                    </span>
+                  )}
+                  {ki.ki_status && (
+                    <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-600">
+                      {KI_STATUS_LABELS[ki.ki_status] ?? ki.ki_status}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <ExternalLink size={14} className="shrink-0 text-text-disabled" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
 // KB 페이지
 // -----------------------------------------------------------------------
 export default function KbPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const tenantSlug = params?.tenantSlug as string;
   const { user } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<SearchTab>('keyword');
+  // RX-4c 잔여: /problems "KB 알려진 이슈에서 해결책 찾기" → ?view=known-issues 딥링크 진입
+  const initialTab: SearchTab = searchParams?.get('view') === 'known-issues' ? 'known-issues' : 'keyword';
+  const [activeTab, setActiveTab] = useState<SearchTab>(initialTab);
   const [q, setQ] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -452,25 +558,41 @@ export default function KbPage() {
           >
             의미 검색
           </button>
+          {/* RX-4c 잔여: 알려진 이슈 탭 */}
+          <button
+            type="button"
+            onClick={() => handleTabChange('known-issues')}
+            title="해결책이 KB 문서로 등록 완료된 항목 (Known Error와는 별개 데이터)"
+            className={cn(
+              'rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-fast',
+              activeTab === 'known-issues'
+                ? 'bg-surface text-text-primary shadow-sm'
+                : 'text-text-secondary hover:text-text-primary',
+            )}
+          >
+            알려진 이슈
+          </button>
         </div>
 
-        <div className="relative max-w-lg">
-          <Search
-            size={14}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-disabled pointer-events-none"
-          />
-          <input
-            type="text"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={
-              activeTab === 'keyword'
-                ? '제목·내용·태그 검색...'
-                : '자연어로 검색 (2자 이상)...'
-            }
-            className="h-9 w-full pl-8 pr-3 rounded-md border border-border-default bg-surface text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
-          />
-        </div>
+        {activeTab !== 'known-issues' && (
+          <div className="relative max-w-lg">
+            <Search
+              size={14}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-disabled pointer-events-none"
+            />
+            <input
+              type="text"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={
+                activeTab === 'keyword'
+                  ? '제목·내용·태그 검색...'
+                  : '자연어로 검색 (2자 이상)...'
+              }
+              className="h-9 w-full pl-8 pr-3 rounded-md border border-border-default bg-surface text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-2 focus:ring-border-strong"
+            />
+          </div>
+        )}
       </div>
 
       {/* 결과 영역 */}
@@ -483,11 +605,17 @@ export default function KbPage() {
             onNew={() => setCreateOpen(true)}
             canCreate={writerAccess}
           />
-        ) : (
+        ) : activeTab === 'semantic' ? (
           <SemanticTab
             tenantSlug={tenantSlug}
             q={q}
             onArticleClick={handleArticleClick}
+          />
+        ) : (
+          <KnownIssuesTab
+            tenantSlug={tenantSlug}
+            onArticleClick={handleArticleClick}
+            onGoToProblems={() => router.push(`/${tenantSlug}/problems?filter=known_error`)}
           />
         )}
       </div>

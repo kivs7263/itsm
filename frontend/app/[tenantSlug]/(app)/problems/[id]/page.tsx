@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Bug, Search, X, Link as LinkIcon, Trash2, AlertCircle, RefreshCw } from 'lucide-react';
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Bug, Search, X, Link as LinkIcon, Trash2, AlertCircle, RefreshCw, BookOpen, HelpCircle, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type {
@@ -12,6 +12,7 @@ import type {
   ProblemPriority,
   Ticket,
   TicketsResponse,
+  KnownIssue,
 } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/utils';
@@ -132,7 +133,7 @@ function PageSkeleton() {
 // -----------------------------------------------------------------------
 // 탭 타입
 // -----------------------------------------------------------------------
-type TabKey = 'info' | 'rca' | 'linked_tickets';
+type TabKey = 'info' | 'rca' | 'linked_tickets' | 'kb_articles';
 
 // -----------------------------------------------------------------------
 // 인시던트 링크 검색 컴포넌트
@@ -298,6 +299,34 @@ export default function ProblemDetailPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  // RX-4c 잔여: Problem ↔ KB "알려진 이슈" 크로스링크.
+  // Problem-KbArticle 간 직접 FK는 없음(reviewer 판정: 계층이 다른 별개 데이터) — 단,
+  // 연결된 인시던트(Ticket) 경유로 실제 연결이 존재(ProblemTicket → TicketKnownIssue → KbArticle).
+  // 기존 /tickets/{id}/known-issues 엔드포인트(tickets/[ticketId]/page.tsx L377과 동일 API) 재사용해 집계.
+  const linkedTicketIds = (problem?.linked_tickets ?? []).map((t) => t.ticket_id);
+  const kbQueries = useQueries({
+    queries: linkedTicketIds.map((ticketId) => ({
+      queryKey: ['ticket-known-issues', tenantSlug, ticketId],
+      queryFn: () =>
+        api.get(`/${tenantSlug}/tickets/${ticketId}/known-issues`).then((r) => {
+          const d = r.data;
+          return Array.isArray(d) ? (d as KnownIssue[]) : ((d?.items ?? []) as KnownIssue[]);
+        }),
+      enabled: !!tenantSlug && !!ticketId,
+      staleTime: 30_000,
+    })),
+  });
+  const relatedKbArticles: KnownIssue[] = React.useMemo(() => {
+    const seen = new Map<string, KnownIssue>();
+    for (const q of kbQueries) {
+      for (const ki of q.data ?? []) {
+        if (!seen.has(ki.id)) seen.set(ki.id, ki);
+      }
+    }
+    return Array.from(seen.values());
+  }, [kbQueries]);
+  const kbArticlesLoading = kbQueries.some((q) => q.isLoading);
+
   // 인시던트 언링크
   const unlinkMutation = useMutation({
     mutationFn: (ticketId: string) =>
@@ -424,8 +453,12 @@ export default function ProblemDetailPage() {
           <ProblemStatusBadge status={problem.status} />
           <ProblemPriorityBadge priority={problem.priority} />
           {problem.is_known_error && (
-            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-warning-bg text-warning-text">
+            <span
+              title="Known Error: 근본 원인이 파악된 Problem. 해결책이 KB 문서로 등록되면 '알려진 이슈'가 됩니다 — 아래 '관련 KB 문서' 탭 참고."
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-warning-bg text-warning-text"
+            >
               Known Error
+              <HelpCircle size={11} />
             </span>
           )}
         </div>
@@ -475,11 +508,27 @@ export default function ProblemDetailPage() {
                 </InfoRow>
                 <InfoRow label="Known Error">
                   {problem.is_known_error ? (
-                    <span className="text-warning-text font-medium text-xs">예</span>
+                    <span
+                      title="근본 원인이 파악된 상태. 해결책이 KB 문서로 등록되면 '알려진 이슈'가 됩니다."
+                      className="text-warning-text font-medium text-xs"
+                    >
+                      예
+                    </span>
                   ) : (
                     <span className="text-text-disabled text-xs">아니오</span>
                   )}
                 </InfoRow>
+                {problem.is_known_error && (
+                  <InfoRow label="관련 KB">
+                    <span className="text-xs">
+                      {kbArticlesLoading
+                        ? '확인 중...'
+                        : relatedKbArticles.length > 0
+                          ? `${relatedKbArticles.length}건 연결됨`
+                          : <span className="text-text-disabled">등록된 해결책 없음</span>}
+                    </span>
+                  </InfoRow>
+                )}
                 <InfoRow label="담당자">
                   {problem.assigned_to
                     ? (() => {
@@ -533,6 +582,7 @@ export default function ProblemDetailPage() {
                   { key: 'info' as TabKey,           label: '기본 정보' },
                   { key: 'rca' as TabKey,            label: 'RCA / 해결책' },
                   { key: 'linked_tickets' as TabKey, label: `연결된 인시던트 (${(problem.linked_tickets ?? []).length})` },
+                  { key: 'kb_articles' as TabKey,    label: `관련 KB 문서 (${relatedKbArticles.length})` },
                 ] as const).map(({ key, label }) => (
                   <button
                     key={key}
@@ -713,6 +763,72 @@ export default function ProblemDetailPage() {
                           ))}
                         </tbody>
                       </table>
+                    )}
+                  </div>
+                )}
+
+                {/* 관련 KB 문서 탭 — RX-4c 잔여: Problem ↔ KB 알려진 이슈 크로스링크 */}
+                {activeTab === 'kb_articles' && (
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-start gap-2 rounded-lg border border-border-subtle bg-surface-subtle px-3 py-2.5 text-xs text-text-secondary">
+                      <HelpCircle size={14} className="mt-0.5 shrink-0 text-text-disabled" />
+                      <span>
+                        Problem(원인 조사 레코드)과 KB &quot;알려진 이슈&quot;(등록된 해결책)는 서로 다른 데이터입니다.
+                        여기서는 이 Problem에 연결된 인시던트(티켓)에 등록된 KB 알려진 이슈를 모아 보여줍니다.
+                      </span>
+                    </div>
+
+                    {kbArticlesLoading ? (
+                      <div className="flex flex-col gap-2">
+                        {Array.from({ length: 2 }).map((_, i) => (
+                          <Skeleton key={i} className="h-14 w-full rounded-lg" />
+                        ))}
+                      </div>
+                    ) : relatedKbArticles.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 gap-2">
+                        <p className="text-sm text-text-secondary">
+                          {linkedTicketIds.length === 0
+                            ? '연결된 인시던트가 없어 관련 KB 문서를 찾을 수 없습니다.'
+                            : '연결된 인시던트에 등록된 KB 알려진 이슈가 없습니다.'}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/${tenantSlug}/kb?view=known-issues`)}
+                          className="inline-flex items-center gap-1.5 text-xs text-brand hover:underline font-medium"
+                        >
+                          <BookOpen size={12} />
+                          KB 알려진 이슈 전체 목록 보기
+                        </button>
+                      </div>
+                    ) : (
+                      <ul className="flex flex-col gap-2">
+                        {relatedKbArticles.map((ki) => (
+                          <li key={ki.id}>
+                            <button
+                              type="button"
+                              onClick={() => router.push(`/${tenantSlug}/kb/${ki.id}`)}
+                              className="w-full flex items-center justify-between gap-3 rounded-lg border border-border-default bg-surface px-3 py-2.5 text-left hover:bg-surface-hover hover:border-border-strong transition-colors"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-text-primary truncate">{ki.title}</p>
+                                <div className="flex gap-1 mt-1 flex-wrap">
+                                  {ki.ki_severity && (
+                                    <span className="inline-flex items-center rounded-full bg-error-bg px-1.5 py-0.5 text-[10px] font-medium text-error-text">
+                                      {ki.ki_severity}
+                                    </span>
+                                  )}
+                                  {ki.ki_status && (
+                                    <span className="inline-flex items-center rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                                      {ki.ki_status}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <ExternalLink size={13} className="shrink-0 text-text-disabled" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
                     )}
                   </div>
                 )}

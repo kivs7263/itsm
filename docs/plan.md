@@ -119,7 +119,7 @@ RX-4 (데드코드 정리 + IA 재구조화)           마지막 · 회귀주의
 | `RX-2a` | Migration 057~058 — `companies`(구 account)·`sites`(구 division)·`contacts`(구 customer_contacts) CREATE + 백필. 라이브 적용·검증(companies3=account3, sites3=division3) | L | `[ DONE 2026-07-04 ]` |
 | `RX-2b` | Migration 059~061 — tickets/assets/contracts/CI에 company_id/site_id/requester_contact_id(NULLABLE) 추가 + 백필 + customers_compat 뷰. FK 미매핑 0 검증(060 division→parent 보정 포함) | M | `[ DONE 2026-07-04 ]` |
 | `RX-2c` | Backend 이중쓰기(Phase B) — customers/tickets/assets/contracts/cmdb create·update·delete가 companies/sites/contacts + FK컬럼 동기 쓰기. dual_write.py 헬퍼. READ는 customers_compat 뷰 | L | `[ DONE 2026-07-04 ]` |
-| `RX-2d` | Frontend — 고객 목록·상세를 Company→Site→Contact 계층으로 재구성 | L | `[ PENDING ]` (후속 웨이브) |
+| `RX-2d` | 지점(Site) 속성(주소/시간대/본사) 관리 + 티켓 요청자 연락처 연결 — 비파괴 이중쓰기(division 경로 확장, sites row 동기). 프론트: 고객상세 지점 편집·티켓 요청자 Select/표시. **전면 계층 재구성(Company/Site/Contact 완전 분리 화면)은 파괴적 DROP 이후 후속** | L | `[ DONE 2026-07-04 ]` (reviewer 중) |
 | `RX-2-DROP` | 마이그레이션 — 구 customers/customer_contacts 컬럼·테이블 DROP. **이중쓰기 2주 검증 + DB스냅샷 후에만** (062는 FK교정으로 사용됨 → DROP은 063+) | M | `[ PENDING ]` (파괴적·보류) |
 | `RX-2V` | reviewer(이중쓰기 정합·격리·원자성). BLOCKER1(account삭제 CASCADE 데이터손실→FK SET NULL 062)+높음3+중간3 발견·전건 수정·재배포. FK confdeltype=n 검증 | L | `[ DONE 2026-07-04 ]` |
 
@@ -148,7 +148,7 @@ RX-4 (데드코드 정리 + IA 재구조화)           마지막 · 회귀주의
 |---|---|---|---|
 | `RX-4a` | 데드코드 제거 — `AuditLog`·`SSOConfig` 모델, `calendar_events`·`external_notifications` 라우터, `calendar_push_service`, tickets subtickets/root_causes. grep 0 재확인. **bridge_worker는 compose 등록 확인돼 유지**, calendar_event 모델은 파괴적 DROP 회피 위해 유지, external_notif_service는 5곳 사용으로 유지 | M | `[ DONE 2026-07-03 ]` |
 | `RX-4b` | IA 재구조화 — 사이드바 8 도메인 허브(홈/작업/서비스관리/고객/인프라/지식/관리). `/automation`·`/service-catalog`·`/notifications`(고아였음) 배선. 5역할 게이팅 100% 보존, 고아 라우트 0. **queue/recurring/contracts는 탭병합 대신 네비 재그룹핑(페이지 보존)** | L | `[ DONE 2026-07-03 ]` |
-| `RX-4c` | known_issues↔problems UX 진입점 정리 + recurring를 Problems 필터탭으로 — 페이지 레벨 탭병합이라 **후속 웨이브로 이연**(고아 방지) | M | `[ PENDING ]` |
+| `RX-4c` | recurring→Problems 탭(커밋 b19552a) + known_issues↔problems UX 명료화(Known Error 필터·툴팁·Problem상세 "관련KB"탭·KB "알려진이슈"탭, 실재 데이터경로 Problem→ProblemTicket→TicketKnownIssue→KbArticle) | M | `[ DONE 2026-07-04 ]` |
 
 **성공 기준**: 데드코드 제거 후 build·health 통과 / 최상위 8그룹 / 고아 라우트 0. ✅ (reviewer 검증 진행 중)
 **이연**: queue→tickets탭, recurring→problems탭 등 페이지 레벨 탭병합은 딥링크·배지 이관 설계 필요 → 별도 웨이브.
