@@ -39,6 +39,22 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import { isAdminRole, type UserRole } from '@/lib/auth';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  SettingsShell,
+  SettingsCard,
+  Switch,
+  Select,
+  EmptyState,
+  CodeValue,
+  type SettingsNavGroup,
+} from '@total/ui-shell';
 import type {
   UserSetting,
   NotificationConfig,
@@ -61,6 +77,8 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_OPTIONS = ['engineer', 'team_lead', 'admin', 'sales', 'c_level'] as const;
+/** ui-shell <Select> 용 옵션 — native <select> 대체 (PU-S3) */
+const ROLE_OPTIONS_MAPPED = ROLE_OPTIONS.map((r) => ({ value: r, label: ROLE_LABELS[r] ?? r }));
 
 const TIER_LABELS: Record<string, string> = {
   bronze: 'Bronze',
@@ -69,29 +87,49 @@ const TIER_LABELS: Record<string, string> = {
   platinum: 'Platinum',
 };
 
-const TIER_COLORS: Record<string, string> = {
-  bronze: 'text-orange-400',
-  silver: 'text-slate-400',
-  gold: 'text-yellow-400',
-  platinum: 'text-cyan-400',
+/** 등급(tier) 배지 — 틸 색상환 내 명도 분기 토큰 (구 Tailwind 원색 text-orange-400 등 폐기, PU-S3) */
+const TIER_BADGE: Record<string, { bg: string; text: string }> = {
+  bronze:   { bg: 'var(--badge-tier-bronze)', text: 'var(--badge-tier-bronze-text)' },
+  silver:   { bg: 'var(--badge-tier-silver)', text: 'var(--badge-tier-silver-text)' },
+  gold:     { bg: 'var(--badge-tier-gold)',   text: 'var(--badge-tier-gold-text)' },
+  platinum: { bg: 'var(--badge-tier-plat)',   text: 'var(--badge-tier-plat-text)' },
 };
 
 // -----------------------------------------------------------------------
-// 탭 정의
+// 탭 정의 — @total/ui-shell SettingsShell 3그룹 좌측 nav (PU-S3, 구 가로 10탭바 폐기)
 // -----------------------------------------------------------------------
 type TabId = 'users' | 'notifications' | 'sla' | 'categories' | 'support-teams' | 'email-inbound' | 'api-keys' | 'webhooks' | 'billing' | 'general';
 
-const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: 'users',             label: '사용자 관리',    icon: Users          },
-  { id: 'notifications',     label: '알림 채널',      icon: Bell           },
-  { id: 'email-inbound',     label: '이메일 수신',    icon: Mail           },
-  { id: 'sla',               label: 'SLA 정책',       icon: Clock          },
-  { id: 'categories',        label: '분류 체계',      icon: Tag            },
-  { id: 'support-teams',     label: '지원팀 관리',    icon: PhoneForwarded },
-  { id: 'api-keys',          label: 'API 키',         icon: Key            },
-  { id: 'webhooks',          label: 'Webhook',        icon: Webhook        },
-  { id: 'billing',           label: '구독',           icon: Zap            },
-  { id: 'general',           label: '일반',           icon: Globe          },
+const ALL_TAB_IDS: TabId[] = ['users', 'notifications', 'email-inbound', 'sla', 'categories', 'support-teams', 'api-keys', 'webhooks', 'billing', 'general'];
+
+const SETTINGS_GROUPS: SettingsNavGroup[] = [
+  {
+    label: '개인',
+    items: [
+      { key: 'notifications', label: '알림 채널', icon: Bell, description: '알림 수신 설정', scopeLabel: '이 제품' },
+    ],
+  },
+  {
+    label: '워크스페이스',
+    role: 'admin',
+    items: [
+      { key: 'sla',           label: 'SLA 정책',    icon: Clock,          description: '응답/해결 SLA',   scopeLabel: '이 조직' },
+      { key: 'categories',    label: '분류 체계',   icon: Tag,            description: '티켓 분류 관리',  scopeLabel: '이 조직' },
+      { key: 'support-teams', label: '지원팀',      icon: PhoneForwarded, description: '에스컬레이션 팀', scopeLabel: '이 조직' },
+      { key: 'email-inbound', label: '이메일 수신', icon: Mail,           description: '수신 채널 설정',  scopeLabel: '이 조직' },
+      { key: 'billing',       label: '구독',        icon: Zap,            description: '플랜 · 시트',     scopeLabel: '이 조직' },
+    ],
+  },
+  {
+    label: '관리',
+    role: 'admin',
+    items: [
+      { key: 'users',    label: '사용자',    icon: Users,   description: '멤버 · 역할',   scopeLabel: '이 조직' },
+      { key: 'api-keys', label: 'API 키',    icon: Key,     description: '외부 연동 키',  scopeLabel: '이 조직' },
+      { key: 'webhooks', label: 'Webhook',   icon: Webhook, description: 'HTTP 이벤트',   scopeLabel: '이 조직' },
+      { key: 'general',  label: '일반 설정', icon: Globe,   description: '시스템 · 시간대', scopeLabel: '이 조직' },
+    ],
+  },
 ];
 
 // -----------------------------------------------------------------------
@@ -173,61 +211,62 @@ function UsersTab({ tenantSlug }: { tenantSlug: string }) {
         <Button
           size="sm"
           leftIcon={<Plus size={14} />}
-          onClick={() => setShowInvite((v) => !v)}
+          onClick={() => setShowInvite(true)}
         >
           사용자 초대
         </Button>
       </div>
 
-      {/* 초대 폼 */}
-      {showInvite && (
-        <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-3">
-          <p className="text-sm font-medium text-text-primary">새 사용자 초대</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-text-secondary">이름</label>
-              <input
-                type="text"
-                value={invite.name}
-                onChange={(e) => setInvite((v) => ({ ...v, name: e.target.value }))}
-                className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-                placeholder="홍길동"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-text-secondary">이메일</label>
-              <input
-                type="email"
-                value={invite.email}
-                onChange={(e) => setInvite((v) => ({ ...v, email: e.target.value }))}
-                className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-                placeholder="user@example.com"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-text-secondary">역할</label>
-              <select
-                value={invite.role}
-                onChange={(e) => setInvite((v) => ({ ...v, role: e.target.value }))}
-                className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-              >
-                {ROLE_OPTIONS.map((r) => (
-                  <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-text-secondary">초기 비밀번호</label>
-              <input
-                type="password"
-                value={invite.password}
-                onChange={(e) => setInvite((v) => ({ ...v, password: e.target.value }))}
-                className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-                placeholder="••••••••"
-              />
+      {/* 초대 폼 — 인라인 확장 폼 → Dialog (PU-S3 STEP 9, 3필드 이하) */}
+      <Dialog open={showInvite} onOpenChange={(v) => { if (!v) setShowInvite(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>새 사용자 초대</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-text-secondary">이름</label>
+                <input
+                  type="text"
+                  value={invite.name}
+                  onChange={(e) => setInvite((v) => ({ ...v, name: e.target.value }))}
+                  className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                  placeholder="홍길동"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-text-secondary">이메일</label>
+                <input
+                  type="email"
+                  value={invite.email}
+                  onChange={(e) => setInvite((v) => ({ ...v, email: e.target.value }))}
+                  className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                  placeholder="user@example.com"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-text-secondary">역할</label>
+                <Select
+                  options={ROLE_OPTIONS_MAPPED}
+                  value={invite.role}
+                  onChange={(v) => setInvite((prev) => ({ ...prev, role: v }))}
+                  aria-label="초대 역할"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-text-secondary">초기 비밀번호</label>
+                <input
+                  type="password"
+                  value={invite.password}
+                  onChange={(e) => setInvite((v) => ({ ...v, password: e.target.value }))}
+                  className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                  placeholder="••••••••"
+                />
+              </div>
             </div>
           </div>
-          <div className="flex gap-2 justify-end">
+          <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setShowInvite(false)}>
               취소
             </Button>
@@ -239,9 +278,9 @@ function UsersTab({ tenantSlug }: { tenantSlug: string }) {
             >
               초대
             </Button>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 사용자 테이블 */}
       <div className="overflow-auto rounded-lg border border-border-default shadow-sm">
@@ -274,30 +313,27 @@ function UsersTab({ tenantSlug }: { tenantSlug: string }) {
                 >
                   <td className="px-4 py-3 text-text-primary font-medium">{u.name}</td>
                   <td className="px-4 py-3 text-text-secondary text-xs">{u.email}</td>
-                  <td className="px-4 py-3">
-                    <select
+                  <td className="px-4 py-3 w-36">
+                    <Select
+                      options={ROLE_OPTIONS_MAPPED}
                       value={u.role}
-                      onChange={(e) => roleMutation.mutate({ id: u.id, role: e.target.value })}
-                      className="rounded border border-border-default bg-bg px-2 py-1 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-                    >
-                      {ROLE_OPTIONS.map((r) => (
-                        <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => roleMutation.mutate({ id: u.id, role: v })}
+                      aria-label={`${u.name} 역할`}
+                    />
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => toggleActiveMutation.mutate({ id: u.id, is_active: u.is_active })}
-                      className={cn(
-                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
-                        u.is_active
-                          ? 'bg-success-bg text-success-text hover:bg-error-bg hover:text-error-text'
-                          : 'bg-error-bg text-error-text hover:bg-success-bg hover:text-success-text',
-                      )}
-                    >
-                      {u.is_active ? '활성' : '비활성'}
-                    </button>
+                    {/* 상태표시(배지)와 클릭 컨트롤(Switch)을 분리 — 구 pill-버튼(클릭가능/상태겸용) 폐기 (PU-S3) */}
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={u.is_active}
+                        onChange={() => toggleActiveMutation.mutate({ id: u.id, is_active: u.is_active })}
+                        size="sm"
+                        aria-label={`${u.name} 활성 상태`}
+                      />
+                      <span className={cn('text-xs font-medium', u.is_active ? 'text-success-text' : 'text-text-disabled')}>
+                        {u.is_active ? '활성' : '비활성'}
+                      </span>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -323,8 +359,7 @@ interface ChannelSectionProps {
 
 function ChannelSection({ title, fields, values, onChange, onSave, isSaving }: ChannelSectionProps) {
   return (
-    <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-3">
-      <p className="text-sm font-semibold text-text-primary">{title}</p>
+    <SettingsCard title={title} className="flex flex-col gap-3">
       {fields.map(({ key, label, placeholder }) => (
         <div key={key} className="flex flex-col gap-1">
           <label className="text-xs text-text-secondary">{label}</label>
@@ -342,7 +377,7 @@ function ChannelSection({ title, fields, values, onChange, onSave, isSaving }: C
           저장
         </Button>
       </div>
-    </div>
+    </SettingsCard>
   );
 }
 
@@ -449,9 +484,7 @@ function NotificationsTab({ tenantSlug }: { tenantSlug: string }) {
       />
 
       {/* SMTP 섹션 — 비밀번호는 별도 state 관리 */}
-      <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-3">
-        <p className="text-sm font-semibold text-text-primary">SMTP (이메일)</p>
-
+      <SettingsCard title="SMTP (이메일)" className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-text-secondary">SMTP 서버</label>
@@ -492,7 +525,7 @@ function NotificationsTab({ tenantSlug }: { tenantSlug: string }) {
             <label className="text-xs text-text-secondary">
               비밀번호
               {configData?.smtp_password_configured && (
-                <span className="ml-2 text-xs text-green-600">✓ 비밀번호 설정됨</span>
+                <span className="ml-2 text-xs text-success-text">✓ 비밀번호 설정됨</span>
               )}
             </label>
             <input
@@ -542,7 +575,7 @@ function NotificationsTab({ tenantSlug }: { tenantSlug: string }) {
             저장
           </Button>
         </div>
-      </div>
+      </SettingsCard>
     </div>
   );
 }
@@ -601,12 +634,11 @@ function SlaTab({ tenantSlug }: { tenantSlug: string }) {
         <p className="text-sm text-text-secondary">
           계약 등급별 응답 시간(분)과 해결 시간(분)을 설정합니다.
         </p>
-        <div className="flex flex-col items-center justify-center py-16 gap-3 border border-dashed border-border-default rounded-lg">
-          <p className="text-sm font-medium text-text-primary">SLA 정책이 없습니다</p>
-          <p className="text-xs text-text-secondary text-center max-w-xs">
-            Bronze · Silver · Gold · Platinum 4개 등급의 SLA 정책을 초기화하려면 관리자에게 문의하거나 백엔드 초기 데이터를 확인하세요.
-          </p>
-        </div>
+        <EmptyState
+          icon={Clock}
+          title="SLA 정책이 없습니다"
+          description="Bronze · Silver · Gold · Platinum 4개 등급의 SLA 정책을 초기화하려면 관리자에게 문의하거나 백엔드 초기 데이터를 확인하세요."
+        />
       </div>
     );
   }
@@ -622,7 +654,12 @@ function SlaTab({ tenantSlug }: { tenantSlug: string }) {
           const policy = policies.find((p) => p.grade === tier);
           if (!policy) return (
             <div key={tier} className="bg-surface border border-dashed border-border-default rounded-[16px] p-4 flex flex-col items-center justify-center gap-2 min-h-[120px]">
-              <p className={cn('text-sm font-semibold', TIER_COLORS[tier])}>{TIER_LABELS[tier]}</p>
+              <span
+                className="text-sm font-semibold rounded-full px-2.5 py-0.5"
+                style={{ background: TIER_BADGE[tier].bg, color: TIER_BADGE[tier].text }}
+              >
+                {TIER_LABELS[tier]}
+              </span>
               <p className="text-xs text-text-disabled">정책 미등록</p>
             </div>
           );
@@ -632,10 +669,13 @@ function SlaTab({ tenantSlug }: { tenantSlug: string }) {
           };
 
           return (
-            <div key={tier} className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-3">
-              <p className={cn('text-sm font-semibold', TIER_COLORS[tier])}>
+            <SettingsCard key={tier} className="flex flex-col gap-3">
+              <span
+                className="self-start text-sm font-semibold rounded-full px-2.5 py-0.5"
+                style={{ background: TIER_BADGE[tier].bg, color: TIER_BADGE[tier].text }}
+              >
                 {TIER_LABELS[tier]}
-              </p>
+              </span>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-text-secondary">응답 시간 (분)</label>
@@ -677,7 +717,7 @@ function SlaTab({ tenantSlug }: { tenantSlug: string }) {
                   저장
                 </Button>
               </div>
-            </div>
+            </SettingsCard>
           );
         })}
       </div>
@@ -810,10 +850,13 @@ function CategorySection({ tenantSlug, urlKey, queryKey, title }: CategorySectio
     setEditName(item.name);
   };
 
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm font-semibold text-text-primary">{title}</p>
+  const parentCategoryOptions = [
+    { value: '', label: '최상위' },
+    ...flatList.map((f) => ({ value: f.id, label: `${'  '.repeat(f.depth)}${f.name}` })),
+  ];
 
+  return (
+    <SettingsCard title={title} className="flex flex-col gap-3">
       {/* 추가 폼 */}
       <div className="flex items-end gap-2">
         <div className="flex flex-col gap-1 flex-1">
@@ -828,18 +871,12 @@ function CategorySection({ tenantSlug, urlKey, queryKey, title }: CategorySectio
         </div>
         <div className="flex flex-col gap-1 flex-1">
           <label className="text-xs text-text-secondary">상위 카테고리 (선택)</label>
-          <select
+          <Select
+            options={parentCategoryOptions}
             value={addParentId}
-            onChange={(e) => setAddParentId(e.target.value)}
-            className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-          >
-            <option value="">최상위</option>
-            {flatList.map((f) => (
-              <option key={f.id} value={f.id}>
-                {'  '.repeat(f.depth)}{f.name}
-              </option>
-            ))}
-          </select>
+            onChange={setAddParentId}
+            aria-label="상위 카테고리"
+          />
         </div>
         <Button
           size="sm"
@@ -880,8 +917,11 @@ function CategorySection({ tenantSlug, urlKey, queryKey, title }: CategorySectio
         </div>
       )}
 
-      {/* 트리 목록 */}
-      <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] py-1">
+      {/* 트리 목록 — SettingsCard 내부이므로 카드-안-카드 방지, 단순 리스트 블록으로 구성 */}
+      <div
+        className="rounded-[10px] py-1"
+        style={{ border: '1px solid var(--color-border-subtle, rgba(0,0,0,.08))' }}
+      >
         {isLoading ? (
           <div className="flex flex-col gap-1 p-2">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -902,7 +942,7 @@ function CategorySection({ tenantSlug, urlKey, queryKey, title }: CategorySectio
           ))
         )}
       </div>
-    </div>
+    </SettingsCard>
   );
 }
 
@@ -980,11 +1020,13 @@ function SupportTeamsTab({ tenantSlug }: { tenantSlug: string }) {
   const teams = data ?? [];
 
   const LEVEL_LABELS: Record<number, string> = { 1: 'L1', 2: 'L2', 3: 'L3' };
-  const LEVEL_COLORS: Record<number, string> = {
-    1: 'bg-blue-100 text-blue-700',
-    2: 'bg-purple-100 text-purple-700',
-    3: 'bg-red-100 text-red-700',
+  /** 구 Tailwind 원색(bg-blue-100 등) 폐기 → info/warning/danger 시맨틱 토큰 재활용 (PU-S3 §8-4) */
+  const LEVEL_BADGE: Record<number, { bg: string; text: string }> = {
+    1: { bg: 'var(--badge-level-1-bg)', text: 'var(--badge-level-1-text)' },
+    2: { bg: 'var(--badge-level-2-bg)', text: 'var(--badge-level-2-text)' },
+    3: { bg: 'var(--badge-level-3-bg)', text: 'var(--badge-level-3-text)' },
   };
+  const DEFAULT_LEVEL_BADGE = { bg: 'rgba(0,0,0,.06)', text: 'var(--color-text-secondary)' };
 
   const handleEditOpen = (team: SupportTeam) => {
     setEditId(team.id);
@@ -995,56 +1037,60 @@ function SupportTeamsTab({ tenantSlug }: { tenantSlug: string }) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-text-secondary">에스컬레이션 레벨별 지원팀을 관리합니다.</p>
-        <Button size="sm" leftIcon={<Plus size={14} />} onClick={() => setShowAddForm((v) => !v)}>
+        <Button size="sm" leftIcon={<Plus size={14} />} onClick={() => setShowAddForm(true)}>
           팀 추가
         </Button>
       </div>
 
-      {/* 추가 폼 */}
-      {showAddForm && (
-        <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-3">
-          <p className="text-sm font-medium text-text-primary">새 지원팀</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-text-secondary">팀 이름 *</label>
-              <input
-                type="text"
-                value={addForm.name}
-                onChange={(e) => setAddForm((v) => ({ ...v, name: e.target.value }))}
-                className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-                placeholder="1차 지원팀"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-text-secondary">레벨</label>
-              <div className="flex gap-3 items-center h-[38px]">
-                {([1, 2, 3] as const).map((lv) => (
-                  <label key={lv} className="flex items-center gap-1 cursor-pointer text-sm text-text-primary">
-                    <input
-                      type="radio"
-                      name="add-level"
-                      value={lv}
-                      checked={addForm.level === lv}
-                      onChange={() => setAddForm((v) => ({ ...v, level: lv }))}
-                      className="accent-accent"
-                    />
-                    {LEVEL_LABELS[lv]}
-                  </label>
-                ))}
+      {/* 추가 폼 — 인라인 확장 폼 → Dialog (PU-S3 STEP 9) */}
+      <Dialog open={showAddForm} onOpenChange={(v) => { if (!v) setShowAddForm(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>새 지원팀</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-text-secondary">팀 이름 *</label>
+                <input
+                  type="text"
+                  value={addForm.name}
+                  onChange={(e) => setAddForm((v) => ({ ...v, name: e.target.value }))}
+                  className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                  placeholder="1차 지원팀"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-text-secondary">레벨</label>
+                <div className="flex gap-3 items-center h-[38px]">
+                  {([1, 2, 3] as const).map((lv) => (
+                    <label key={lv} className="flex items-center gap-1 cursor-pointer text-sm text-text-primary">
+                      <input
+                        type="radio"
+                        name="add-level"
+                        value={lv}
+                        checked={addForm.level === lv}
+                        onChange={() => setAddForm((v) => ({ ...v, level: lv }))}
+                        className="accent-accent"
+                      />
+                      {LEVEL_LABELS[lv]}
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-text-secondary">설명 (선택)</label>
+              <input
+                type="text"
+                value={addForm.description}
+                onChange={(e) => setAddForm((v) => ({ ...v, description: e.target.value }))}
+                className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                placeholder="팀 역할 간단 설명"
+              />
+            </div>
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-text-secondary">설명 (선택)</label>
-            <input
-              type="text"
-              value={addForm.description}
-              onChange={(e) => setAddForm((v) => ({ ...v, description: e.target.value }))}
-              className="rounded-md border border-border-default bg-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-              placeholder="팀 역할 간단 설명"
-            />
-          </div>
-          <div className="flex gap-2 justify-end">
+          <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setShowAddForm(false)}>
               취소
             </Button>
@@ -1062,9 +1108,9 @@ function SupportTeamsTab({ tenantSlug }: { tenantSlug: string }) {
             >
               생성
             </Button>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 팀 목록 */}
       {isLoading ? (
@@ -1074,18 +1120,13 @@ function SupportTeamsTab({ tenantSlug }: { tenantSlug: string }) {
           ))}
         </div>
       ) : teams.length === 0 ? (
-        <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] py-12 text-center text-sm text-text-secondary">
-          지원팀이 없습니다.
-        </div>
+        <EmptyState icon={PhoneForwarded} title="지원팀이 없습니다" />
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {teams.map((team) => (
-            <div
+            <SettingsCard
               key={team.id}
-              className={cn(
-                'bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-2',
-                !team.is_active && 'opacity-60',
-              )}
+              className={cn('flex flex-col gap-2', !team.is_active && 'opacity-60')}
             >
               {editId === team.id ? (
                 /* 인라인 편집 폼 */
@@ -1147,16 +1188,17 @@ function SupportTeamsTab({ tenantSlug }: { tenantSlug: string }) {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span
-                        className={cn(
-                          'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold',
-                          LEVEL_COLORS[team.level] ?? 'bg-gray-100 text-gray-600',
-                        )}
+                        className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold"
+                        style={{
+                          background: (LEVEL_BADGE[team.level] ?? DEFAULT_LEVEL_BADGE).bg,
+                          color: (LEVEL_BADGE[team.level] ?? DEFAULT_LEVEL_BADGE).text,
+                        }}
                       >
                         {LEVEL_LABELS[team.level] ?? `L${team.level}`}
                       </span>
                       <span className="text-sm font-medium text-text-primary">{team.name}</span>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => handleEditOpen(team)}
@@ -1165,18 +1207,13 @@ function SupportTeamsTab({ tenantSlug }: { tenantSlug: string }) {
                       >
                         <Pencil size={13} />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleActiveMutation.mutate({ id: team.id, is_active: team.is_active })}
-                        className={cn(
-                          'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-colors ml-1',
-                          team.is_active
-                            ? 'bg-success-bg text-success-text hover:bg-error-bg hover:text-error-text'
-                            : 'bg-error-bg text-error-text hover:bg-success-bg hover:text-success-text',
-                        )}
-                      >
-                        {team.is_active ? '활성' : '비활성'}
-                      </button>
+                      {/* 상태표시(텍스트)와 클릭 컨트롤(Switch) 분리 (PU-S3) */}
+                      <Switch
+                        checked={team.is_active}
+                        onChange={() => toggleActiveMutation.mutate({ id: team.id, is_active: team.is_active })}
+                        size="sm"
+                        aria-label={`${team.name} 활성 상태`}
+                      />
                     </div>
                   </div>
                   {team.description && (
@@ -1185,7 +1222,7 @@ function SupportTeamsTab({ tenantSlug }: { tenantSlug: string }) {
                   <p className="text-xs text-text-secondary">멤버 {team.member_count}명</p>
                 </>
               )}
-            </div>
+            </SettingsCard>
           ))}
         </div>
       )}
@@ -1380,26 +1417,12 @@ function EmailInboundTab({ tenantSlug }: { tenantSlug: string }) {
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={form.is_active}
-            onClick={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
-            className={cn(
-              'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
-              form.is_active ? 'bg-[#129B8E]' : 'bg-border-default',
-            )}
-          >
-            <span
-              className={cn(
-                'pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200',
-                form.is_active ? 'translate-x-4' : 'translate-x-0',
-              )}
-            />
-          </button>
-          <span className="text-sm text-text-primary">수신 활성화</span>
-        </div>
+        {/* 구 인라인 role=switch(하드코딩 hex #129B8E) → 공유 Switch 토큰화 (PU-S3) */}
+        <Switch
+          checked={form.is_active}
+          onChange={(checked) => setForm((f) => ({ ...f, is_active: checked }))}
+          label="수신 활성화"
+        />
       </div>
 
       {/* 연결 테스트 결과 */}
@@ -1487,12 +1510,6 @@ function ApiKeysTab({ tenantSlug }: { tenantSlug: string }) {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  async function handleCopy() {
-    if (!createdKey) return;
-    await navigator.clipboard.writeText(createdKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
 
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
@@ -1510,7 +1527,7 @@ function ApiKeysTab({ tenantSlug }: { tenantSlug: string }) {
 
       {/* 생성 폼 */}
       {showCreate && (
-        <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex items-end gap-3">
+        <SettingsCard className="flex items-end gap-3">
           <div className="flex-1 flex flex-col gap-1">
             <label className="text-xs text-text-secondary">키 이름</label>
             <input
@@ -1531,34 +1548,31 @@ function ApiKeysTab({ tenantSlug }: { tenantSlug: string }) {
           <Button size="sm" variant="ghost" onClick={() => setShowCreate(false)}>
             취소
           </Button>
-        </div>
+        </SettingsCard>
       )}
 
-      {/* 생성된 키 1회 표시 모달 */}
+      {/* 생성된 키 1회 표시 — amber Tailwind 원색 폐기 → warning 시맨틱 토큰 + CodeValue (PU-S3) */}
       {createdKey && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 flex flex-col gap-3">
+        <div
+          className="rounded-lg p-4 flex flex-col gap-3"
+          style={{
+            border: '1px solid var(--color-warning-border)',
+            background: 'var(--color-warning-bg)',
+          }}
+        >
           <div className="flex items-center gap-2">
-            <Key size={14} className="text-amber-600" />
-            <p className="text-sm font-medium text-amber-700">
+            <Key size={14} style={{ color: 'var(--color-warning-text)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--color-warning-text)' }}>
               API 키가 생성되었습니다 — 지금 복사하세요 (이후 다시 볼 수 없습니다)
             </p>
           </div>
-          <div className="flex items-center gap-2 rounded-md border border-border-default bg-bg px-3 py-2">
-            <code className="flex-1 text-xs font-mono text-text-primary break-all select-all">{createdKey}</code>
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="shrink-0 rounded p-1 text-text-secondary hover:text-text-primary transition-colors"
-            >
-              {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
-            </button>
-          </div>
+          <CodeValue value={createdKey} onCopy={() => setCopied(true)} />
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={confirmed}
               onChange={(e) => setConfirmed(e.target.checked)}
-              className="h-4 w-4 rounded border-border-default accent-amber-500"
+              className="h-4 w-4 rounded border-border-default accent-warning"
             />
             <span className="text-xs text-text-secondary">키를 복사했습니다. 안전한 곳에 저장했습니다.</span>
           </label>
@@ -1753,7 +1767,7 @@ function WebhooksTab({ tenantSlug }: { tenantSlug: string }) {
 
       {/* 등록 폼 */}
       {showCreate && (
-        <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4 flex flex-col gap-4">
+        <SettingsCard className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-text-secondary">URL</label>
             <input
@@ -1796,7 +1810,7 @@ function WebhooksTab({ tenantSlug }: { tenantSlug: string }) {
               취소
             </Button>
           </div>
-        </div>
+        </SettingsCard>
       )}
 
       {/* Webhook 목록 */}
@@ -1807,10 +1821,7 @@ function WebhooksTab({ tenantSlug }: { tenantSlug: string }) {
           ))}
         </div>
       ) : webhooks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border-default py-10 gap-2">
-          <Webhook size={24} className="text-text-tertiary" />
-          <p className="text-sm text-text-tertiary">등록된 Webhook이 없습니다.</p>
-        </div>
+        <EmptyState icon={Webhook} title="등록된 Webhook이 없습니다" />
       ) : (
         <div className="flex flex-col gap-3">
           {webhooks.map((wh) => (
@@ -1923,11 +1934,12 @@ const PLAN_LABELS: Record<string, string> = {
   professional: 'Professional',
   enterprise: 'Enterprise',
 };
-const PLAN_COLORS: Record<string, string> = {
-  free: 'bg-border-subtle text-text-secondary',
-  starter: 'bg-blue-100 text-blue-700',
-  professional: 'bg-amber-100 text-amber-700',
-  enterprise: 'bg-purple-100 text-purple-700',
+/** 구 Tailwind 원색(bg-blue-100 등) 폐기 → brand/semantic 토큰 재활용 (PU-S3 §8-4) */
+const PLAN_BADGE: Record<string, { bg: string; text: string }> = {
+  free:         { bg: 'var(--badge-plan-free)',         text: 'var(--badge-plan-free-text)' },
+  starter:      { bg: 'var(--badge-plan-starter)',      text: 'var(--badge-plan-starter-text)' },
+  professional: { bg: 'var(--badge-plan-professional)', text: 'var(--badge-plan-professional-text)' },
+  enterprise:   { bg: 'var(--badge-plan-enterprise)',   text: 'var(--badge-plan-enterprise-text)' },
 };
 const PLAN_FEATURES: Record<string, string[]> = {
   free: ['엔지니어 3명', '월 100건 티켓', 'KB·SLA 기본'],
@@ -1996,22 +2008,28 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
 
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
-      {/* 만료 임박 경고 */}
+      {/* 만료 임박 경고 — amber Tailwind 원색 폐기 → warning 시맨틱 토큰 (PU-S3) */}
       {daysToRenewal !== null && daysToRenewal <= 7 && (
-        <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
-          <Zap size={16} className="text-amber-600 shrink-0" />
-          <p className="text-sm text-amber-700">
+        <div
+          className="flex items-center gap-3 rounded-lg px-4 py-3"
+          style={{ border: '1px solid var(--color-warning-border)', background: 'var(--color-warning-bg)' }}
+        >
+          <Zap size={16} className="shrink-0" style={{ color: 'var(--color-warning-text)' }} />
+          <p className="text-sm" style={{ color: 'var(--color-warning-text)' }}>
             구독이 {daysToRenewal}일 후 만료됩니다. 갱신하지 않으면 Free 플랜으로 자동 전환됩니다.
           </p>
         </div>
       )}
 
       {/* 현재 플랜 카드 */}
-      <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-5">
+      <SettingsCard>
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', PLAN_COLORS[plan])}>
+              <span
+                className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                style={{ background: PLAN_BADGE[plan]?.bg ?? PLAN_BADGE.free.bg, color: PLAN_BADGE[plan]?.text ?? PLAN_BADGE.free.text }}
+              >
                 {PLAN_LABELS[plan] ?? plan}
               </span>
               {renewalStr && (
@@ -2057,12 +2075,12 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
             </div>
           )}
         </div>
-      </div>
+      </SettingsCard>
 
       {/* 사용량 */}
       <div className="grid grid-cols-2 gap-4">
         {/* 시트 */}
-        <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4">
+        <SettingsCard>
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-text-secondary">엔지니어 시트</span>
             <span className="text-xs text-text-tertiary">
@@ -2071,14 +2089,14 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
           </div>
           <div className="h-2 rounded-full bg-border-subtle overflow-hidden">
             <div
-              className={cn('h-full rounded-full transition-all', seatPct >= 90 ? 'bg-error' : seatPct >= 70 ? 'bg-amber-400' : 'bg-success')}
+              className={cn('h-full rounded-full transition-all', seatPct >= 90 ? 'bg-error' : seatPct >= 70 ? 'bg-warning' : 'bg-success')}
               style={{ width: `${seatPct}%` }}
             />
           </div>
-        </div>
+        </SettingsCard>
 
         {/* 티켓 (Free만) */}
-        <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-4">
+        <SettingsCard>
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-text-secondary">이번달 티켓</span>
             <span className="text-xs text-text-tertiary">
@@ -2089,17 +2107,17 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
           <div className="h-2 rounded-full bg-border-subtle overflow-hidden">
             {sub?.ticket_limit_monthly ? (
               <div
-                className={cn('h-full rounded-full transition-all', ticketPct >= 90 ? 'bg-error' : ticketPct >= 70 ? 'bg-amber-400' : 'bg-success')}
+                className={cn('h-full rounded-full transition-all', ticketPct >= 90 ? 'bg-error' : ticketPct >= 70 ? 'bg-warning' : 'bg-success')}
                 style={{ width: `${ticketPct}%` }}
               />
             ) : (
               <div className="h-full w-full bg-success/30 rounded-full" />
             )}
           </div>
-        </div>
+        </SettingsCard>
       </div>
 
-      {/* 인보이스 */}
+      {/* 인보이스 — 리스트/테이블형 카드는 SettingsCard 고정 p-5 패딩과 flush-edge 구분선 요구가 상충해 기존 div 유지(이미 CSS var 토큰만 사용, 하드hex 없음) */}
       {invoices.length > 0 && (
         <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] overflow-hidden">
           <div className="px-4 py-3 bg-surface-elevated border-b border-border-subtle">
@@ -2117,7 +2135,7 @@ function BillingTab({ tenantSlug }: { tenantSlug: string }) {
                     {new Date(inv.period_end * 1000).toLocaleDateString('ko-KR')}
                   </span>
                 </div>
-                <span className={cn('text-xs', inv.status === 'paid' ? 'text-success' : 'text-amber-500')}>
+                <span className={cn('text-xs', inv.status === 'paid' ? 'text-success' : 'text-warning')}>
                   {inv.status}
                 </span>
                 {inv.invoice_pdf && (
@@ -2179,40 +2197,29 @@ function GeneralTab({ tenantSlug }: { tenantSlug: string }) {
 
   return (
     <div className="flex flex-col gap-6 max-w-lg">
-      <div className="bg-surface border border-[var(--color-border)] rounded-[16px] shadow-[var(--shadow-card)] p-5 flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-text-primary flex items-center gap-2">
-            <Globe size={15} className="text-text-secondary" />
-            시간대
-          </label>
-          <p className="text-xs text-text-secondary">
-            티켓 생성 시각·SLA 마감·공수 타이머가 이 시간대로 표시됩니다. DB는 UTC로 저장됩니다.
-          </p>
-        </div>
+      <SettingsCard icon={<Globe size={15} />} title="시간대" description="티켓 생성 시각·SLA 마감·공수 타이머가 이 시간대로 표시됩니다. DB는 UTC로 저장됩니다.">
+        <div className="flex flex-col gap-4">
+          <Select
+            options={COMMON_TIMEZONES}
+            value={tz}
+            onChange={(v) => { setTz(v); setSaved(false); }}
+            aria-label="시간대"
+          />
 
-        <select
-          value={tz}
-          onChange={(e) => { setTz(e.target.value); setSaved(false); }}
-          className="h-10 w-full rounded-md border border-border-default bg-surface px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-500"
-        >
-          {COMMON_TIMEZONES.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
-          ))}
-        </select>
-
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-text-tertiary">
-            현재 시각: <span className="font-mono">{nowInTz}</span>
-          </span>
-          <Button
-            size="sm"
-            onClick={handleSave}
-            leftIcon={saved ? <CheckCircle2 size={13} className="text-success" /> : undefined}
-          >
-            {saved ? '저장됨' : '저장'}
-          </Button>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-text-tertiary">
+              현재 시각: <span className="font-mono">{nowInTz}</span>
+            </span>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              leftIcon={saved ? <CheckCircle2 size={13} className="text-success" /> : undefined}
+            >
+              {saved ? '저장됨' : '저장'}
+            </Button>
+          </div>
         </div>
-      </div>
+      </SettingsCard>
 
       <p className="text-xs text-text-tertiary">
         * 시간대는 이 브라우저에만 적용됩니다. 팀원마다 독립적으로 설정합니다.
@@ -2230,7 +2237,7 @@ export default function SettingsPage() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const tabParam = searchParams?.get('tab');
-  const initialTab: TabId = TABS.some((t) => t.id === tabParam)
+  const initialTab: TabId = ALL_TAB_IDS.includes(tabParam as TabId)
     ? (tabParam as TabId)
     : 'users';
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
@@ -2238,14 +2245,16 @@ export default function SettingsPage() {
   const isAdmin = isAdminRole(user?.role as UserRole);
 
   // 권한 없음 처리 — hooks는 조건부 return 이전 모두 선언 완료
+  // (PU-S3: 이 게이트는 유지·강화 — ITSM settings는 admin 전용, SettingsShell 그룹 role
+  //  게이팅은 이 게이트를 통과한 이후에만 의미를 갖는 이중 방어)
   if (!isAdmin) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
         <div
           className="flex h-12 w-12 items-center justify-center rounded-2xl"
-          style={{ background: 'rgba(18, 155, 142, 0.12)' }}
+          style={{ background: 'var(--color-brand-subtle)' }}
         >
-          <ShieldOff size={24} strokeWidth={1.5} style={{ color: '#129B8E' }} />
+          <ShieldOff size={24} strokeWidth={1.5} style={{ color: 'var(--color-brand)' }} />
         </div>
         <div>
           <p className="text-sm font-medium text-text-primary">접근 권한 없음</p>
@@ -2262,38 +2271,31 @@ export default function SettingsPage() {
         <h1 className="text-xl font-semibold text-text-primary">설정</h1>
       </div>
 
-      {/* 탭 헤더 */}
-      <div className="flex gap-1 px-6 pt-4 border-b border-border-default bg-surface shrink-0">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setActiveTab(id)}
-            className={cn(
-              'flex items-center gap-2 px-4 py-2.5 text-sm rounded-t-md transition-colors border-b-2 -mb-px',
-              activeTab === id
-                ? 'border-accent text-text-primary font-medium'
-                : 'border-transparent text-text-secondary hover:text-text-primary hover:border-border-default',
-            )}
-          >
-            <Icon size={15} />
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* 탭 콘텐츠 */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-6 py-6">
-        {activeTab === 'users' && <UsersTab tenantSlug={tenantSlug} />}
-        {activeTab === 'notifications' && <NotificationsTab tenantSlug={tenantSlug} />}
-        {activeTab === 'email-inbound' && <EmailInboundTab tenantSlug={tenantSlug} />}
-        {activeTab === 'sla' && <SlaTab tenantSlug={tenantSlug} />}
-        {activeTab === 'categories' && <CategoriesTab tenantSlug={tenantSlug} />}
-        {activeTab === 'support-teams' && <SupportTeamsTab tenantSlug={tenantSlug} />}
-        {activeTab === 'api-keys' && <ApiKeysTab tenantSlug={tenantSlug} />}
-        {activeTab === 'webhooks' && <WebhooksTab tenantSlug={tenantSlug} />}
-        {activeTab === 'billing' && <BillingTab tenantSlug={tenantSlug} />}
-        {activeTab === 'general' && <GeneralTab tenantSlug={tenantSlug} />}
+      {/* 가로 10탭바 → @total/ui-shell SettingsShell 좌측 3그룹 세로 nav (PU-S3) */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        <SettingsShell
+          groups={SETTINGS_GROUPS.map((g) => ({
+            ...g,
+            items: g.items.map((item) => ({
+              ...item,
+              onClick: () => setActiveTab(item.key as TabId),
+            })),
+          }))}
+          activeKey={activeTab}
+          isAdmin={isAdmin}
+          skin="A"
+        >
+          {activeTab === 'users' && <UsersTab tenantSlug={tenantSlug} />}
+          {activeTab === 'notifications' && <NotificationsTab tenantSlug={tenantSlug} />}
+          {activeTab === 'email-inbound' && <EmailInboundTab tenantSlug={tenantSlug} />}
+          {activeTab === 'sla' && <SlaTab tenantSlug={tenantSlug} />}
+          {activeTab === 'categories' && <CategoriesTab tenantSlug={tenantSlug} />}
+          {activeTab === 'support-teams' && <SupportTeamsTab tenantSlug={tenantSlug} />}
+          {activeTab === 'api-keys' && <ApiKeysTab tenantSlug={tenantSlug} />}
+          {activeTab === 'webhooks' && <WebhooksTab tenantSlug={tenantSlug} />}
+          {activeTab === 'billing' && <BillingTab tenantSlug={tenantSlug} />}
+          {activeTab === 'general' && <GeneralTab tenantSlug={tenantSlug} />}
+        </SettingsShell>
       </div>
     </div>
   );

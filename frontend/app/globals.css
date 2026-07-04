@@ -134,10 +134,31 @@
   --glass-border:   rgba(22, 24, 29, 0.10);
   --glass-backdrop: blur(18px) saturate(1.20);
   --shadow-glass:   0 4px 24px rgba(16, 24, 40, 0.10), 0 2px 8px rgba(16, 24, 40, 0.06);
-  /* GW_LESSONS §2 soft 2단 카드 그림자 — E4 */
-  --shadow-card:  0 1px 4px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.06);
+  /* Alveo 시안 2단 소프트 섀도우 — SA 정본(남색 톤 rgba(16,24,40)), 4앱 통일 (PU-S3, 구 순검정 rgba(0,0,0) 값 폐기) */
+  --shadow-card:    0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 28px rgba(16, 24, 40, 0.06);
+  --shadow-card-sm: 0 1px 2px rgba(16, 24, 40, 0.03), 0 4px 12px rgba(16, 24, 40, 0.04);
   /* 카드 radius primitive — radius-lg(16px) 사용 */
   --radius-card:  var(--radius-lg);
+
+  /* === 설정 셸 (PU-S3, @total/ui-shell SettingsShell/SettingsCard/Select 공통 토큰) === */
+  --settings-nav-w:          220px;
+  --settings-nav-active-bg:  rgba(0, 0, 0, 0.05);
+  --settings-scope-badge-bg: rgba(0, 0, 0, 0.04);
+
+  /* === 설정 배지 토큰 — TIER_COLORS/LEVEL_COLORS/PLAN_COLORS Tailwind 원색 대체 (PU-S3 §8-4) === */
+  --badge-tier-bronze:      rgba(18, 155, 142, 0.12); --badge-tier-bronze-text: #0a6b62;
+  --badge-tier-silver:      rgba(18, 155, 142, 0.20); --badge-tier-silver-text: #0a6b62;
+  --badge-tier-gold:        rgba(18, 155, 142, 0.35); --badge-tier-gold-text:   #064e48;
+  --badge-tier-plat:        rgba(18, 155, 142, 0.55); --badge-tier-plat-text:   #033633;
+
+  --badge-level-1-bg: rgba(59, 125, 216, 0.10);  --badge-level-1-text: #1a4d8c;
+  --badge-level-2-bg: rgba(184, 128, 31, 0.12);  --badge-level-2-text: #7a5010;
+  --badge-level-3-bg: rgba(210, 85, 63, 0.12);   --badge-level-3-text: #8a2a1a;
+
+  --badge-plan-free:          rgba(0, 0, 0, 0.06);       --badge-plan-free-text:       #555;
+  --badge-plan-starter:       rgba(18, 155, 142, 0.12);  --badge-plan-starter-text:    #0a6b62;
+  --badge-plan-professional:  rgba(110, 99, 230, 0.12);  --badge-plan-professional-text: #3d3280;
+  --badge-plan-enterprise:    rgba(184, 128, 31, 0.15);  --badge-plan-enterprise-text: #7a5010;
 
   /* === Sidebar (SHELL-7: 3앱 통일 토큰) === */
   --sidebar-bg:               #17181C;
