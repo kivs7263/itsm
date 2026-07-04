@@ -296,11 +296,11 @@ async def list_customers(
 # ------------------------------------------------------------------
 
 
-@router.post("", response_model=CustomerOut, status_code=status.HTTP_201_CREATED, summary="고객 생성")
+@router.post("", response_model=CustomerOut, status_code=status.HTTP_201_CREATED, summary="고객 생성 (admin/team_lead/engineer)")
 async def create_customer(
     tenant_slug: str,
     data: CustomerCreate,
-    current_user: Annotated[User, Depends(get_current_user)] = None,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead, UserRole.engineer))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> CustomerOut:
     if data.parent_id:
@@ -421,12 +421,12 @@ async def get_customer(
 # ------------------------------------------------------------------
 
 
-@router.patch("/{customer_id}", response_model=CustomerOut, summary="고객 수정")
+@router.patch("/{customer_id}", response_model=CustomerOut, summary="고객 수정 (admin/team_lead/engineer)")
 async def update_customer(
     tenant_slug: str,
     customer_id: uuid.UUID,
     data: CustomerUpdate,
-    current_user: Annotated[User, Depends(get_current_user)] = None,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead, UserRole.engineer))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> CustomerOut:
     customer = await _get_or_404(db, current_user.tenant_id, customer_id)
@@ -568,13 +568,13 @@ async def delete_customer(
     "/{customer_id}/divisions",
     response_model=CustomerOut,
     status_code=status.HTTP_201_CREATED,
-    summary="하위 부서 등록",
+    summary="하위 부서 등록 (admin/team_lead/engineer)",
 )
 async def create_division(
     tenant_slug: str,
     customer_id: uuid.UUID,
     data: DivisionCreate,
-    current_user: Annotated[User, Depends(get_current_user)] = None,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead, UserRole.engineer))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> CustomerOut:
     parent = await _get_or_404(db, current_user.tenant_id, customer_id)

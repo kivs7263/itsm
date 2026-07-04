@@ -276,9 +276,28 @@ function RecurringTab({ tenantSlug }: { tenantSlug: string }) {
   });
 
   const alerts: RecurringAlert[] = data?.items ?? [];
+  const unacknowledgedCount = alerts.filter((a) => !a.is_acknowledged).length;
 
   return (
-    <div className="flex-1 overflow-auto min-h-0 mt-4">
+    <div className="flex flex-col flex-1 min-h-0 mt-4">
+      {/* 헤더 바 — 미인지 배지 + 수동 새로고침 (refetchInterval 없음, 유일 갱신 수단) */}
+      <div className="flex items-center gap-2 px-1 pb-2 shrink-0">
+        <span className="text-xs text-text-secondary">반복 장애 알림</span>
+        {unacknowledgedCount > 0 && (
+          <span className="flex items-center justify-center h-5 min-w-5 rounded-full bg-warning text-white text-[10px] font-bold px-1.5">
+            {unacknowledgedCount}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="ml-auto shrink-0 flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary"
+        >
+          <RefreshCw size={12} />
+          새로고침
+        </button>
+      </div>
+      <div className="flex-1 overflow-auto min-h-0">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-surface border-b border-border-default">
           <tr>
@@ -398,6 +417,7 @@ function RecurringTab({ tenantSlug }: { tenantSlug: string }) {
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

@@ -465,6 +465,7 @@ async def create_ticket(
     _company_id, _site_id = await _resolve(db, current_user.tenant_id, data.customer_id)
 
     # H1: requester_contact_id 크로스테넌트 방지 — 자기 테넌트 contact만 허용
+    # RX-2d 보강: 요청자 연락처가 티켓 고객사(company)에 귀속돼야 함 (동일 테넌트 내 타사 오염 차단)
     if data.requester_contact_id is not None:
         _ct = await db.scalar(
             select(Contact).where(
@@ -474,6 +475,8 @@ async def create_ticket(
         )
         if _ct is None:
             raise HTTPException(status_code=400, detail="요청자 연락처를 찾을 수 없습니다.")
+        if _company_id is not None and _ct.company_id != _company_id:
+            raise HTTPException(status_code=400, detail="요청자 연락처가 티켓 고객사와 일치하지 않습니다.")
 
     ticket = Ticket(
         id=uuid.uuid4(),
@@ -704,6 +707,17 @@ async def update_ticket(
         )
         if _ct_check is None:
             raise HTTPException(status_code=400, detail="요청자 연락처를 찾을 수 없습니다.")
+        # RX-2d 보강: 요청자 연락처가 티켓 고객사(company)와 동일해야 함.
+        # 같은 PATCH로 customer_id도 바뀌면 새 고객 기준으로 판정, 아니면 현재 티켓 company 기준.
+        if "customer_id" in update_fields:
+            from app.services.dual_write import resolve_company_site as _resolve
+            _eff_company, _ = await _resolve(
+                db, current_user.tenant_id, update_fields["customer_id"]
+            )
+        else:
+            _eff_company = ticket.company_id
+        if _eff_company is not None and _ct_check.company_id != _eff_company:
+            raise HTTPException(status_code=400, detail="요청자 연락처가 티켓 고객사와 일치하지 않습니다.")
 
     # 변경 전 값 스냅샷 (활동 기록용)
     _prev_status   = str(ticket.status.value if hasattr(ticket.status, "value") else ticket.status)

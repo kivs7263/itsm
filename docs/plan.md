@@ -54,7 +54,7 @@
 
 ---
 
-## Phase RX — ITSM 전면 개편 (2026-07-03 · 6에이전트 진단 기반) [ IN PROGRESS ]
+## Phase RX — ITSM 전면 개편 (2026-07-03 · 6에이전트 진단 기반) [ DONE 2026-07-04 — 개편 5웨이브 완료·reviewer 검증 종결. 구테이블 DROP(RX-2-DROP)만 사용자 결정 대기·별도 백로그 ]
 
 > **진단 정본**: [docs/design/2026-07-03_redesign_diagnosis.md](design/2026-07-03_redesign_diagnosis.md)
 > **방법**: product·uiux·architect·reviewer·analytics·backend 6에이전트 병렬 실사(file:line + 외부 리서치).
@@ -109,8 +109,8 @@ RX-4 (데드코드 정리 + IA 재구조화)           마지막 · 회귀주의
 
 ---
 
-### RX-2: Customer 데이터 모델 전면 재설계 (P2) [ IN PROGRESS ]
-> 사용자 결정 = 전면 재설계. **Phase A(비파괴 스키마+백필) 라이브 적용·검증 완료. Phase B(이중쓰기) 진행. 파괴적 062(DROP)는 이중쓰기 검증 후 보류.**
+### RX-2: Customer 데이터 모델 전면 재설계 (P2) [ DONE 2026-07-04 — 비파괴 재설계+이중쓰기 완료·검증. 구테이블 DROP만 별도 결정 대기 ]
+> 사용자 결정 = 전면 재설계. **Phase A(비파괴 스키마+백필) 라이브 적용·검증 완료. Phase B(이중쓰기) 완료·reviewer 검증 종결. 파괴적 DROP(RX-2-DROP)은 READ 전면 이전 선행 필요 → 별도 백로그.**
 > DB 백업 확보(itsm_pre_rx2_*.sql). 데이터: account 3·division 3·고아 0.
 
 | ID | 작업 | 크기 | 상태 |
@@ -119,12 +119,23 @@ RX-4 (데드코드 정리 + IA 재구조화)           마지막 · 회귀주의
 | `RX-2a` | Migration 057~058 — `companies`(구 account)·`sites`(구 division)·`contacts`(구 customer_contacts) CREATE + 백필. 라이브 적용·검증(companies3=account3, sites3=division3) | L | `[ DONE 2026-07-04 ]` |
 | `RX-2b` | Migration 059~061 — tickets/assets/contracts/CI에 company_id/site_id/requester_contact_id(NULLABLE) 추가 + 백필 + customers_compat 뷰. FK 미매핑 0 검증(060 division→parent 보정 포함) | M | `[ DONE 2026-07-04 ]` |
 | `RX-2c` | Backend 이중쓰기(Phase B) — customers/tickets/assets/contracts/cmdb create·update·delete가 companies/sites/contacts + FK컬럼 동기 쓰기. dual_write.py 헬퍼. READ는 customers_compat 뷰 | L | `[ DONE 2026-07-04 ]` |
-| `RX-2d` | 지점(Site) 속성(주소/시간대/본사) 관리 + 티켓 요청자 연락처 연결 — 비파괴 이중쓰기(division 경로 확장, sites row 동기). 프론트: 고객상세 지점 편집·티켓 요청자 Select/표시. **전면 계층 재구성(Company/Site/Contact 완전 분리 화면)은 파괴적 DROP 이후 후속** | L | `[ DONE 2026-07-04 ]` (reviewer 중) |
+| `RX-2d` | 지점(Site) 속성(주소/시간대/본사) 관리 + 티켓 요청자 연락처 연결 — 비파괴 이중쓰기(division 경로 확장, sites row 동기). 프론트: 고객상세 지점 편집·티켓 요청자 Select/표시. **전면 계층 재구성(Company/Site/Contact 완전 분리 화면)은 파괴적 DROP 이후 후속** | L | `[ DONE 2026-07-04 ]` (reviewer 종결 — MEDIUM 2건 수정) |
 | `RX-2-DROP` | 구 customers/customer_contacts DROP. **⚠️ 지금 실행 시 시스템 다운 확정** — 실측(2026-07-04): 구 customers 참조 FK **10개**(tickets·assets·contracts·CI·csat_surveys·recurring_alerts·portal_sessions·customer_notes·customer_contacts+self), 구 Customer 읽는 라우터 **7개**(customers.py에 select 18곳), assets/contracts.customer_id NOT NULL, 프론트·compat뷰 구 테이블 READ. **선행 필수 = READ 전면 이전**: ①10 FK 재배선(RX-2는 4개만 준비, csat/recurring/portal/notes 4개 company링크 미신설) ②7 라우터+프론트 companies/sites/contacts 재작성 ③검증 → 그다음 DROP(063+). 대형 별도 프로젝트·기능이득 0. **사용자 결정 대기** | L | `[ PENDING ]` (파괴적·READ이전 선행) |
 | `RX-2V` | reviewer(이중쓰기 정합·격리·원자성). BLOCKER1(account삭제 CASCADE 데이터손실→FK SET NULL 062)+높음3+중간3 발견·전건 수정·재배포. FK confdeltype=n 검증 | L | `[ DONE 2026-07-04 ]` |
 
 **성공 기준**: 다지점 고객사에서 지점별 자산·계약·티켓 필터 / 티켓이 요청자 개인에 연결 / 기존 데이터 무손실 이관.
-**진행**: Phase A(비파괴 스키마+백필) 라이브 적용 완료(head 061, 미매핑 FK 0). Phase B 이중쓰기 진행. 파괴적 DROP(062)·프론트 계층 UI는 이연.
+**진행**: Phase A·B 완료(head 062, 미매핑 FK 0). 파괴적 DROP·프론트 계층 UI는 별도 백로그(RX-2-DROP).
+
+### RX 마무리·검증 (2026-07-04) — reviewer 2건 종결 + 검증 중 발견 버그 수정
+> health 200·tsc 0·build 0·alembic head 062·데드코드 dangling 0 재확인. reviewer(RX-2d 백엔드 이중쓰기 / RX-4c 프론트 IA) 병렬 검증 → BLOCKER 0.
+
+| 발견 | 심각도 | 처리 |
+|---|---|---|
+| **CSAT `/csat/summary` 500** (GroupingError) — `to_char` 리터럴을 SELECT/GROUP BY/ORDER BY에 분리 작성해 익명 바인드 파라미터가 달라짐. **선재버그(fe4003c), RX-1 고객360 UI가 호출하며 표면화**. `month_expr` 식 재사용으로 수정·실증(구형태 ProgrammingError↔신형태 OK) | 🔴 라이브500 | `[ DONE ]` 커밋 d7475e4 |
+| **요청자 연락처↔티켓 고객사 정합 미검증** — 같은 테넌트 내 타사 Contact를 요청자로 붙일 수 있음. create/update_ticket에 `_ct.company_id == _company_id` 검증 추가 | 🟡 MEDIUM | `[ DONE ]` |
+| **고객/지점 쓰기 RBAC 미게이팅** — `create_customer`·`update_customer`·`create_division`이 `get_current_user`만 → sales/c_level 등 과권한. `require_roles(admin,team_lead,engineer)`로 통일(contacts와 일치). 무인증 403 확인 | 🟡 MEDIUM | `[ DONE ]` |
+| **RecurringTab 수동 새로고침 버튼 소실** — problems 탭 병합 시 유일 갱신수단 누락(refetchInterval 없음). 미인지 배지+새로고침 버튼 복원 | 🟡 MEDIUM | `[ DONE ]` |
+| LOW 4건: 탭상태 URL 미반영 / 티켓쿼리 탭게이트 부재(?view=pool 중복호출) / 큐·recurring 백엔드 role 무제한(선재) / 회귀테스트 부재 | 🟢 LOW | `[ 백로그 ]` (별도 웨이브) |
 
 ---
 
@@ -137,7 +148,7 @@ RX-4 (데드코드 정리 + IA 재구조화)           마지막 · 회귀주의
 | `RX-3b` | 서비스카탈로그 관리자 UI — `/service-catalog` 신설(offering/category CRUD + approval_policy 다단결재 편집기 + form_schema 빌더). is_system 403 회피 | M | `[ DONE 2026-07-03 ]` |
 | `RX-3c` | SNMP 디스커버리 UI — `/inventory` 디스커버리 탭(스캔폼·run이력·3s폴링·발견CI 자동갱신). admin/team_lead | M | `[ DONE 2026-07-03 ]` |
 
-**성공 기준**: 각 관리 UI에서 생성·조회 가능. ✅ 라우트 빌드·health 200. (reviewer 검증 진행 중)
+**성공 기준**: 각 관리 UI에서 생성·조회 가능. ✅ 라우트 빌드·health 200. (reviewer 검증 2026-07-04 진행 중 — RBAC 서버 강제·격리·폴링 leak 중점)
 
 ---
 
@@ -150,7 +161,7 @@ RX-4 (데드코드 정리 + IA 재구조화)           마지막 · 회귀주의
 | `RX-4b` | IA 재구조화 — 사이드바 8 도메인 허브(홈/작업/서비스관리/고객/인프라/지식/관리). `/automation`·`/service-catalog`·`/notifications`(고아였음) 배선. 5역할 게이팅 100% 보존, 고아 라우트 0. **queue/recurring/contracts는 탭병합 대신 네비 재그룹핑(페이지 보존)** | L | `[ DONE 2026-07-03 ]` |
 | `RX-4c` | recurring→Problems 탭(커밋 b19552a) + known_issues↔problems UX 명료화(Known Error 필터·툴팁·Problem상세 "관련KB"탭·KB "알려진이슈"탭, 실재 데이터경로 Problem→ProblemTicket→TicketKnownIssue→KbArticle) | M | `[ DONE 2026-07-04 ]` |
 
-**성공 기준**: 데드코드 제거 후 build·health 통과 / 최상위 8그룹 / 고아 라우트 0. ✅ (reviewer 검증 진행 중)
+**성공 기준**: 데드코드 제거 후 build·health 통과 / 최상위 8그룹 / 고아 라우트 0. ✅ reviewer 검증 종결(RX-4c: 고아 라우트 0·권한 상향 회귀 0·데드코드 dangling grep 0 재확인. RecurringTab 새로고침 버튼 회귀 1건 수정).
 **이연**: queue→tickets탭, recurring→problems탭 등 페이지 레벨 탭병합은 딥링크·배지 이관 설계 필요 → 별도 웨이브.
 
 ---
