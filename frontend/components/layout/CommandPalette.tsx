@@ -34,6 +34,12 @@ import {
   Settings,
   Loader2,
   FileText,
+  GitPullRequest,
+  Bug,
+  Gauge,
+  Boxes,
+  Workflow,
+  LayoutGrid,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -47,15 +53,23 @@ interface NavItem {
   icon: React.ElementType;
 }
 
+// IA-2(2026-07-04): Sidebar 트리와 1:1 미러. 팔레트는 무게이팅(파워유저 검색) — 역할별 접근 불가 페이지는 서버가 403.
 const NAV_ITEMS: NavItem[] = [
-  { section: '대시보드',   label: '홈',           href: '/home',             icon: Home      },
-  { section: '티켓',       label: '티켓 목록',    href: '/tickets',          icon: LifeBuoy  },
-  { section: '티켓',       label: '작업 로그',    href: '/work-logs',        icon: Clock     },
-  { section: '고객',       label: '고객 목록',    href: '/customers',        icon: Users     },
-  { section: '지식베이스', label: '지식베이스',   href: '/kb',               icon: BookOpen  },
-  { section: '운영',       label: '반복 감지',    href: '/problems?tab=recurring', icon: RefreshCw },
-  { section: '보고서',     label: '보고서',       href: '/reports',          icon: BarChart2 },
-  { section: '설정',       label: '설정',         href: '/settings',         icon: Settings  },
+  { section: '대시보드',     label: '홈',            href: '/home',             icon: Home           },
+  { section: '작업',         label: '티켓 목록',     href: '/tickets',          icon: LifeBuoy       },
+  { section: '작업',         label: '작업 시간',     href: '/work-logs',        icon: Clock          },
+  { section: '서비스 관리',  label: '변경 요청',     href: '/change-requests',  icon: GitPullRequest },
+  { section: '서비스 관리',  label: '문제 관리',     href: '/problems',         icon: Bug            },
+  { section: '서비스 관리',  label: '반복 감지',     href: '/problems?tab=recurring', icon: RefreshCw },
+  { section: '서비스 관리',  label: 'SLA',           href: '/sla',              icon: Gauge          },
+  { section: '서비스 관리',  label: '자동화',        href: '/automation',       icon: Workflow       },
+  { section: '서비스 관리',  label: '서비스 카탈로그', href: '/service-catalog', icon: LayoutGrid     },
+  { section: '고객',         label: '고객 목록',     href: '/customers',        icon: Users          },
+  { section: '고객',         label: '계약',          href: '/contracts',        icon: FileText       },
+  { section: '자산·지식',    label: '인프라',        href: '/inventory',        icon: Boxes          },
+  { section: '자산·지식',    label: '지식베이스',    href: '/kb',               icon: BookOpen       },
+  { section: '분석',         label: '리포트',        href: '/reports',          icon: BarChart2      },
+  { section: '설정',         label: '설정',          href: '/settings',         icon: Settings       },
 ];
 
 // -----------------------------------------------------------------------

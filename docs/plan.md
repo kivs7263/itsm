@@ -54,6 +54,17 @@
 
 ---
 
+## Phase IA-2 — 사이드바 IA 재구조화 (2026-07-04 · uiux+product 진단) [ DONE 2026-07-04 ]
+> 트리거: 사용자 "사용자와 설정이 똑같다·사이드바 남발·잘못된 게 많다". RX-4b "8 도메인 허브"의 부작용 교정. 진단·설계 정본: [docs/design/2026-07-04_sidebar_ia_redesign.md](design/2026-07-04_sidebar_ia_redesign.md).
+
+| ID | 작업 | 크기 | 상태 |
+|---|---|---|---|
+| `IA-2` | 사이드바 재구조화 — ①설정/사용자 딥링크 nav 제거→하단 고정 설정 기어(admin, 세부는 /settings 10탭) ②알림 사이드바 제거(헤더 벨+모바일 시트 도달) ③infra+knowledge 병합("자산·지식") ④reports 상단 리딩 승격 ⑤sales 계약 추가 ⑥CommandPalette 1:1 미러+breadcrumb 라벨 보강. 단일항목섹션 10→0, Admin 16→13항목. Sidebar.tsx·CommandPalette.tsx·messages(ko/en)·layout.tsx | M | `[ DONE 2026-07-04 ]` |
+
+**성공 기준**: 5역할 게이팅 보존·도달성 유지(설정/알림/사용자)·단일항목섹션 0·고아 라우트 0. ✅ tsc 0·build 0·health 200. **결정(사용자)**: 구현 진행 / 고객·계약 유지 / 자동화·카탈로그 서비스관리 최하단 유지. **이연**: 헤더 UserMenu 설정 존치(하드중복 아님), 모바일 하단바 5번째 슬롯 재검토는 별도.
+
+---
+
 ## Phase RX — ITSM 전면 개편 (2026-07-03 · 6에이전트 진단 기반) [ DONE 2026-07-04 — 개편 5웨이브 완료·reviewer 검증 종결. 구테이블 DROP(RX-2-DROP)만 사용자 결정 대기·별도 백로그 ]
 
 > **진단 정본**: [docs/design/2026-07-03_redesign_diagnosis.md](design/2026-07-03_redesign_diagnosis.md)

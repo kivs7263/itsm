@@ -25,10 +25,8 @@ const ko = {
     sections: {
       work: '작업',
       serviceMgmt: '서비스 관리',
-      knowledge: '지식',
       customers: '고객',
-      infra: '인프라',
-      admin: '관리',
+      assetsKnowledge: '자산·지식',
     },
   },
   auth: {
@@ -130,7 +128,7 @@ const ko = {
 };
 
 export interface Messages {
-  nav: { dashboard: string; tickets: string; workLogs: string; customers: string; kb: string; recurringIssues: string; reports: string; settings: string; assets: string; cmdb: string; inventory: string; changeRequests: string; sla: string; contracts: string; problems: string; queue: string; automation: string; serviceCatalog: string; notifications: string; users: string; sections: { work: string; serviceMgmt: string; knowledge: string; customers: string; infra: string; admin: string } };
+  nav: { dashboard: string; tickets: string; workLogs: string; customers: string; kb: string; recurringIssues: string; reports: string; settings: string; assets: string; cmdb: string; inventory: string; changeRequests: string; sla: string; contracts: string; problems: string; queue: string; automation: string; serviceCatalog: string; notifications: string; users: string; sections: { work: string; serviceMgmt: string; customers: string; assetsKnowledge: string } };
   auth: { logout: string; role: Record<string, string> };
   sidebar: { open: string; close: string; language: string };
   ticket: {

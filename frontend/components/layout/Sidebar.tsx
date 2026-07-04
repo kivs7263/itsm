@@ -22,8 +22,6 @@ import {
   Bug,
   Workflow,
   LayoutGrid,
-  Bell,
-  UserCog,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSlug } from '@/lib/slug';
@@ -43,21 +41,22 @@ function getInitialCollapsed(): boolean {
 }
 
 // RX-1c: assets·cmdb 2개 항목 → 단일 'inventory'(인프라)로 통합
-// RX-4b: automation·serviceCatalog(신규 라우트) + notifications·users(설정 딥링크) 배선
-// RX-4c: queue·recurringIssues 최상위 항목 제거 — 각각 tickets(?view=pool)·problems(?tab=recurring) 탭으로 흡수
-type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'reports' | 'settings' | 'inventory' | 'changeRequests' | 'sla' | 'contracts' | 'problems' | 'automation' | 'serviceCatalog' | 'notifications' | 'users';
+// IA-2 재구조화(2026-07-04, docs/design/2026-07-04_sidebar_ia_redesign.md):
+//   ① 설정/사용자 딥링크 nav 제거 → 하단 고정 '설정' 기어(admin) 단일 진입점 (세부는 /settings 10탭)
+//   ② 알림(notifications) 사이드바 제거 → 헤더 벨 + 모바일 시트가 도달 보장
+//   ③ infra+knowledge 단일항목 섹션 병합 → 'assetsKnowledge'(자산·지식)
+//   ④ reports를 admin 섹션에서 빼 상단 리딩 그룹으로 승격
+//   ⑤ sales에 contracts 추가
+type NavKey = 'dashboard' | 'tickets' | 'workLogs' | 'customers' | 'kb' | 'reports' | 'inventory' | 'changeRequests' | 'sla' | 'contracts' | 'problems' | 'automation' | 'serviceCatalog';
 type NavItem = { key: NavKey; href: string; icon: React.ElementType };
-// RA-U3: 섹션 그룹핑 — titleKey 없으면 무제목 섹션(홈), 있으면 t.nav.sections[titleKey] 라벨
-// RX-4b: 16개 평면 항목 → 8 도메인 허브(홈/작업/서비스관리/고객/인프라/지식/관리)로 재편
-type SectionKey = 'work' | 'serviceMgmt' | 'customers' | 'infra' | 'knowledge' | 'admin';
+// 섹션: titleKey 없으면 무제목 리딩 그룹(홈·리포트), 있으면 t.nav.sections[titleKey] 라벨.
+// 단일항목 섹션 금지 원칙 — 2개 미만은 무제목 그룹으로 흡수.
+type SectionKey = 'work' | 'serviceMgmt' | 'customers' | 'assetsKnowledge';
 type NavSection = { titleKey?: SectionKey; items: NavItem[] };
 
-// SHELL-7 항목 ③: 아이콘 17px 통일
-// RA-U3: 13~15개 평면 나열(Miller 7±2 초과) → SSO Sidebar 패턴 참고해 섹션 그룹핑
-// RX-4b: 8 도메인 허브 — 홈 / 작업(티켓·풀·작업기록) / 서비스관리(변경요청·문제·SLA·반복이슈·자동화·서비스카탈로그) /
-//        고객(고객·계약) / 인프라 / 지식(KB) / 관리(리포트·설정·사용자·알림)
 const ENGINEER_SECTIONS: NavSection[] = [
   {
+    // 리딩 그룹(무제목): engineer는 reports 미노출 → 홈만
     items: [
       { key: 'dashboard', href: '/home', icon: Home },
     ],
@@ -65,7 +64,7 @@ const ENGINEER_SECTIONS: NavSection[] = [
   {
     titleKey: 'work',
     items: [
-      // RX-4c: 티켓 풀(FRP-3d-A1)은 tickets 페이지 "티켓 풀" 탭(?view=pool)으로 흡수 — 최상위 항목 제거
+      // RX-4c: 티켓 풀은 tickets 페이지 "티켓 풀" 탭(?view=pool)으로 흡수
       { key: 'tickets',  href: '/tickets',   icon: LifeBuoy },
       { key: 'workLogs', href: '/work-logs',  icon: Clock    },
     ],
@@ -74,11 +73,9 @@ const ENGINEER_SECTIONS: NavSection[] = [
     titleKey: 'serviceMgmt',
     items: [
       { key: 'changeRequests',  href: '/change-requests',  icon: GitPullRequest },
-      // CA-P2-4: Problem Management
-      // RX-4c: 반복 이슈(recurring-alerts)는 problems 페이지 "반복 감지" 탭(?tab=recurring)으로 흡수 — 최상위 항목 제거
+      // RX-4c: 반복 이슈는 problems "반복 감지" 탭(?tab=recurring)으로 흡수
       { key: 'problems',        href: '/problems',         icon: Bug            },
       { key: 'sla',             href: '/sla',              icon: Gauge          },
-      // RX-4b: automation·serviceCatalog는 team_lead+ 전용 (아래 TEAM_LEAD_SECTIONS에서 추가)
     ],
   },
   {
@@ -89,38 +86,26 @@ const ENGINEER_SECTIONS: NavSection[] = [
     ],
   },
   {
-    // CA-5 → RX-1c: 운영 관리 메뉴 — assets/cmdb를 단일 "인프라" 진입점(/inventory)으로 통합
-    // (탭: 자산 목록 / 구성항목(CI) / 관계맵). 기존 /assets, /cmdb 경로는 리다이렉트로 보존.
-    titleKey: 'infra',
+    // IA-2 ③: infra(인벤토리)+knowledge(KB) 단일 섹션 병합
+    titleKey: 'assetsKnowledge',
     items: [
-      { key: 'inventory', href: '/inventory', icon: Boxes },
-    ],
-  },
-  {
-    titleKey: 'knowledge',
-    items: [
-      { key: 'kb', href: '/kb', icon: BookOpen },
-    ],
-  },
-  {
-    // RX-4b: 알림 로그/인박스(/notifications)는 전 역할 공용 페이지(관리자 전용 채널상태는 페이지 내부에서 자체 게이팅)
-    titleKey: 'admin',
-    items: [
-      { key: 'notifications', href: '/notifications', icon: Bell },
+      { key: 'inventory', href: '/inventory', icon: Boxes    },
+      { key: 'kb',        href: '/kb',        icon: BookOpen },
     ],
   },
 ];
 
 const TEAM_LEAD_SECTIONS: NavSection[] = [
   {
+    // IA-2 ④: reports를 상단 리딩 그룹으로 승격(홈·리포트)
     items: [
-      { key: 'dashboard', href: '/home', icon: Home },
+      { key: 'dashboard', href: '/home',    icon: Home      },
+      { key: 'reports',   href: '/reports', icon: BarChart2 },
     ],
   },
   {
     titleKey: 'work',
     items: [
-      // RX-4c: 티켓 풀은 tickets 페이지 "티켓 풀" 탭(?view=pool)으로 흡수 — 최상위 항목 제거
       { key: 'tickets',  href: '/tickets',   icon: LifeBuoy },
       { key: 'workLogs', href: '/work-logs',  icon: Clock    },
     ],
@@ -131,8 +116,7 @@ const TEAM_LEAD_SECTIONS: NavSection[] = [
       { key: 'changeRequests',  href: '/change-requests',  icon: GitPullRequest },
       { key: 'problems',        href: '/problems',         icon: Bug            },
       { key: 'sla',             href: '/sla',              icon: Gauge          },
-      // RX-4c: 반복 이슈는 problems 페이지 "반복 감지" 탭(?tab=recurring)으로 흡수 — 최상위 항목 제거
-      // RX-4b: 신규 라우트 배선 — 자동화 룰 관리(admin/team_lead, backend require_roles와 일치)
+      // 자동화·서비스카탈로그: 초기 셋업 성격 → 서비스관리 최하단 유지(사용자 결정 2026-07-04)
       { key: 'automation',      href: '/automation',       icon: Workflow       },
       { key: 'serviceCatalog',  href: '/service-catalog',  icon: LayoutGrid     },
     ],
@@ -145,50 +129,34 @@ const TEAM_LEAD_SECTIONS: NavSection[] = [
     ],
   },
   {
-    titleKey: 'infra',
+    titleKey: 'assetsKnowledge',
     items: [
-      { key: 'inventory', href: '/inventory', icon: Boxes },
-    ],
-  },
-  {
-    titleKey: 'knowledge',
-    items: [
-      { key: 'kb', href: '/kb', icon: BookOpen },
-    ],
-  },
-  {
-    titleKey: 'admin',
-    items: [
-      { key: 'reports',       href: '/reports',       icon: BarChart2 },
-      { key: 'notifications', href: '/notifications', icon: Bell      },
+      { key: 'inventory', href: '/inventory', icon: Boxes    },
+      { key: 'kb',        href: '/kb',        icon: BookOpen },
     ],
   },
 ];
 
-const ADMIN_SECTIONS: NavSection[] = TEAM_LEAD_SECTIONS.map((section) =>
-  section.titleKey === 'admin'
-    ? {
-        ...section,
-        items: [
-          { key: 'reports', href: '/reports', icon: BarChart2 },
-          // settings 라우트는 admin 전용(page.tsx isAdminRole 게이트) — 딥링크로 대표 탭 직접 진입
-          { key: 'settings', href: '/settings?tab=general', icon: Settings },
-          { key: 'users',    href: '/settings?tab=users',   icon: UserCog  },
-          { key: 'notifications', href: '/notifications', icon: Bell },
-        ],
-      }
-    : section,
-);
+// IA-2: admin의 스크롤 nav = team_lead와 동일. 차이는 하단 고정 '설정' 기어(isAdminRole)뿐.
+const ADMIN_SECTIONS: NavSection[] = TEAM_LEAD_SECTIONS;
 
 const SALES_SECTIONS: NavSection[] = [
-  { items: [{ key: 'dashboard', href: '/home', icon: Home }] },
-  { titleKey: 'customers', items: [{ key: 'customers', href: '/customers', icon: Users }] },
-  { titleKey: 'admin', items: [{ key: 'reports', href: '/reports', icon: BarChart2 }] },
+  // IA-2 ⑤: contracts 추가(파이프라인 운영자 결함 보강). 전부 무제목 리딩 그룹.
+  {
+    items: [
+      { key: 'dashboard', href: '/home',      icon: Home      },
+      { key: 'reports',   href: '/reports',   icon: BarChart2 },
+      { key: 'customers', href: '/customers', icon: Users     },
+      { key: 'contracts', href: '/contracts', icon: FileText  },
+    ],
+  },
 ];
 
 const C_LEVEL_SECTIONS: NavSection[] = [
-  { items: [{ key: 'dashboard', href: '/home', icon: Home }] },
-  { titleKey: 'admin', items: [{ key: 'reports', href: '/reports', icon: BarChart2 }] },
+  { items: [
+    { key: 'dashboard', href: '/home',    icon: Home      },
+    { key: 'reports',   href: '/reports', icon: BarChart2 },
+  ] },
 ];
 
 function getNavSections(role: UserRole | undefined): NavSection[] {
@@ -413,6 +381,36 @@ export function Sidebar() {
         style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
         className="p-2 flex flex-col gap-1"
       >
+        {/* IA-2 ①: 설정 단일 진입점(admin 전용) — 스크롤 nav 밖 하단 고정.
+            세부(사용자·SLA·분류·이메일·API·웹훅·구독·일반)는 /settings 10탭이 담당. */}
+        {isAdminRole(user?.role as UserRole) && (() => {
+          const settingsHref = slug('/settings');
+          const settingsActive = pathname?.startsWith(settingsHref) ?? false;
+          return (
+            <Link
+              href={settingsHref}
+              className={cn(
+                'flex items-center gap-3 rounded-md px-2.5 py-2',
+                'transition-colors duration-[150ms] focus-visible:outline-none focus-visible:shadow-brand',
+                settingsActive ? 'font-semibold' : 'hover:bg-white/[0.06]',
+                !effectivelyExpanded && 'justify-center',
+              )}
+              style={
+                settingsActive
+                  ? { background: 'var(--sidebar-active-bg)', color: 'var(--sidebar-active-text, #F5F5F5)', fontSize: '14px' }
+                  : { color: 'var(--sidebar-nav-text, rgba(255,255,255,0.6))', fontSize: '14px' }
+              }
+              title={!effectivelyExpanded ? t.nav.settings : undefined}
+            >
+              <Settings
+                size={16}
+                className={cn('shrink-0', settingsActive ? '' : 'text-white/40')}
+                style={settingsActive ? { color: 'var(--color-brand)' } : undefined}
+              />
+              {effectivelyExpanded && <span className="truncate flex-1">{t.nav.settings}</span>}
+            </Link>
+          );
+        })()}
         {/* 1행 사용자 카드: 아바타 32px + 이름/이메일 1줄 + 로그아웃 */}
         {user && (
           <div

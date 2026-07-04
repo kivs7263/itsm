@@ -27,10 +27,8 @@ const en = {
     sections: {
       work: 'Work',
       serviceMgmt: 'Service Mgmt',
-      knowledge: 'Knowledge',
       customers: 'Customers',
-      infra: 'Infrastructure',
-      admin: 'Admin',
+      assetsKnowledge: 'Assets & Knowledge',
     },
   },
   auth: {
