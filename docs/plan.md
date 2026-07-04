@@ -135,7 +135,10 @@ RX-4 (데드코드 정리 + IA 재구조화)           마지막 · 회귀주의
 | **요청자 연락처↔티켓 고객사 정합 미검증** — 같은 테넌트 내 타사 Contact를 요청자로 붙일 수 있음. create/update_ticket에 `_ct.company_id == _company_id` 검증 추가 | 🟡 MEDIUM | `[ DONE ]` |
 | **고객/지점 쓰기 RBAC 미게이팅** — `create_customer`·`update_customer`·`create_division`이 `get_current_user`만 → sales/c_level 등 과권한. `require_roles(admin,team_lead,engineer)`로 통일(contacts와 일치). 무인증 403 확인 | 🟡 MEDIUM | `[ DONE ]` |
 | **RecurringTab 수동 새로고침 버튼 소실** — problems 탭 병합 시 유일 갱신수단 누락(refetchInterval 없음). 미인지 배지+새로고침 버튼 복원 | 🟡 MEDIUM | `[ DONE ]` |
-| LOW 4건: 탭상태 URL 미반영 / 티켓쿼리 탭게이트 부재(?view=pool 중복호출) / 큐·recurring 백엔드 role 무제한(선재) / 회귀테스트 부재 | 🟢 LOW | `[ 백로그 ]` (별도 웨이브) |
+| **빈 액션 유령룰** (RX-3) — `POST /automation/rules`에 `"actions":[]` 직접 전송 시 아무 동작 안 하는 룰 생성(프론트만 강제). `_validate_rule_payload`에 "액션 ≥1" 서버 검증 추가 | 🟡 MEDIUM | `[ DONE ]` |
+| LOW 7건: 탭상태 URL 미반영 / 티켓쿼리 탭게이트 부재(?view=pool 중복호출) / 큐·recurring 백엔드 role 무제한(선재) / 회귀테스트 부재 / approval_policy·form_schema 길이상한 부재 / validate.pattern ReDoS 이론적 가능(admin전용) / RUN_STATUS `rate_limited` 라벨 누락(코스메틱) | 🟢 LOW | `[ 백로그 ]` (별도 웨이브) |
+
+**RX-3 reviewer 결론**: BLOCKER 0. RBAC 서버 강제·테넌트 격리·타입 정합·폴링 정리 전부 견고. RX-4c reviewer 결론: 고아 라우트 0·권한 상향 회귀 0.
 
 ---
 
@@ -148,7 +151,7 @@ RX-4 (데드코드 정리 + IA 재구조화)           마지막 · 회귀주의
 | `RX-3b` | 서비스카탈로그 관리자 UI — `/service-catalog` 신설(offering/category CRUD + approval_policy 다단결재 편집기 + form_schema 빌더). is_system 403 회피 | M | `[ DONE 2026-07-03 ]` |
 | `RX-3c` | SNMP 디스커버리 UI — `/inventory` 디스커버리 탭(스캔폼·run이력·3s폴링·발견CI 자동갱신). admin/team_lead | M | `[ DONE 2026-07-03 ]` |
 
-**성공 기준**: 각 관리 UI에서 생성·조회 가능. ✅ 라우트 빌드·health 200. (reviewer 검증 2026-07-04 진행 중 — RBAC 서버 강제·격리·폴링 leak 중점)
+**성공 기준**: 각 관리 UI에서 생성·조회 가능. ✅ 라우트 빌드·health 200. reviewer 검증 종결(2026-07-04) — RBAC 3화면 전부 서버측 require_roles 강제·테넌트 격리 견고·폴링 leak 없음(react-query refetchInterval). MEDIUM 1건(빈 액션 유령룰) 수정, LOW 3건 백로그.
 
 ---
 

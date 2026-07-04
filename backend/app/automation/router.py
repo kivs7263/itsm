@@ -132,6 +132,11 @@ def _validate_rule_payload(trigger_event: str, conditions: list[Any], actions: l
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"조건 오류: {exc}",
         )
+    if not actions:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="액션을 최소 1개 이상 지정해야 합니다.",
+        )
     allowed = get_registered_actions()
     for action in actions:
         atype = action.get("type")
