@@ -221,9 +221,9 @@ function DashboardTab({ tenantSlug }: { tenantSlug: string }) {
         </div>
       ) : (
       <div className="grid grid-cols-4 gap-4">
-        <KpiCard label="활성 티켓" value={dashboard?.active_tickets ?? 0} icon={<TicketIcon size={20} />} color={COLOR_INFO} isLoading={dashLoading} />
-        <KpiCard label="SLA 위반" value={dashboard?.sla_violations ?? 0} icon={<AlertTriangle size={20} />} color={COLOR_ERROR} isLoading={dashLoading} />
-        <KpiCard label="경고" value={dashboard?.sla_warnings ?? 0} icon={<Clock size={20} />} color={COLOR_WARNING} isLoading={dashLoading} />
+        <KpiCard label="활성 티켓" value={dashboard?.total_active_tickets ?? 0} icon={<TicketIcon size={20} />} color={COLOR_INFO} isLoading={dashLoading} />
+        <KpiCard label="SLA 위반" value={dashboard?.breached_tickets ?? 0} icon={<AlertTriangle size={20} />} color={COLOR_ERROR} isLoading={dashLoading} />
+        <KpiCard label="경고" value={dashboard?.warning_tickets ?? 0} icon={<Clock size={20} />} color={COLOR_WARNING} isLoading={dashLoading} />
         <KpiCard label="준수율" value={`${(dashboard?.compliance_rate ?? 0).toFixed(1)}%`} icon={<CheckCircle size={20} />} color={COLOR_SUCCESS} isLoading={dashLoading} />
       </div>
       )}

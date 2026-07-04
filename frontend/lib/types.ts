@@ -307,9 +307,9 @@ export interface SlaPolicy {
 }
 
 export interface SlaDashboard {
-  active_tickets: number;
-  sla_violations: number;
-  sla_warnings: number;
+  total_active_tickets: number;
+  breached_tickets: number;
+  warning_tickets: number;
   compliance_rate: number;
 }
 
