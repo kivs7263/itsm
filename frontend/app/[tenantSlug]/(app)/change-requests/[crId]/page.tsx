@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { ArrowLeft, GitMerge, RefreshCw, Trash2, X, AlertCircle } from 'lucide-react';
+import { ArrowLeft, GitMerge, Link2, RefreshCw, Trash2, X, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import type { ChangeRequest, CRStatus, CRRiskLevel, CRPriority } from '@/lib/types';
@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { isTeamLeadOrAbove } from '@/lib/auth';
+import { LinkCIModal } from '@/components/change-requests/LinkCIModal';
 
 // -----------------------------------------------------------------------
 // 상수 매핑
@@ -184,6 +185,7 @@ export default function CRDetailPage() {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [scheduledStart, setScheduledStart] = useState('');
   const [scheduledEnd, setScheduledEnd] = useState('');
+  const [linkCIModalOpen, setLinkCIModalOpen] = useState(false);
 
   const isPrivileged = isTeamLeadOrAbove(user?.role);
 
@@ -542,6 +544,16 @@ export default function CRDetailPage() {
                 {/* 연관 CI 탭 */}
                 {activeTab === 'linked_cis' && (
                   <div>
+                    <div className="flex justify-end mb-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        leftIcon={<Link2 size={14} />}
+                        onClick={() => setLinkCIModalOpen(true)}
+                      >
+                        CI 연결
+                      </Button>
+                    </div>
                     {(!cr.linked_cis || cr.linked_cis.length === 0) ? (
                       <div className="flex flex-col items-center justify-center py-12">
                         <p className="text-sm text-text-secondary">연관된 CI가 없습니다.</p>
@@ -668,6 +680,15 @@ export default function CRDetailPage() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* CI 연결 모달 */}
+    <LinkCIModal
+      open={linkCIModalOpen}
+      onClose={() => setLinkCIModalOpen(false)}
+      tenantSlug={tenantSlug}
+      crId={crId}
+      excludeCiIds={(cr.linked_cis ?? []).map((item) => item.ci_id)}
+    />
     </>
   );
 }
