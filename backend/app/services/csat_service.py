@@ -161,10 +161,14 @@ async def get_summary(
     response_rate = round(submitted / total, 4) if total > 0 else 0.0
 
     # 월별 CSAT 추이 (최근 6개월)
+    # NOTE: to_char 식을 단일 객체로 재사용 — SELECT/GROUP BY/ORDER BY가
+    # 동일 바인드 파라미터를 참조해야 Postgres GROUP BY 검증을 통과한다.
+    # (각 위치에 리터럴을 따로 쓰면 익명 파라미터가 달라져 GroupingError 발생)
+    month_expr = func.to_char(CSATSurvey.sent_at, "YYYY-MM")
     trend_rows = (
         await db.execute(
             select(
-                func.to_char(CSATSurvey.sent_at, "YYYY-MM").label("month"),
+                month_expr.label("month"),
                 func.avg(CSATSurvey.score).label("avg_score"),
                 func.count().label("cnt"),
             )
@@ -175,8 +179,8 @@ async def get_summary(
                     CSATSurvey.score.isnot(None),
                 )
             )
-            .group_by(func.to_char(CSATSurvey.sent_at, "YYYY-MM"))
-            .order_by(func.to_char(CSATSurvey.sent_at, "YYYY-MM").desc())
+            .group_by(month_expr)
+            .order_by(month_expr.desc())
             .limit(6)
         )
     ).all()
