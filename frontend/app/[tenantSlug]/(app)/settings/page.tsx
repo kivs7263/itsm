@@ -2283,7 +2283,7 @@ export default function SettingsPage() {
           }))}
           activeKey={activeTab}
           isAdmin={isAdmin}
-          skin="A"
+          skin="C"
         >
           {activeTab === 'users' && <UsersTab tenantSlug={tenantSlug} />}
           {activeTab === 'notifications' && <NotificationsTab tenantSlug={tenantSlug} />}
