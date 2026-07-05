@@ -35,6 +35,9 @@ _SKIP_PREFIXES = (
     "/api/internal/",                   # internal_workflow (HMAC)
     # 고객 포털 (매직링크 세션 쿠키 — itsm.access_token 과 별개 체계)
     "/portal/",
+    # PU-D19: 고객포털 API 는 /api/portal/ 로도 병행 마운트됨(nginx /portal/→프론트라 브라우저는 /api 로만 도달).
+    # 포털 세션은 csrf.itsm 쿠키가 없으므로 미면제 시 login/logout/tickets/comments/survey POST 가 403.
+    "/api/portal/",
     # 공개 API v1 (API 키 Bearer 인증, 쿠키 미사용)
     "/v1/",
     # Stripe 웹훅 (HMAC-SHA256 서명 검증, 쿠키 미사용)

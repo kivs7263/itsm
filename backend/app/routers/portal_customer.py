@@ -268,7 +268,9 @@ async def portal_verify(
         secure=False,  # HTTPS 환경에서는 True
         samesite="lax",
         max_age=_SESSION_TTL_HOURS * 3600,
-        path=f"/portal/{tenant_slug}",
+        # PU-D19: 브라우저는 API 를 /api/portal/{slug}/... 로 호출(nginx /portal/→프론트).
+        # 쿠키 path 가 /portal/{slug} 이면 /api/portal/{slug}/me 등에 미전송 → verify 후에도 401.
+        path=f"/api/portal/{tenant_slug}",
     )
 
     return {"redirect": f"/portal/{tenant_slug}"}
@@ -302,7 +304,7 @@ async def portal_logout(
             await db.delete(ps)
             await db.commit()
 
-    response.delete_cookie(key=_SESSION_COOKIE, path=f"/portal/{tenant_slug}")
+    response.delete_cookie(key=_SESSION_COOKIE, path=f"/api/portal/{tenant_slug}")
     return {"message": "로그아웃 완료"}
 
 

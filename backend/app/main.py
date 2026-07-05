@@ -182,6 +182,9 @@ app.include_router(search_router.router, prefix="/api")
 from app.routers import kb as kb_router  # noqa: E402
 app.include_router(kb_router.router, prefix="/api")
 app.include_router(kb_router.router_portal_kb)              # /portal/{slug}/kb/search (비인증)
+# PU-D19: nginx 는 /portal/ 를 프론트로 프록시 → 브라우저는 /api/* 로만 백엔드 도달.
+# 프론트 @/lib/api(baseURL /api)가 /portal/{slug}/kb/search 호출 → /api/portal/... 병행 마운트 필수.
+app.include_router(kb_router.router_portal_kb, prefix="/api")   # /api/portal/{slug}/kb/search
 
 # P3-2 Change Management
 from app.routers import change_management as change_management_router  # noqa: E402
@@ -192,6 +195,7 @@ from app.routers import csat as csat_router  # noqa: E402
 app.include_router(csat_router.router, prefix="/api")                      # /api/{slug}/csat/...
 app.include_router(csat_router.router_tickets_csat, prefix="/api")         # /api/{slug}/tickets/{id}/csat
 app.include_router(csat_router.router_portal)                              # /portal/{slug}/survey/{token}
+app.include_router(csat_router.router_portal, prefix="/api")               # PU-D19: /api/portal/{slug}/survey/{token} (프론트 @/lib/api 도달경로)
 
 # P3-5 멀티채널 알림
 from app.routers import notifications as notifications_router  # noqa: E402
@@ -254,6 +258,9 @@ app.include_router(portal_router.router_staff, prefix="/api")      # /api/{slug}
 app.include_router(portal_router.router_portal)                    # /portal/* (인증 없음)
 from app.routers import portal_customer as portal_customer_router  # noqa: E402
 app.include_router(portal_customer_router.router)                   # /portal/{slug}/auth/*, /portal/{slug}/me, /portal/{slug}/tickets
+# PU-D19: 프론트 고객포털은 @/lib/api(baseURL /api)로 /portal/{slug}/... 호출 → 실제 /api/portal/{slug}/...
+# nginx /portal/ 는 프론트로 가므로 위 bare 마운트는 브라우저 미도달 → /api 병행 마운트로 백엔드 매칭.
+app.include_router(portal_customer_router.router, prefix="/api")    # /api/portal/{slug}/auth/*, /me, /tickets, /assets, /contracts, /catalog
 
 # API-1 공개 REST API 키 관리
 from app.routers import api_keys as api_keys_router  # noqa: E402
