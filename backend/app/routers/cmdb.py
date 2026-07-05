@@ -22,6 +22,7 @@ prefix : /{tenant_slug}/cmdb
 """
 from __future__ import annotations
 
+import enum
 import logging
 import uuid
 from datetime import datetime
@@ -190,6 +191,10 @@ class JsonImportBody(BaseModel):
 def _val_to_str(val) -> str | None:
     if val is None:
         return None
+    if isinstance(val, enum.Enum):
+        # Enum 신값은 str(CIEnvironment.test)='CIEnvironment.test'(repr)가 아니라
+        # .value('test')로 저장 — old_value(DB문자열)와 표시 정합.
+        return str(val.value)
     if isinstance(val, dict):
         import json as _json
         return _json.dumps(val, sort_keys=True, ensure_ascii=False)

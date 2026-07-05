@@ -305,6 +305,7 @@ async def portal_logout(
     session_token: str | None = Cookie(default=None, alias=_SESSION_COOKIE),
 ) -> dict:
     if session_token:
+        tenant = await _get_tenant(db, tenant_slug)
         thash = _token_hash(session_token)
         ps = (
             await db.execute(
@@ -312,6 +313,9 @@ async def portal_logout(
                     and_(
                         PortalSession.token_hash == thash,
                         PortalSession.purpose == "customer_session",
+                        # PU-D19 후속(reviewer🟡): 다른 테넌트 세션을 이론적으로
+                        # 로그아웃할 수 있는 갭 차단 — 인증 엔드포인트 공통 스코핑.
+                        PortalSession.tenant_id == tenant.id,
                     )
                 )
             )
