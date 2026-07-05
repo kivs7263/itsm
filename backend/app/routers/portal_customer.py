@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth_cookies import _COOKIE_SECURE
 from app.core.database import get_db
 from app.models.customer import Customer
 from app.models.portal_session import PortalSession
@@ -265,7 +266,9 @@ async def portal_verify(
         key=_SESSION_COOKIE,
         value=session_token,
         httponly=True,
-        secure=False,  # HTTPS 환경에서는 True
+        # PU-D19 후속(reviewer🟡): 포털이 실제 도달 가능해지며 HTTPS로 세션쿠키가
+        # 브라우저에 실전송됨 → secure 강제(스태프 auth 쿠키와 동일 _COOKIE_SECURE).
+        secure=_COOKIE_SECURE,  # settings.ENVIRONMENT=="production"
         samesite="lax",
         max_age=_SESSION_TTL_HOURS * 3600,
         # PU-D19: 브라우저는 API 를 /api/portal/{slug}/... 로 호출(nginx /portal/→프론트).
