@@ -167,13 +167,6 @@ function getNavSections(role: UserRole | undefined): NavSection[] {
   return ENGINEER_SECTIONS;
 }
 
-// RX-4b: 설정 딥링크(예: /settings?tab=users)는 pathname에 쿼리스트링이 포함되지 않으므로
-// 섹션 자동펼침 판정 시 경로(base path)만으로 비교 — 쿼리는 아래 renderer의 정확 하이라이트에서만 사용
-function pathMatchesHref(pathname: string | null, fullHref: string): boolean {
-  if (!pathname) return false;
-  return pathname.startsWith(fullHref.split('?')[0]);
-}
-
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
   const pathname = usePathname();
@@ -213,26 +206,6 @@ export function Sidebar() {
   }, []);
 
   const navSections = useMemo(() => getNavSections(user?.role as UserRole), [user?.role]);
-
-  // 아코디언(단일 오픈): 한 번에 한 섹션만 열림. 현재 라우트가 속한 섹션은 이동 시 자동 펼침(위치 상실 방지).
-  const activeSectionKey = useMemo<SectionKey | null>(() => {
-    for (const section of navSections) {
-      if (!section.titleKey) continue;
-      if (section.items.some((it) => pathMatchesHref(pathname, slug(it.href)))) return section.titleKey;
-    }
-    return null;
-  }, [navSections, pathname, slug]);
-
-  const [openSection, setOpenSection] = useState<SectionKey | null>(() => activeSectionKey);
-
-  // 라우트가 다른 섹션으로 바뀌면 그 섹션을 열고 나머지는 닫음 (단일 오픈 유지)
-  useEffect(() => {
-    if (activeSectionKey) setOpenSection(activeSectionKey);
-  }, [activeSectionKey]);
-
-  const toggleSection = useCallback((key: SectionKey) => {
-    setOpenSection((prev) => (prev === key ? null : key));
-  }, []);
 
   // SHELL-7: useCallback으로 변경 ([ 키 단축키 의존성용)
   const toggleCollapsed = useCallback(() => {
@@ -285,36 +258,23 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto py-2 px-1.5 space-y-5" aria-label={t.nav.dashboard}>
         {navSections.map((section, si) => {
           const sectionKey = section.titleKey;
-          // 아이콘 레일(사이드바 축소) 상태에선 전 항목을 아이콘으로 노출(도달성 보장).
-          // 펼침 상태에선 단일 오픈 섹션만 항목 표시.
-          const sectionOpen =
-            !sectionKey ||
-            !effectivelyExpanded ||
-            openSection === sectionKey;
 
           return (
           <div key={sectionKey ?? `section-${si}`}>
+            {/* PU-N4: 아코디언(클릭 접이) 제거 — 정적 그룹 라벨(비접이). 아이콘 레일 축소 시엔 라벨 자체를 숨김(항목은 그대로 아이콘 노출). */}
             {sectionKey && effectivelyExpanded && (
-              <button
-                type="button"
-                onClick={() => toggleSection(sectionKey)}
-                className="w-full flex items-center gap-1.5 px-2.5 py-1.5 mb-2 rounded-md focus-visible:outline-none hover:bg-white/[0.04] transition-colors"
-                aria-expanded={sectionOpen}
+              <div
+                className="w-full flex items-center px-2.5 py-1.5 mb-2"
               >
-                <ChevronRight
-                  size={12}
-                  className={cn('shrink-0 transition-transform duration-150', sectionOpen && 'rotate-90')}
-                  style={{ color: 'var(--sidebar-section-text, rgba(255,255,255,0.5))' }}
-                />
                 <span
                   className="text-[12px] font-semibold truncate"
                   style={{ color: 'var(--sidebar-section-text, rgba(255,255,255,0.4))' }}
                 >
                   {t.nav.sections[sectionKey]}
                 </span>
-              </button>
+              </div>
             )}
-            {sectionOpen && section.items.map(({ key, href, icon: Icon }) => {
+            {section.items.map(({ key, href, icon: Icon }) => {
               const label = t.nav[key];
               const fullHref = slug(href);
               // RX-4b: 쿼리스트링 딥링크(/settings?tab=users 등)는 정확 일치로,
