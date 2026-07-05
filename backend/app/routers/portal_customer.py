@@ -19,6 +19,7 @@ prefix: /portal/{tenant_slug}
 from __future__ import annotations
 
 import hashlib
+import logging
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -34,6 +35,8 @@ from app.core.database import get_db
 from app.models.customer import Customer
 from app.models.portal_session import PortalSession
 from app.models.tenant import Tenant
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/portal/{tenant_slug}", tags=["portal-customer"])
 
@@ -186,7 +189,10 @@ async def portal_login(
         db.add(ps)
         await db.commit()
 
-        # 외부 알림 큐에 매직링크 이메일 등록
+        # 외부 알림 큐에 매직링크 이메일 등록.
+        # ⚠️ queue_notification은 flush만 수행하므로 이 블록에서 commit 필수 —
+        #    누락 시 get_db가 세션 종료 시 rollback해 pending row가 사라진다
+        #    (D19: external_notification_logs 0건 근본원인). 실패는 삼키되 로깅한다.
         try:
             from app.services.external_notif_service import queue_notification
             verify_url = f"/portal/{tenant_slug}/auth/verify?token={token}"
@@ -204,8 +210,15 @@ async def portal_login(
                     "expires_minutes": _MAGIC_TTL_MINUTES,
                 },
             )
+            await db.commit()
         except Exception:
-            pass  # 메인 응답은 항상 성공 반환
+            # 발송 실패해도 메인 응답은 항상 202 — 단, silent-broken 방지 위해 명시 로깅
+            logger.warning(
+                "포털 매직링크 알림 큐 등록 실패 tenant=%s recipient=%s",
+                tenant_slug,
+                customer.email,
+                exc_info=True,
+            )
 
     return {"message": "이메일을 확인해주세요."}
 
