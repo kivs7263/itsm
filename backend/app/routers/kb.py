@@ -278,6 +278,7 @@ async def create_kb_article(
         tenant_id=current_user.tenant_id,
         title=data.title,
         content=data.content,
+        category_id=data.category_id,
         tags=data.tags,
         linked_ticket_id=data.linked_ticket_id,
         author_id=current_user.id,
@@ -305,7 +306,7 @@ async def create_kb_article(
 
 
 @router.get(
-    "/{kb_id}",
+    "/{kb_id:uuid}",
     response_model=KbArticleResponse,
     summary="KB 문서 상세 (조회수 증가)",
 )
@@ -339,7 +340,7 @@ async def get_kb_article(
 
 
 @router.patch(
-    "/{kb_id}",
+    "/{kb_id:uuid}",
     response_model=KbArticleResponse,
     summary="KB 문서 수정 (engineer 이상)",
 )
@@ -381,7 +382,7 @@ async def update_kb_article(
 
 
 @router.delete(
-    "/{kb_id}",
+    "/{kb_id:uuid}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="KB 문서 삭제 (engineer 이상)",
 )

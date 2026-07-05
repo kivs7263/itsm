@@ -145,7 +145,7 @@ class CommentCreate(BaseModel):
 class CommentOut(BaseModel):
     id: uuid.UUID
     ticket_id: uuid.UUID
-    author_id: uuid.UUID
+    author_id: uuid.UUID | None = None
     body: str
     is_internal: bool
     created_at: datetime

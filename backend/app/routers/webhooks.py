@@ -190,8 +190,9 @@ async def test_webhook(
     await webhook_service._deliver(
         event_type="webhook.test",
         payload={"message": "ITSM Webhook 테스트 메시지입니다."},
-        endpoint=endpoint,
-        db=db,
+        endpoint_id=endpoint.id,
+        url=endpoint.url,
+        secret=endpoint.secret,
     )
     return {"ok": True}
 

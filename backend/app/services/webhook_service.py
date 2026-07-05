@@ -21,6 +21,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import AsyncSessionLocal
 from app.models.webhook import WebhookEndpoint, WebhookDeliveryLog
 
 logger = logging.getLogger(__name__)
@@ -53,15 +54,29 @@ async def fire(
     if not endpoints:
         return
 
+    # 요청 세션(db)은 여기서만 읽기용으로 사용. 배송 태스크는 요청 세션을
+    # 공유하면 안 된다(AsyncSession은 동시성 비안전 — 요청 커밋/close와 경합 시
+    # 'Session is already flushing'/'transaction is closed'로 세션 손상). 각 태스크가
+    # 자체 세션을 열도록, ORM 인스턴스가 아닌 원시값만 캡처해 넘긴다.
     for endpoint in endpoints:
-        asyncio.create_task(_deliver(event_type, payload, endpoint, db))
+        asyncio.create_task(
+            _deliver(
+                event_type,
+                payload,
+                endpoint_id=endpoint.id,
+                url=endpoint.url,
+                secret=endpoint.secret,
+            )
+        )
 
 
 async def _deliver(
     event_type: str,
     payload: dict,
-    endpoint: WebhookEndpoint,
-    db: AsyncSession,
+    *,
+    endpoint_id: uuid.UUID,
+    url: str,
+    secret: str,
 ) -> None:
     body_dict = {
         "event": event_type,
@@ -69,54 +84,56 @@ async def _deliver(
         "data": payload,
     }
     body_bytes = json.dumps(body_dict, ensure_ascii=False).encode()
-    signature = _sign(endpoint.secret, body_bytes)
+    signature = _sign(secret, body_bytes)
 
-    log = WebhookDeliveryLog(
-        id=uuid.uuid4(),
-        endpoint_id=endpoint.id,
-        event_type=event_type,
-        payload=body_dict,
-        status="pending",
-        attempt_count=0,
-    )
-    db.add(log)
-    await db.commit()
-
-    last_exc: Exception | None = None
-    for attempt in range(_MAX_ATTEMPTS):
-        log.attempt_count = attempt + 1
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(
-                    endpoint.url,
-                    content=body_bytes,
-                    headers={
-                        "Content-Type": "application/json",
-                        "X-ITSM-Signature": f"sha256={signature}",
-                        "X-ITSM-Event": event_type,
-                    },
-                )
-            log.http_status = resp.status_code
-            log.response_body = resp.text[:500] if resp.text else None
-            if resp.status_code < 300:
-                log.status = "success"
-                log.delivered_at = datetime.now(timezone.utc)
-                break
-            else:
-                log.status = "failed"
-                last_exc = None
-        except Exception as exc:
-            last_exc = exc
-            log.status = "failed"
-            log.response_body = str(exc)[:500]
-
-        if attempt < _MAX_ATTEMPTS - 1:
-            await asyncio.sleep(_BACKOFF_BASE * (2 ** attempt))
-
-    if log.status != "success":
-        logger.warning(
-            "webhook delivery failed endpoint=%s event=%s attempts=%d err=%s",
-            endpoint.id, event_type, log.attempt_count, last_exc,
+    # 자체 세션 소유 (요청 세션 재사용 금지 — 세션 손상 방지)
+    async with AsyncSessionLocal() as db:
+        log = WebhookDeliveryLog(
+            id=uuid.uuid4(),
+            endpoint_id=endpoint_id,
+            event_type=event_type,
+            payload=body_dict,
+            status="pending",
+            attempt_count=0,
         )
+        db.add(log)
+        await db.commit()
 
-    await db.commit()
+        last_exc: Exception | None = None
+        for attempt in range(_MAX_ATTEMPTS):
+            log.attempt_count = attempt + 1
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.post(
+                        url,
+                        content=body_bytes,
+                        headers={
+                            "Content-Type": "application/json",
+                            "X-ITSM-Signature": f"sha256={signature}",
+                            "X-ITSM-Event": event_type,
+                        },
+                    )
+                log.http_status = resp.status_code
+                log.response_body = resp.text[:500] if resp.text else None
+                if resp.status_code < 300:
+                    log.status = "success"
+                    log.delivered_at = datetime.now(timezone.utc)
+                    break
+                else:
+                    log.status = "failed"
+                    last_exc = None
+            except Exception as exc:
+                last_exc = exc
+                log.status = "failed"
+                log.response_body = str(exc)[:500]
+
+            if attempt < _MAX_ATTEMPTS - 1:
+                await asyncio.sleep(_BACKOFF_BASE * (2 ** attempt))
+
+        if log.status != "success":
+            logger.warning(
+                "webhook delivery failed endpoint=%s event=%s attempts=%d err=%s",
+                endpoint_id, event_type, log.attempt_count, last_exc,
+            )
+
+        await db.commit()
