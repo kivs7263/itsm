@@ -73,8 +73,9 @@ const MOBILE_NAV = [
 const SEG_LABELS: Record<string, string> = {
   tickets: '티켓', queue: '티켓 풀', customers: '고객', kb: '지식베이스',
   'recurring-alerts': '반복 장애', reports: '리포트', settings: '설정',
-  worklog: '작업 시간', 'work-logs': '작업 시간', assets: '자산', cmdb: 'CMDB',
-  'change-requests': '변경 요청', contracts: '계약', notifications: '알림',
+  // ITSM-NAV-A(2026-07-05): Sidebar.tsx·CommandPalette.tsx 라벨 변경과 동기화
+  worklog: '작업 기록', 'work-logs': '작업 기록', assets: '자산', cmdb: 'CMDB',
+  'change-requests': '변경', contracts: '계약', notifications: '알림',
   home: '대시보드', sla: 'SLA', problems: '문제 관리', inventory: '인프라',
   automation: '자동화', 'service-catalog': '서비스 카탈로그',
 };

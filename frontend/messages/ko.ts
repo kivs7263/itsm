@@ -2,7 +2,11 @@ const ko = {
   nav: {
     dashboard: '대시보드',
     tickets: '티켓',
-    workLogs: '작업 시간',
+    // ITSM-NAV-A(2026-07-05): '작업 시간'→'작업 기록'. /work-logs 실제 성격 확인 결과
+    // 시간(hours) 외 완료여부·유상/무상·승인 등을 포괄하는 티켓별 공수 기록이라
+    // '시간'만으로는 범위가 좁음. 티켓 상세의 실제 활동 이력(ActivityTab '활동 내역')과
+    // 의미 충돌 방지 위해 '활동 기록'은 채택하지 않음 — 그건 이미 다른 기능이 쓰는 용어.
+    workLogs: '작업 기록',
     customers: '고객',
     kb: '지식베이스',
     recurringIssues: '반복 이슈',
@@ -12,7 +16,10 @@ const ko = {
     cmdb: 'CMDB',
     // RX-1c: assets·cmdb 통합 인프라 진입점(/inventory) 라벨
     inventory: '인프라',
-    changeRequests: '변경 요청',
+    // ITSM-NAV-A: '변경 요청'→'변경'. '관리' 접미사는 사람·조직 라벨 전용 원칙 +
+    // Jira Service Management 선례("Changes" 단독) — 형제 항목(티켓·고객·계약·SLA)과
+    // 짧은 명사형 스타일 통일
+    changeRequests: '변경',
     sla: 'SLA',
     contracts: '계약',
     problems: '문제 관리',

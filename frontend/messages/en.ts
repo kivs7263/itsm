@@ -4,7 +4,8 @@ const en = {
   nav: {
     dashboard: 'Dashboard',
     tickets: 'Tickets',
-    workLogs: 'Work Logs',
+    // ITSM-NAV-A(2026-07-05): mirrors ko.ts label change (see comment there)
+    workLogs: 'Work Log',
     customers: 'Customers',
     kb: 'Knowledge Base',
     recurringIssues: 'Recurring Issues',
@@ -14,7 +15,8 @@ const en = {
     cmdb: 'CMDB',
     // RX-1c: unified assets+cmdb entry point (/inventory) label
     inventory: 'Infrastructure',
-    changeRequests: 'Change Requests',
+    // ITSM-NAV-A: mirrors ko.ts label change (see comment there)
+    changeRequests: 'Changes',
     sla: 'SLA',
     contracts: 'Contracts',
     problems: 'Problem Management',

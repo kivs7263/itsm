@@ -57,8 +57,9 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { section: '대시보드',     label: '홈',            href: '/home',             icon: Home           },
   { section: '작업',         label: '티켓 목록',     href: '/tickets',          icon: LifeBuoy       },
-  { section: '작업',         label: '작업 시간',     href: '/work-logs',        icon: Clock          },
-  { section: '서비스 관리',  label: '변경 요청',     href: '/change-requests',  icon: GitPullRequest },
+  // ITSM-NAV-A(2026-07-05): Sidebar.tsx 라벨 변경과 동기화 ('작업 시간'→'작업 기록', '변경 요청'→'변경')
+  { section: '작업',         label: '작업 기록',     href: '/work-logs',        icon: Clock          },
+  { section: '서비스 관리',  label: '변경',          href: '/change-requests',  icon: GitPullRequest },
   { section: '서비스 관리',  label: '문제 관리',     href: '/problems',         icon: Bug            },
   { section: '서비스 관리',  label: '반복 감지',     href: '/problems?tab=recurring', icon: RefreshCw },
   { section: '서비스 관리',  label: 'SLA',           href: '/sla',              icon: Gauge          },
