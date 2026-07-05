@@ -298,3 +298,7 @@ app.include_router(service_catalog_router.router, prefix="/api")  # /api/{slug}/
 # CA-P2-4 Problem Management (ITIL RCA / Known Error)
 from app.routers import problems as problems_router  # noqa: E402
 app.include_router(problems_router.router, prefix="/api")          # /api/{slug}/problems
+
+# ITSM-SIDEBAR-P1: 사이드바 즐겨찾기(pin) — SA sidebar_pins 패턴 이식
+from app.routers import sidebar_pins as sidebar_pins_router  # noqa: E402
+app.include_router(sidebar_pins_router.router, prefix="/api")      # /api/{slug}/sidebar/pins

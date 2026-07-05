@@ -27,7 +27,7 @@ _생성: 자동 (sync_patterns_bidirectional.sh). 검토 후 docs/patterns/[doma
 | outbox worker 독립 세션 패턴 | outbox PROCESSING 전환 후 `process_one`에 동일 세션 전달 금지. `expired_ | fastapi+pg | 1 | 보안 |
 | sync 블로킹 토큰 갱신 async 우회 | `google.auth.transport.requests.Request`(동기 requests 기반) 를 a | python | 1 | 보안 |
 | python-jose unverified decode verify_aud | `jwt.decode(token, options={"verify_signature": False})` 는 여 | python | 1 | 보안 |
-| SQLAlchemy lazy load MissingGreenlet — r | `db.commit()` + `db.refresh(obj)` 후 relationship 속성(e.g. `ms | fastapi+pg | 2 | 검증#=2 |
+| SQLAlchemy lazy load MissingGreenlet — r | `db.commit()` + `db.refresh(obj)` 후 relationship 속성(e.g. `ms | fastapi+pg | 3 | 검증#=3 |
 | 신규 FastAPI 서비스 RLS — get_tenant_db 헬퍼 | 신규 마이크로서비스에서 SQLAlchemy async 세션 + PostgreSQL RLS 조합 시: `get | fastapi+pg | 1 | 보안 |
 | WS JWT URL query param 노출 — 헤더로 이동 | WS handshake `?token=<JWT>` query param은 nginx/access.log에 기 | fastapi | 1 | 보안 |
 | asyncio import 규율 (모듈레벨·누락검사) | ① 함수 내부 `import asyncio`는 컴파일러가 그 이름을 함수 local로 처리 → 상단 `asy | python | 2 | 검증#=2 |

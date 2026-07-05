@@ -90,6 +90,7 @@ from app.models.problem import Problem, ProblemTicket  # noqa: F401
 from app.models.kb_category import KbCategory  # noqa: F401
 from app.models.kb_article_version import KbArticleVersion  # noqa: F401
 from app.models.cmdb_discovery import DiscoveryRun  # noqa: F401
+from app.models.sidebar_pin import SidebarPin  # noqa: F401
 
 __all__ = [
     "Base",
@@ -200,4 +201,6 @@ __all__ = [
     "KbArticleVersion",
     # cmdb discovery runs (RA-C10-A)
     "DiscoveryRun",
+    # sidebar pins (ITSM-SIDEBAR-P1)
+    "SidebarPin",
 ]

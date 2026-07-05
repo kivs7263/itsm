@@ -29,6 +29,10 @@ const ko = {
     serviceCatalog: '서비스 카탈로그',
     notifications: '알림',
     users: '사용자',
+    // ITSM-SIDEBAR-P1: 즐겨찾기(pin) 그룹 라벨 + hover 토글 aria-label/title
+    favorites: '즐겨찾기',
+    pin: '즐겨찾기에 추가',
+    unpin: '즐겨찾기 해제',
     sections: {
       work: '작업',
       serviceMgmt: '서비스 관리',
@@ -135,7 +139,7 @@ const ko = {
 };
 
 export interface Messages {
-  nav: { dashboard: string; tickets: string; workLogs: string; customers: string; kb: string; recurringIssues: string; reports: string; settings: string; assets: string; cmdb: string; inventory: string; changeRequests: string; sla: string; contracts: string; problems: string; queue: string; automation: string; serviceCatalog: string; notifications: string; users: string; sections: { work: string; serviceMgmt: string; customers: string; assetsKnowledge: string } };
+  nav: { dashboard: string; tickets: string; workLogs: string; customers: string; kb: string; recurringIssues: string; reports: string; settings: string; assets: string; cmdb: string; inventory: string; changeRequests: string; sla: string; contracts: string; problems: string; queue: string; automation: string; serviceCatalog: string; notifications: string; users: string; favorites: string; pin: string; unpin: string; sections: { work: string; serviceMgmt: string; customers: string; assetsKnowledge: string } };
   auth: { logout: string; role: Record<string, string> };
   sidebar: { open: string; close: string; language: string };
   ticket: {

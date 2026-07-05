@@ -22,6 +22,7 @@ import {
   Bug,
   Workflow,
   LayoutGrid,
+  Star,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSlug } from '@/lib/slug';
@@ -31,6 +32,7 @@ import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { getInitials } from '@/lib/utils';
 import { useLocale } from '@/lib/locale';
 import { api } from '@/lib/api';
+import { fetchSidebarPins, saveSidebarPins } from '@/lib/api/sidebarPins';
 
 const STORAGE_KEY = 'itsm.sidebar.collapsed';
 
@@ -207,6 +209,40 @@ export function Sidebar() {
 
   const navSections = useMemo(() => getNavSections(user?.role as UserRole), [user?.role]);
 
+  // 즐겨찾기(pin) — ITSM-SIDEBAR-P1. 사용자별 영속(GET/PUT /api/{slug}/sidebar/pins), 낙관적 업데이트.
+  // pin key = NavItem.key(NavKey) — role별 섹션이 달라도 안정적으로 유지되는 식별자.
+  const [pinnedKeys, setPinnedKeys] = useState<string[]>([]);
+  useEffect(() => {
+    if (!tenantSlug) return;
+    let cancelled = false;
+    fetchSidebarPins(tenantSlug)
+      .then((res) => { if (!cancelled) setPinnedKeys(res.pinned_keys); })
+      .catch(() => { /* 조회 실패 시 즐겨찾기 없음으로 취급 (기능 저하 없이 기본 nav만) */ });
+    return () => { cancelled = true; };
+  }, [tenantSlug]);
+
+  const togglePin = useCallback((key: string) => {
+    if (!tenantSlug) return;
+    setPinnedKeys((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+      saveSidebarPins(tenantSlug, { pinned_keys: next }).catch(() => {
+        // 저장 실패 시 롤백 (낙관적 업데이트 취소)
+        setPinnedKeys(prev);
+      });
+      return next;
+    });
+  }, [tenantSlug]);
+
+  // 즐겨찾기 그룹 표시용 — 현재 role nav에 존재하는 항목 중 pin된 것만, pinnedKeys 순서대로
+  // (원 섹션에도 그대로 유지 — Linear식 "즐겨찾기에 복제 표시", SA sidebar_pins 동일 패턴)
+  const favoriteItems = useMemo(() => {
+    const visible = navSections.flatMap((section) => section.items);
+    const byKey = new Map(visible.map((item) => [item.key, item]));
+    return pinnedKeys
+      .map((key) => byKey.get(key as NavKey))
+      .filter((item): item is NavItem => !!item);
+  }, [navSections, pinnedKeys]);
+
   // SHELL-7: useCallback으로 변경 ([ 키 단축키 의존성용)
   const toggleCollapsed = useCallback(() => {
     setCollapsed((prev) => {
@@ -233,6 +269,95 @@ export function Sidebar() {
   const effectivelyExpanded = !collapsed || hoverExpanded;
   const isFloating = collapsed && hoverExpanded;
 
+  // 단일 nav 항목 렌더 — 원 섹션·즐겨찾기 그룹 공용 (ITSM-SIDEBAR-P1).
+  // forcePinned: 즐겨찾기 그룹 복제본은 항상 pinned 취급(별표 항상 채움 표시).
+  function renderNavItem(
+    { key, href, icon: Icon }: NavItem,
+    opts?: { keyPrefix?: string; forcePinned?: boolean },
+  ) {
+    const label = t.nav[key];
+    const fullHref = slug(href);
+    // RX-4b: 쿼리스트링 딥링크(/settings?tab=users 등)는 정확 일치로,
+    // 그 외 일반 경로는 기존 prefix 매칭 그대로 유지
+    const [hrefPath, hrefQuery] = fullHref.split('?');
+    const isActive = hrefQuery
+      ? pathname === hrefPath && (searchParams?.toString() ?? '') === hrefQuery
+      : pathname?.startsWith(fullHref);
+    const isPinned = opts?.forcePinned || pinnedKeys.includes(key);
+    // collapsed(아이콘레일)에선 공간 부족으로 별표 토글 숨김
+    const showPinToggle = effectivelyExpanded;
+
+    return (
+      <Link
+        key={`${opts?.keyPrefix ?? ''}${href}`}
+        href={fullHref}
+        className={cn(
+          'group/navitem flex items-center gap-3 rounded-md px-2.5 py-2',
+          'transition-colors duration-[150ms]',
+          'focus-visible:outline-none focus-visible:shadow-brand',
+          // RA-B(다크 리파인드): 화이트 오버레이 8% 단일 장치 — 좌측바 제거, pill 하나로 절제
+          isActive
+            ? 'font-semibold'
+            : 'hover:bg-white/[0.06]',
+        )}
+        style={
+          isActive
+            ? {
+                background: 'var(--sidebar-active-bg)',
+                color: 'var(--sidebar-active-text, #F5F5F5)',
+                fontSize: '14px',
+              }
+            : {
+                color: 'var(--sidebar-nav-text, rgba(255,255,255,0.6))',
+                fontSize: '14px',
+              }
+        }
+        title={!effectivelyExpanded ? label : undefined}
+      >
+        {/* SHELL-7 항목 ③: 아이콘 16px */}
+        <Icon
+          size={16}
+          className={cn('shrink-0', isActive ? '' : 'text-white/40')}
+          style={isActive ? { color: 'var(--color-brand)' } : undefined}
+        />
+        {effectivelyExpanded && <span className="truncate flex-1">{label}</span>}
+        {key === 'tickets' && (queueCountData?.count ?? 0) > 0 && (
+          <span
+            className="shrink-0 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1.5 min-w-4 h-4"
+            // RA-V1: 흰 텍스트가 배지 위에 올라가므로 base(--color-error, WCAG 4.11:1 미달)가 아닌
+            // -text 변형(--color-error-text, WCAG 4.99:1 통과) 사용
+            style={{ background: 'var(--color-error-text, #C0482F)' }}
+          >
+            {queueCountData?.count}
+          </span>
+        )}
+        {showPinToggle && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              togglePin(key);
+            }}
+            className={cn(
+              'flex-shrink-0 flex items-center transition-opacity duration-fast',
+              isPinned ? 'opacity-70 hover:opacity-100' : 'opacity-0 group-hover/navitem:opacity-100 hover:opacity-100',
+            )}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, marginLeft: 2 }}
+            aria-label={isPinned ? t.nav.unpin : t.nav.pin}
+            title={isPinned ? t.nav.unpin : t.nav.pin}
+          >
+            <Star
+              size={13}
+              fill={isPinned ? 'var(--color-brand)' : 'none'}
+              style={{ color: isPinned ? 'var(--color-brand)' : 'rgba(255,255,255,0.5)' }}
+            />
+          </button>
+        )}
+      </Link>
+    );
+  }
+
   return (
     <aside
       className={cn(
@@ -256,6 +381,24 @@ export function Sidebar() {
 
       {/* RA-U3: 섹션 그룹핑 (SSO Sidebar 패턴 참고 — 무제목 섹션 + titled 섹션들) */}
       <nav className="flex-1 overflow-y-auto py-2 px-1.5 space-y-5" aria-label={t.nav.dashboard}>
+        {/* 즐겨찾기(pin) 그룹 — ITSM-SIDEBAR-P1. 원 섹션 항목을 복제 표시(Linear식), 비어있으면 그룹 자체 미노출 */}
+        {favoriteItems.length > 0 && (
+          <div>
+            {effectivelyExpanded && (
+              <div className="w-full flex items-center px-2.5 py-1.5 mb-2">
+                <span
+                  className="text-[12px] font-semibold truncate"
+                  style={{ color: 'var(--sidebar-section-text, rgba(255,255,255,0.4))' }}
+                >
+                  {t.nav.favorites}
+                </span>
+              </div>
+            )}
+            {favoriteItems.map((item) =>
+              renderNavItem(item, { keyPrefix: 'fav-', forcePinned: true }),
+            )}
+          </div>
+        )}
         {navSections.map((section, si) => {
           const sectionKey = section.titleKey;
 
@@ -274,63 +417,7 @@ export function Sidebar() {
                 </span>
               </div>
             )}
-            {section.items.map(({ key, href, icon: Icon }) => {
-              const label = t.nav[key];
-              const fullHref = slug(href);
-              // RX-4b: 쿼리스트링 딥링크(/settings?tab=users 등)는 정확 일치로,
-              // 그 외 일반 경로는 기존 prefix 매칭 그대로 유지
-              const [hrefPath, hrefQuery] = fullHref.split('?');
-              const isActive = hrefQuery
-                ? pathname === hrefPath && (searchParams?.toString() ?? '') === hrefQuery
-                : pathname?.startsWith(fullHref);
-
-              return (
-                <Link
-                  key={href}
-                  href={fullHref}
-                  className={cn(
-                    'flex items-center gap-3 rounded-md px-2.5 py-2',
-                    'transition-colors duration-[150ms]',
-                    'focus-visible:outline-none focus-visible:shadow-brand',
-                    // RA-B(다크 리파인드): 화이트 오버레이 8% 단일 장치 — 좌측바 제거, pill 하나로 절제
-                    isActive
-                      ? 'font-semibold'
-                      : 'hover:bg-white/[0.06]',
-                  )}
-                  style={
-                    isActive
-                      ? {
-                          background: 'var(--sidebar-active-bg)',
-                          color: 'var(--sidebar-active-text, #F5F5F5)',
-                          fontSize: '14px',
-                        }
-                      : {
-                          color: 'var(--sidebar-nav-text, rgba(255,255,255,0.6))',
-                          fontSize: '14px',
-                        }
-                  }
-                  title={!effectivelyExpanded ? label : undefined}
-                >
-                  {/* SHELL-7 항목 ③: 아이콘 16px */}
-                  <Icon
-                    size={16}
-                    className={cn('shrink-0', isActive ? '' : 'text-white/40')}
-                    style={isActive ? { color: 'var(--color-brand)' } : undefined}
-                  />
-                  {effectivelyExpanded && <span className="truncate flex-1">{label}</span>}
-                  {key === 'tickets' && (queueCountData?.count ?? 0) > 0 && (
-                    <span
-                      className="shrink-0 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1.5 min-w-4 h-4"
-                      // RA-V1: 흰 텍스트가 배지 위에 올라가므로 base(--color-error, WCAG 4.11:1 미달)가 아닌
-                      // -text 변형(--color-error-text, WCAG 4.99:1 통과) 사용
-                      style={{ background: 'var(--color-error-text, #C0482F)' }}
-                    >
-                      {queueCountData?.count}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+            {section.items.map((item) => renderNavItem(item))}
           </div>
           );
         })}

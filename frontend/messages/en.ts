@@ -26,6 +26,10 @@ const en = {
     serviceCatalog: 'Service Catalog',
     notifications: 'Notifications',
     users: 'Users',
+    // ITSM-SIDEBAR-P1: mirrors ko.ts label additions (see comment there)
+    favorites: 'Favorites',
+    pin: 'Add to favorites',
+    unpin: 'Remove from favorites',
     sections: {
       work: 'Work',
       serviceMgmt: 'Service Mgmt',
