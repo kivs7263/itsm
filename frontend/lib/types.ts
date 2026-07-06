@@ -70,7 +70,7 @@ export type CIType =
   | 'printer';
 
 export type CIStatus = 'active' | 'inactive' | 'maintenance' | 'decommissioned';
-export type CIEnvironment = 'production' | 'staging' | 'development' | 'testing' | 'dr';
+export type CIEnvironment = 'production' | 'staging' | 'development' | 'test';
 export type CICriticality = 'critical' | 'high' | 'medium' | 'low';
 
 export type RelType =
