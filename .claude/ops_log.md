@@ -170,3 +170,8 @@ for f in backend/alembic/versions/062_fix_co | ✅ | itsm | build-hook |
 | 2026-07-04 00:51 | session_close | ITSM 전면개편 RX-0~4c+RX-2(A/B)+RX-2d 완료 / ★★:116개 | ✅ | itsm | leader |
 | 2026-07-04 00:56 | session_close | RX-2 DROP 조사·보류 판단(READ 이전 선행) / ★★:116개 | ✅ | itsm | leader |
 | 2026-07-04 19:07 | session_close | 세션 정상 종료 / ★★:116개 | ✅ | itsm | leader |
+| 2026-07-04 19:08 | build | cd /teamwork/itsm
+echo "=== 시드/테스트 계정 흔적 ==="; grep -rniE "admin@|password.*=|se | ✅ | itsm | build-hook |
+| 2026-07-04 19:09 | build | cd /teamwork/itsm/frontend
+echo "=== 토큰 저장 방식 (localStorage/cookie) ==="; grep - | ✅ | itsm | build-hook |
+| 2026-07-04 19:10 | build | ls -d /root/.npm/_npx/*/node_modules/playwright-core 2>/dev/null; echo "---versi | ✅ | itsm | build-hook |
