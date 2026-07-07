@@ -1,7 +1,7 @@
 """서비스 카탈로그 관리자(staff) CRUD 라우터 (CA-P1-5 P2).
 
 prefix : /{tenant_slug}/service-catalog
-인증   : get_current_user (목록/상세) / require_roles(admin, team_lead) (CUD)
+인증   : get_current_user (목록/상세) / require_roles(admin) (CUD, 2026-07-07 admin 전용화)
 격리   : 모든 쿼리 tenant_id == current_user.tenant_id (명시 필터)
 
 엔드포인트:
@@ -42,7 +42,8 @@ router = APIRouter(
     tags=["service-catalog"],
 )
 
-_ADMIN_ROLES = (UserRole.admin, UserRole.team_lead)
+# 2026-07-07 admin 전용화(구 admin+team_lead). 목록/상세 GET은 get_current_user 유지(요청자 브라우즈).
+_ADMIN_ROLES = (UserRole.admin,)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 스키마

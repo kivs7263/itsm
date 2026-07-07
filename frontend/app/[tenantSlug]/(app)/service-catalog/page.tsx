@@ -7,12 +7,12 @@
  *   GET    /{tenant_slug}/service-catalog/offerings                    L335-361 (category_id, is_active 필터)
  *   PATCH  /{tenant_slug}/service-catalog/offerings/{off_id}/toggle-active  L526-542
  *
- * 권한: admin/team_lead — 백엔드 require_roles(admin, team_lead)와 동일 기준
- *   (list_offerings/list_categories 자체는 get_current_user만 요구하지만,
- *    이 화면은 관리자 CUD 콘솔이므로 진입 자체를 team_lead 이상으로 제한)
+ * 권한: admin — 백엔드 require_roles(admin)와 동일 기준 (2026-07-07 admin 전용화, 구 admin+team_lead)
+ *   (list_offerings/list_categories 자체는 get_current_user만 요구=요청자 브라우즈 유지,
+ *    이 화면은 관리자 CUD 콘솔이므로 진입 자체를 admin으로 제한)
  *
  * approval_policy 다단/조건부 결재선 구조: backend/app/services/catalog_approval.py L1-44
- * 사이드바 미등록 — /service-catalog 직접 URL 접근 전용 (IA 에이전트 담당 영역 회피)
+ * 네비게이션: /settings '셋업' 그룹(admin 전용) 진입 — 2026-07-07 사이드바 serviceMgmt에서 축출
  */
 
 import React, { useState } from 'react';
@@ -32,7 +32,7 @@ import {
 import { api, getErrorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
-import { isTeamLeadOrAbove } from '@/lib/auth';
+import { isAdminRole } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -126,7 +126,7 @@ export default function ServiceCatalogPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  const canManage = isTeamLeadOrAbove(user?.role);
+  const canManage = isAdminRole(user?.role);
 
   function openCreate() {
     setEditingOffering(null);
@@ -151,7 +151,7 @@ export default function ServiceCatalogPage() {
         <div>
           <p className="text-sm font-medium text-text-primary">접근 권한 없음</p>
           <p className="text-xs text-text-secondary mt-1">
-            서비스 카탈로그 관리는 팀장/관리자만 접근할 수 있습니다.
+            서비스 카탈로그 관리는 관리자만 접근할 수 있습니다.
           </p>
         </div>
       </div>

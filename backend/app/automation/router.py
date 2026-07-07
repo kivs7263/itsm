@@ -1,7 +1,7 @@
 """자동화 룰 엔진 관리자 API.
 
 prefix : /{tenant_slug}/automation
-인증   : get_current_user + require_roles(admin, team_lead)
+인증   : require_roles(admin) — 2026-07-07 admin 전용화(구 admin+team_lead)
 격리   : tenant_id == current_user.tenant_id
 
 엔드포인트:
@@ -179,7 +179,7 @@ async def list_rules(
     tenant_slug: str,
     enabled: bool | None = Query(default=None),
     trigger_event: str | None = Query(default=None),
-    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead))] = None,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> list[RuleOut]:
     q = select(AutomationRule).where(AutomationRule.tenant_id == current_user.tenant_id)
@@ -201,7 +201,7 @@ async def list_rules(
 async def create_rule(
     tenant_slug: str,
     data: RuleCreate,
-    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead))] = None,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> RuleOut:
     _validate_rule_payload(data.trigger_event, data.conditions, data.actions)
@@ -241,7 +241,7 @@ async def create_rule(
 async def get_rule(
     tenant_slug: str,
     rule_id: uuid.UUID,
-    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead))] = None,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> RuleOut:
     rule = await _get_rule_or_404(rule_id, current_user.tenant_id, db)
@@ -257,7 +257,7 @@ async def update_rule(
     tenant_slug: str,
     rule_id: uuid.UUID,
     data: RuleUpdate,
-    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead))] = None,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> RuleOut:
     rule = await _get_rule_or_404(rule_id, current_user.tenant_id, db)
@@ -293,7 +293,7 @@ async def update_rule(
 async def delete_rule(
     tenant_slug: str,
     rule_id: uuid.UUID,
-    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead))] = None,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> None:
     rule = await _get_rule_or_404(rule_id, current_user.tenant_id, db)
@@ -309,7 +309,7 @@ async def delete_rule(
 async def toggle_rule(
     tenant_slug: str,
     rule_id: uuid.UUID,
-    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead))] = None,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> ToggleOut:
     rule = await _get_rule_or_404(rule_id, current_user.tenant_id, db)
@@ -335,7 +335,7 @@ async def list_runs(
     rule_id: uuid.UUID | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=50, ge=1, le=200),
-    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead))] = None,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> list[RunOut]:
     q = select(AutomationRuleRun).where(AutomationRuleRun.tenant_id == current_user.tenant_id)
@@ -356,7 +356,7 @@ async def list_runs(
 async def get_run(
     tenant_slug: str,
     run_id: uuid.UUID,
-    current_user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.team_lead))] = None,
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))] = None,
     db: AsyncSession = Depends(get_db),
 ) -> RunOut:
     run = await db.scalar(

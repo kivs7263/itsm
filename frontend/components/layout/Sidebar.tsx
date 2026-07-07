@@ -20,8 +20,6 @@ import {
   Gauge,
   FileText,
   Bug,
-  Workflow,
-  LayoutGrid,
   Star,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -118,9 +116,8 @@ const TEAM_LEAD_SECTIONS: NavSection[] = [
       { key: 'changeRequests',  href: '/change-requests',  icon: GitPullRequest },
       { key: 'problems',        href: '/problems',         icon: Bug            },
       { key: 'sla',             href: '/sla',              icon: Gauge          },
-      // 자동화·서비스카탈로그: 초기 셋업 성격 → 서비스관리 최하단 유지(사용자 결정 2026-07-04)
-      { key: 'automation',      href: '/automation',       icon: Workflow       },
-      { key: 'serviceCatalog',  href: '/service-catalog',  icon: LayoutGrid     },
+      // 자동화·서비스카탈로그(초기 셋업 성격·저빈도)는 /settings '셋업' 그룹으로 축출·admin 전용화
+      // (2026-07-07 오너 결정 — 구 "serviceMgmt 최하단 유지"(2026-07-04) 대체. serviceMgmt 5→3 슬림)
     ],
   },
   {

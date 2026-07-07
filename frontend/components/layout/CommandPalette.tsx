@@ -63,13 +63,14 @@ const NAV_ITEMS: NavItem[] = [
   { section: '서비스 관리',  label: '문제 관리',     href: '/problems',         icon: Bug            },
   { section: '서비스 관리',  label: '반복 감지',     href: '/problems?tab=recurring', icon: RefreshCw },
   { section: '서비스 관리',  label: 'SLA',           href: '/sla',              icon: Gauge          },
-  { section: '서비스 관리',  label: '자동화',        href: '/automation',       icon: Workflow       },
-  { section: '서비스 관리',  label: '서비스 카탈로그', href: '/service-catalog', icon: LayoutGrid     },
   { section: '고객',         label: '고객 목록',     href: '/customers',        icon: Users          },
   { section: '고객',         label: '계약',          href: '/contracts',        icon: FileText       },
   { section: '자산·지식',    label: '인프라',        href: '/inventory',        icon: Boxes          },
   { section: '자산·지식',    label: '지식베이스',    href: '/kb',               icon: BookOpen       },
   { section: '분석',         label: '리포트',        href: '/reports',          icon: BarChart2      },
+  // 셋업(자동화·카탈로그)은 /settings '셋업' 그룹으로 축출(2026-07-07) — ⌘K도 설정 섹션으로 정합
+  { section: '설정',         label: '자동화',        href: '/automation',       icon: Workflow       },
+  { section: '설정',         label: '서비스 카탈로그', href: '/service-catalog', icon: LayoutGrid     },
   { section: '설정',         label: '설정',          href: '/settings',         icon: Settings       },
 ];
 

@@ -31,6 +31,8 @@ import {
   XCircle,
   Zap,
   Globe,
+  Workflow,
+  LayoutGrid,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
@@ -128,6 +130,15 @@ const SETTINGS_GROUPS: SettingsNavGroup[] = [
       { key: 'api-keys', label: 'API 키',    icon: Key,     description: '외부 연동 키',  scopeLabel: '이 조직' },
       { key: 'webhooks', label: 'Webhook',   icon: Webhook, description: 'HTTP 이벤트',   scopeLabel: '이 조직' },
       { key: 'general',  label: '일반 설정', icon: Globe,   description: '시스템 · 시간대', scopeLabel: '이 조직' },
+    ],
+  },
+  {
+    // 셋업(초기 구성·저빈도) — 구 사이드바 serviceMgmt에서 축출(2026-07-07). href 항목이라 탭 전환 대신 풀페이지로 이동.
+    label: '셋업',
+    role: 'admin',
+    items: [
+      { key: 'automation',     label: '자동화',         icon: Workflow,   description: '규칙 · 트리거',  href: '/automation',      scopeLabel: '이 조직' },
+      { key: 'serviceCatalog', label: '서비스 카탈로그', icon: LayoutGrid, description: '요청 카탈로그',  href: '/service-catalog', scopeLabel: '이 조직' },
     ],
   },
 ];
@@ -2276,10 +2287,12 @@ export default function SettingsPage() {
         <SettingsShell
           groups={SETTINGS_GROUPS.map((g) => ({
             ...g,
-            items: g.items.map((item) => ({
-              ...item,
-              onClick: () => setActiveTab(item.key as TabId),
-            })),
+            items: g.items.map((item) =>
+              // href 항목(셋업: 자동화·카탈로그)은 slug 접두 후 풀페이지 이동, 그 외는 인라인 탭 전환
+              item.href
+                ? { ...item, href: `/${tenantSlug}${item.href}` }
+                : { ...item, onClick: () => setActiveTab(item.key as TabId) },
+            ),
           }))}
           activeKey={activeTab}
           isAdmin={isAdmin}

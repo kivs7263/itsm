@@ -3,8 +3,8 @@
 /**
  * /automation — 자동화 룰 엔진 관리 페이지 (RX-3a).
  *
- * 네비게이션 미등록 상태(사이드바 별도 작업 예정) — 직접 URL 접근으로 동작.
- * 권한: admin/team_lead만 룰 CRUD 가능 (backend router.py require_roles(admin, team_lead)와 일치).
+ * 네비게이션: /settings '셋업' 그룹(admin 전용) 진입 — 2026-07-07 사이드바 serviceMgmt에서 축출.
+ * 권한: admin만 접근·CRUD (backend router.py require_roles(admin)와 일치, 2026-07-07 admin 전용화).
  *
  * 엔드포인트 (backend/app/automation/router.py 근거):
  * - GET    /{tenant_slug}/automation/rules              (router.py:168-187)
@@ -23,7 +23,7 @@ import {
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
-import { isTeamLeadOrAbove, type UserRole } from '@/lib/auth';
+import { isAdminRole, type UserRole } from '@/lib/auth';
 import type { AutomationRule, AutomationRun } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -385,7 +385,7 @@ export default function AutomationPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<AutomationTab>('rules');
 
-  const allowed = isTeamLeadOrAbove(user?.role as UserRole);
+  const allowed = isAdminRole(user?.role as UserRole);
 
   // 권한 없음 처리 — hooks는 조건부 return 이전 모두 선언 완료
   if (!allowed) {
@@ -396,7 +396,7 @@ export default function AutomationPage() {
         </div>
         <div>
           <p className="text-sm font-medium text-text-primary">접근 권한 없음</p>
-          <p className="text-xs text-text-secondary mt-1">이 페이지는 관리자/팀 리더만 접근할 수 있습니다.</p>
+          <p className="text-xs text-text-secondary mt-1">이 페이지는 관리자만 접근할 수 있습니다.</p>
         </div>
       </div>
     );
