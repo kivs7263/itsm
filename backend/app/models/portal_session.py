@@ -1,7 +1,7 @@
 """고객 포털 세션 모델."""
 from __future__ import annotations
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.models.base import Base, gen_uuid, utcnow
@@ -34,3 +34,5 @@ class PortalSession(Base):
     used_at = Column(DateTime(timezone=True), nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    # 장수명 세션 여부 — True: 절대 90일·idle 30일 / False(기본): 절대 30일·idle 14일
+    is_remember = Column(Boolean(), nullable=False, default=False)

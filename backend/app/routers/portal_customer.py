@@ -41,7 +41,28 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/portal/{tenant_slug}", tags=["portal-customer"])
 
 _SESSION_COOKIE = "itsm_portal_session"
-_SESSION_TTL_HOURS = 24 * 7  # 7일
+
+# ── 세션 TTL 설계 (2026-07-07) ────────────────────────────────────────────
+# 고객 포털은 매직링크 단일 접근경로 → 세션 만료 = 재락아웃 위험.
+# 견고한 무비밀번호(A안) 방침에 따라 세션을 장수명·슬라이딩으로 운영한다.
+#
+# ┌─────────────────────┬────────────┬──────────────┐
+# │ 모드                 │ 절대 TTL   │ idle window  │
+# ├─────────────────────┼────────────┼──────────────┤
+# │ 기본 (remember=F)    │ 30일       │ 14일         │
+# │ 이 기기 기억 (remember=T) │ 90일  │ 30일         │
+# └─────────────────────┴────────────┴──────────────┘
+#
+# · 쿠키 max_age = 절대 TTL (브라우저가 full period 보관)
+# · 서버 expires_at = idle window 으로 시작 → 활동 시 sliding 연장
+#   (잔여 < idle_window × 50% 일 때만 DB write → 요청당 write 최소화)
+# · remember=T/F 구분은 portal_sessions.is_remember 컬럼(migration 064)으로 저장.
+# · 절대 상한 = created_at + 절대_TTL — idle 연장은 이 상한을 넘지 않음.
+_SESSION_TTL_HOURS = 24 * 30            # 기본 절대 TTL: 30일
+_SESSION_TTL_REMEMBER_HOURS = 24 * 90   # remember 절대 TTL: 90일
+_IDLE_TTL_HOURS = 24 * 14              # 기본 idle window: 14일
+_IDLE_TTL_REMEMBER_HOURS = 24 * 30     # remember idle window: 30일
+
 _MAGIC_TTL_MINUTES = 30
 
 
@@ -63,9 +84,17 @@ async def _get_customer_from_session(
     tenant_id: uuid.UUID,
     session_token: str | None,
 ) -> Customer | None:
+    """세션 쿠키로 고객을 조회하고, 슬라이딩 idle timeout을 적용한다.
+
+    Rolling 연장 규칙:
+    · 잔여 시간이 idle_window의 50% 미만이면 expires_at을 연장
+      (요청당 DB write를 최소화하기 위한 임계).
+    · 연장 상한 = created_at + 절대_TTL (remember 여부에 따라 분기).
+    """
     if not session_token:
         return None
     thash = _token_hash(session_token)
+    now = datetime.now(timezone.utc)
     ps = (
         await db.execute(
             select(PortalSession).where(
@@ -73,13 +102,41 @@ async def _get_customer_from_session(
                     PortalSession.token_hash == thash,
                     PortalSession.tenant_id == tenant_id,
                     PortalSession.purpose == "customer_session",
-                    PortalSession.expires_at > datetime.now(timezone.utc),
+                    PortalSession.expires_at > now,
                 )
             )
         )
     ).scalar_one_or_none()
     if not ps:
         return None
+
+    # ── Sliding idle timeout ──────────────────────────────────────
+    idle_hours = _IDLE_TTL_REMEMBER_HOURS if ps.is_remember else _IDLE_TTL_HOURS
+    idle_secs = idle_hours * 3600
+    remaining = (ps.expires_at - now).total_seconds()
+
+    if remaining < idle_secs / 2:
+        absolute_hours = (
+            _SESSION_TTL_REMEMBER_HOURS if ps.is_remember else _SESSION_TTL_HOURS
+        )
+        # created_at이 naive일 경우 UTC 보정 (DateTime(timezone=True)는 aware이나 방어코드)
+        created_utc = (
+            ps.created_at
+            if ps.created_at.tzinfo
+            else ps.created_at.replace(tzinfo=timezone.utc)
+        )
+        absolute_max = created_utc + timedelta(hours=absolute_hours)
+        new_expires = min(now + timedelta(hours=idle_hours), absolute_max)
+        if new_expires > ps.expires_at:
+            ps.expires_at = new_expires
+            try:
+                await db.commit()
+            except Exception:
+                logger.warning(
+                    "포털 세션 idle 연장 commit 실패 (무시) token_hash=%.8s", thash
+                )
+                await db.rollback()
+
     return await db.get(Customer, ps.customer_id)
 
 
@@ -90,6 +147,7 @@ async def _get_customer_from_session(
 
 class LoginRequest(BaseModel):
     email: str
+    remember: bool = False  # True → 매직링크 URL에 remember=1 포함 → 90일 세션 발급
 
 
 class PortalMeOut(BaseModel):
@@ -195,7 +253,9 @@ async def portal_login(
         #    (D19: external_notification_logs 0건 근본원인). 실패는 삼키되 로깅한다.
         try:
             from app.services.external_notif_service import queue_notification
-            verify_url = f"/portal/{tenant_slug}/auth/verify?token={token}"
+            # remember 플래그를 verify URL에 포함 → 클릭 시 세션 TTL 결정
+            remember_param = "&remember=1" if body.remember else ""
+            verify_url = f"/portal/{tenant_slug}/auth/verify?token={token}{remember_param}"
             await queue_notification(
                 db,
                 tenant_id=tenant.id,
@@ -232,11 +292,21 @@ async def portal_login(
 async def portal_verify(
     tenant_slug: str,
     token: str = Query(...),
+    remember: bool = Query(False, description="이 기기 기억 여부 — True: 절대 90일·idle 30일"),
     response: Response = None,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    """매직링크 토큰을 검증하고 HttpOnly 세션 쿠키를 발급한다.
+
+    remember=True  → 절대 TTL 90일, idle window 30일 (장수명)
+    remember=False → 절대 TTL 30일, idle window 14일 (기본)
+
+    쿠키 max_age = 절대 TTL (브라우저가 full period 보관)
+    서버 expires_at = idle window 으로 시작 → 활동 시 _get_customer_from_session 이 슬라이딩 연장.
+    """
     tenant = await _get_tenant(db, tenant_slug)
     thash = _token_hash(token)
+    now = datetime.now(timezone.utc)
 
     ps = (
         await db.execute(
@@ -245,7 +315,7 @@ async def portal_verify(
                     PortalSession.token_hash == thash,
                     PortalSession.tenant_id == tenant.id,
                     PortalSession.purpose == "magic_login",
-                    PortalSession.expires_at > datetime.now(timezone.utc),
+                    PortalSession.expires_at > now,
                     PortalSession.used_at.is_(None),
                 )
             )
@@ -255,14 +325,20 @@ async def portal_verify(
     if not ps:
         raise HTTPException(status_code=401, detail="링크가 만료되었거나 이미 사용되었습니다.")
 
-    # 매직링크 사용 처리
-    ps.used_at = datetime.now(timezone.utc)
+    # 매직링크 사용 처리 (재사용 방지)
+    ps.used_at = now
     await db.commit()
 
-    # 세션 쿠키 발급
+    # ── TTL 결정 ──────────────────────────────────────────────────
+    ttl_hours = _SESSION_TTL_REMEMBER_HOURS if remember else _SESSION_TTL_HOURS
+    idle_hours = _IDLE_TTL_REMEMBER_HOURS if remember else _IDLE_TTL_HOURS
+
+    # 서버 세션은 idle window 로 시작 (활동 시 슬라이딩)
+    expires_at = now + timedelta(hours=idle_hours)
+
+    # ── 세션 쿠키 발급 ────────────────────────────────────────────
     session_token = secrets.token_urlsafe(32)
     session_hash = _token_hash(session_token)
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=_SESSION_TTL_HOURS)
 
     session = PortalSession(
         id=uuid.uuid4(),
@@ -271,6 +347,7 @@ async def portal_verify(
         token_hash=session_hash,
         purpose="customer_session",
         expires_at=expires_at,
+        is_remember=remember,
     )
     db.add(session)
     await db.commit()
@@ -283,10 +360,22 @@ async def portal_verify(
         # 브라우저에 실전송됨 → secure 강제(스태프 auth 쿠키와 동일 _COOKIE_SECURE).
         secure=_COOKIE_SECURE,  # settings.ENVIRONMENT=="production"
         samesite="lax",
-        max_age=_SESSION_TTL_HOURS * 3600,
+        # 쿠키 max_age = 절대 TTL — 브라우저가 full period 보관.
+        # 서버 expires_at(idle window)이 먼저 만료될 경우 → 쿠키는 있지만 서버가 401 → 정상.
+        max_age=ttl_hours * 3600,
         # PU-D19: 브라우저는 API 를 /api/portal/{slug}/... 로 호출(nginx /portal/→프론트).
         # 쿠키 path 가 /portal/{slug} 이면 /api/portal/{slug}/me 등에 미전송 → verify 후에도 401.
         path=f"/api/portal/{tenant_slug}",
+    )
+
+    logger.info(
+        "포털 세션 발급 tenant=%s customer_id=%s remember=%s "
+        "absolute_ttl_days=%d idle_ttl_days=%d",
+        tenant_slug,
+        ps.customer_id,
+        remember,
+        ttl_hours // 24,
+        idle_hours // 24,
     )
 
     return {"redirect": f"/portal/{tenant_slug}"}
