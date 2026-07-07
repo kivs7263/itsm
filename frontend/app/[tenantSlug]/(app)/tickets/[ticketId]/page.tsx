@@ -13,6 +13,7 @@ import {
   X, Link2, UserMinus,
 } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
+import { issuePortalLink, formatPortalExpiry } from '@/lib/portalLink';
 import type { Ticket, TicketComment, EscalationOut, TicketPriority, TicketStatus, KnownIssue, TicketWithRequester } from '@/lib/types';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { SlaBadge } from '@/components/tickets/SlaBadge';
@@ -570,6 +571,20 @@ export default function TicketDetailPage() {
     },
   });
 
+  // 고객 포털 매직링크 발급 (락아웃 구제 — 이메일 외 채널 전달용)
+  const portalLinkMutation = useMutation({
+    mutationFn: () => issuePortalLink(tenantSlug, ticketId),
+    onSuccess: async ({ url, expiresAt }) => {
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success(`고객 포털 링크가 복사되었습니다 (${formatPortalExpiry(expiresAt)})`);
+      } catch {
+        toast.error('클립보드 복사에 실패했습니다. 브라우저 권한을 확인해주세요.');
+      }
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
   if (ticketLoading) return <PageSkeleton />;
 
   if (ticketError) { /* AS-W1 */
@@ -826,6 +841,21 @@ export default function TicketDetailPage() {
                   )}
                 </div>
               </div>
+
+              {/* 고객 포털 매직링크 발급 — 락아웃 구제(전화/메신저 전달용) */}
+              {ticket.customer_id ? (
+                <button
+                  type="button"
+                  onClick={() => portalLinkMutation.mutate()}
+                  disabled={portalLinkMutation.isPending}
+                  className="w-full flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border-default hover:border-border-strong text-xs text-text-secondary hover:text-text-primary px-2 py-1.5 transition-colors mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Link2 size={11} />
+                  {portalLinkMutation.isPending ? '발급 중...' : '고객 포털 링크 발급'}
+                </button>
+              ) : (
+                <p className="text-xs text-text-disabled text-center mt-1">고객 연결 후 포털 링크 발급 가능</p>
+              )}
             </SideSection>
 
             {/* SLA 현황 */}

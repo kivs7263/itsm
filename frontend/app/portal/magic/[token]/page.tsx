@@ -107,7 +107,7 @@ export default function MagicPortalPage() {
 
   // 타임라인 로드 함수 (코멘트 전송 후 재사용)
   async function loadTimeline(tk: string): Promise<TimelineEvent[]> {
-    const res = await fetch(`/portal/${tk}/timeline`, { cache: 'no-store' });
+    const res = await fetch(`/api/portal/${tk}/timeline`, { cache: 'no-store' });
     if (!res.ok) return [];
     const data = await res.json();
     // 백엔드가 { events: [...] } 또는 배열 직접 반환하는 두 형태 모두 대응
@@ -129,7 +129,7 @@ export default function MagicPortalPage() {
     async function load() {
       try {
         const [verifyRes, tl] = await Promise.all([
-          fetch(`/portal/verify/${token}`, { cache: 'no-store' }),
+          fetch(`/api/portal/verify/${token}`, { cache: 'no-store' }),
           loadTimeline(token),
         ]);
 
@@ -166,7 +166,7 @@ export default function MagicPortalPage() {
     setSubmitError(null);
 
     try {
-      const res = await fetch(`/portal/${token}/comments`, {
+      const res = await fetch(`/api/portal/${token}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: comment.trim() }),

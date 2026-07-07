@@ -32,9 +32,11 @@ import {
   ShieldAlert,
   MapPin,
   Landmark,
+  Link2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
+import { issuePortalLink, formatPortalExpiry } from '@/lib/portalLink';
 import type {
   CustomerTreeNodeWithSite,
   CustomerWithSite,
@@ -1556,6 +1558,23 @@ const STATUS_LEFT_BORDER: Record<string, string> = {
 
 function SupportHistoryCard({ item, tenantSlug }: { item: SupportHistoryItem; tenantSlug: string }) {
   const router = useRouter();
+
+  // 고객 포털 매직링크 발급 — 락아웃 구제(전화/메신저 전달용).
+  // 고객 상세엔 고객 단위 발급 API가 없어(백엔드는 티켓 단위만 존재) 지원 이력의
+  // 각 티켓 카드에서 발급한다.
+  const portalLinkMutation = useMutation({
+    mutationFn: () => issuePortalLink(tenantSlug, item.id),
+    onSuccess: async ({ url, expiresAt }) => {
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success(`고객 포털 링크가 복사되었습니다 (${formatPortalExpiry(expiresAt)})`);
+      } catch {
+        toast.error('클립보드 복사에 실패했습니다. 브라우저 권한을 확인해주세요.');
+      }
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
   const borderClass = STATUS_LEFT_BORDER[item.status] ?? 'border-l-4 border-l-gray-300';
   const requestBadge = REQUEST_TYPE_BADGE[item.request_type ?? ''] ?? 'bg-gray-100 text-gray-600';
   const requestLabel = REQUEST_TYPE_LABEL[item.request_type ?? ''] ?? item.request_type ?? '';
@@ -1643,6 +1662,22 @@ function SupportHistoryCard({ item, tenantSlug }: { item: SupportHistoryItem; te
           )}
         </div>
       )}
+
+      {/* 고객 포털 매직링크 발급 — 락아웃 구제(전화/메신저 전달용) */}
+      <div className="mt-2 pt-2 border-t border-border-default flex justify-end">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            portalLinkMutation.mutate();
+          }}
+          disabled={portalLinkMutation.isPending}
+          className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Link2 size={11} />
+          {portalLinkMutation.isPending ? '발급 중...' : '포털 링크 발급'}
+        </button>
+      </div>
     </div>
   );
 }
