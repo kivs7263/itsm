@@ -166,6 +166,7 @@ async def verify_portal_token(
         await db.execute(
             select(PortalSession).where(
                 PortalSession.token_hash == thash,
+                PortalSession.tenant_id == tenant_id,  # reviewer 권고-1: 방어심층(JWT서명 외 tenant 이중검증)
                 PortalSession.expires_at > datetime.now(timezone.utc),
             )
         )
@@ -224,6 +225,7 @@ async def portal_timeline(
         await db.execute(
             select(PortalSession).where(
                 PortalSession.token_hash == thash,
+                PortalSession.tenant_id == tenant_id,  # reviewer 권고-1: 방어심층(JWT서명 외 tenant 이중검증)
                 PortalSession.expires_at > datetime.now(timezone.utc),
             )
         )
@@ -290,6 +292,7 @@ async def portal_add_comment(
         await db.execute(
             select(PortalSession).where(
                 PortalSession.token_hash == thash,
+                PortalSession.tenant_id == tenant_id,  # reviewer 권고-1: 방어심층(JWT서명 외 tenant 이중검증)
                 PortalSession.expires_at > datetime.now(timezone.utc),
             )
         )
