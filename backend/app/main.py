@@ -256,6 +256,10 @@ app.include_router(escalations_router.team_router, prefix="/api")  # /api/{slug}
 from app.routers import portal as portal_router  # noqa: E402
 app.include_router(portal_router.router_staff, prefix="/api")      # /api/{slug}/tickets/{id}/portal-link
 app.include_router(portal_router.router_portal)                    # /portal/* (인증 없음)
+# IPA-1(2026-07-07): PU-D19와 동일 클래스 — nginx /portal/ 는 프론트로 프록시하므로
+# 매직페이지(/portal/magic/[token])가 호출하는 /portal/verify·/timeline·/comments 가 백엔드에
+# 미도달(404)해 스태프 발급 링크가 죽어있었음. /api 병행 마운트로 백엔드 매칭.
+app.include_router(portal_router.router_portal, prefix="/api")     # /api/portal/verify/{token}, /api/portal/{token}/timeline, /comments
 from app.routers import portal_customer as portal_customer_router  # noqa: E402
 app.include_router(portal_customer_router.router)                   # /portal/{slug}/auth/*, /portal/{slug}/me, /portal/{slug}/tickets
 # PU-D19: 프론트 고객포털은 @/lib/api(baseURL /api)로 /portal/{slug}/... 호출 → 실제 /api/portal/{slug}/...

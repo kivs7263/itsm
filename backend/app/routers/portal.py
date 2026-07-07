@@ -115,8 +115,9 @@ async def issue_portal_link(
     db.add(session)
     await db.commit()
 
-    # 포털 URL 구성: 프론트 도메인 미설정 시 상대 경로
-    portal_url = f"/portal/{token}"
+    # 포털 URL 구성: 실제 매직 뷰 라우트는 /portal/magic/{token} (Next.js app/portal/magic/[token]).
+    # 구 "/portal/{token}" 는 존재하지 않는 라우트라 404 → magic 경로로 교정 (IPA-1 2026-07-07).
+    portal_url = f"/portal/magic/{token}"
 
     return PortalLinkOut(token=token, expires_at=expires_at, portal_url=portal_url)
 
