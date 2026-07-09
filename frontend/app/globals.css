@@ -140,6 +140,12 @@
   /* 카드 radius primitive — radius-lg(16px) 사용 */
   --radius-card:  var(--radius-lg);
 
+  /* ALVEO-V2 Track 4(2026-07-09): 카드 shadow 사다리 — rest flat + hover pop(핵심 레버).
+     신규 옵트인 토큰(`.v2-card` 클래스 전용) — 기존 `--shadow-card` 상시 2레이어는 유지(회귀 방지),
+     새로 카드래핑한 화면/주요 KPI 카드에만 `.v2-card` 적용. SA `app/globals.css:171-178` 동형. */
+  --shadow-card-rest:  0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-card-hover: 0 4px 10px rgba(16, 24, 40, 0.05), 0 16px 38px rgba(16, 24, 40, 0.11);
+
   /* === 설정 셸 (PU-S3, @total/ui-shell SettingsShell/SettingsCard/Select 공통 토큰) === */
   --settings-nav-w:          220px;
   --settings-nav-active-bg:  rgba(0, 0, 0, 0.05);
@@ -164,8 +170,8 @@
   --sidebar-bg:               #17181C;
   --sidebar-border:           #24262B;
   --sidebar-nav-text:         #9A96A4;
-  /* RA-B(다크 리파인드, Vercel/Raycast 계열): 화이트 오버레이 8% + 좌측바 제거 (구 밝은 pill #F2F4F6 폐기) */
-  --sidebar-active-bg:        rgba(255, 255, 255, 0.08);
+  /* ALVEO-V2 2026-07-08 오너결정#1: 제품색(teal) 틴트 pill + 좌측 inset 바(Sidebar.tsx boxShadow). 구 RA-B 화이트 오버레이 8%+좌측바 제거는 대체됨 */
+  --sidebar-active-bg:        rgba(var(--color-brand-rgb), 0.18);
   --sidebar-active-border:    var(--color-brand);
   --sidebar-active-text:      #F5F5F5;
   --sidebar-nav-active-text:  var(--sidebar-active-text); /* 별칭(하위호환) */
@@ -279,8 +285,8 @@
   --sidebar-bg:               #17181C;
   --sidebar-border:           #24262B;
   --sidebar-nav-text:         #9A96A4;
-  /* RA-B(다크 리파인드, Vercel/Raycast 계열): 화이트 오버레이 8% + 좌측바 제거 (구 밝은 pill #F2F4F6 폐기) */
-  --sidebar-active-bg:        rgba(255, 255, 255, 0.08);
+  /* ALVEO-V2 2026-07-08 오너결정#1: 제품색(teal) 틴트 pill + 좌측 inset 바(Sidebar.tsx boxShadow). 구 RA-B 화이트 오버레이 8%+좌측바 제거는 대체됨 */
+  --sidebar-active-bg:        rgba(var(--color-brand-rgb), 0.18);
   --sidebar-active-border:    var(--color-brand);
   --sidebar-active-text:      #F5F5F5;
   --sidebar-nav-active-text:  var(--sidebar-active-text); /* 별칭(하위호환) */
@@ -400,6 +406,36 @@
 h1, .text-h1 { letter-spacing: -0.03em; }
 h2, .text-h2 { letter-spacing: -0.02em; }
 h3, .text-h3 { letter-spacing: -0.015em; }
+
+/* =====================================================================
+   ALVEO-V2 Track 4(2026-07-09): KPI hero 수치 스케일 (alveo_v2.html:135 정본).
+   /home·/sla·/reports 대표 KPI 숫자에 적용 — 구조 변경 없이 클래스만.
+===================================================================== */
+.v2-kpi-num {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* =====================================================================
+   ALVEO-V2 Track 4(2026-07-09): rest flat + hover lift-and-pop 카드(핵심 레버).
+   신규 카드래핑 테이블/주요 KPI 카드에 opt-in. SA `.v2-card`와 동형(app/globals.css:415-427).
+===================================================================== */
+.v2-card {
+  box-shadow: var(--shadow-card-rest);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease;
+}
+.v2-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card-hover);
+}
+@media (prefers-reduced-motion: reduce) {
+  .v2-card:hover {
+    transform: none;
+  }
+}
 
 /* =====================================================================
    접근성 — prefers-reduced-motion

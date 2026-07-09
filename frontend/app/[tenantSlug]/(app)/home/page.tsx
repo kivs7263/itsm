@@ -159,10 +159,7 @@ function SparklineStrip({ metrics }: { metrics: MetricColumn[] }) {
                 {m.label}
               </span>
               <div className="flex items-baseline gap-1">
-                <span
-                  className="font-bold tabular-nums text-text-primary leading-none"
-                  style={{ fontSize: '28px' }}
-                >
+                <span className="v2-kpi-num text-text-primary">
                   {m.value}
                 </span>
                 {m.unit && (
@@ -346,7 +343,7 @@ function KpiCard({
         <Icon size={15} className={accentClass} />
       </div>
       <div>
-        <p className="text-2xl font-semibold text-text-primary">{value}</p>
+        <p className="v2-kpi-num text-text-primary">{value}</p>
         {sub && <p className="text-xs text-text-secondary mt-0.5">{sub}</p>}
       </div>
     </div>

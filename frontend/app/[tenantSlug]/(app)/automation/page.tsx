@@ -107,7 +107,7 @@ function RulesTab({ tenantSlug }: { tenantSlug: string }) {
         <Button size="sm" onClick={openCreate} leftIcon={<Plus size={14} />}>룰 추가</Button>
       </div>
 
-      <div className="rounded-lg border border-border-default bg-surface">
+      <div className="rounded-[14px] border border-border-default bg-surface shadow-[var(--shadow-card)] overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-subtle">
@@ -328,7 +328,7 @@ function RunsTab({ tenantSlug }: { tenantSlug: string }) {
         </div>
       </div>
 
-      <div className="rounded-lg border border-border-default bg-surface">
+      <div className="rounded-[14px] border border-border-default bg-surface shadow-[var(--shadow-card)] overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-subtle">

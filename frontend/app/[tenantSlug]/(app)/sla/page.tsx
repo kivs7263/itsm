@@ -87,7 +87,7 @@ function KpiCard({ label, value, icon, color, isLoading }: {
       <div className="flex-1 min-w-0">
         <p className="text-xs text-text-secondary mb-1">{label}</p>
         {isLoading ? <Skeleton className="h-7 w-16" /> : (
-          <p className="text-2xl font-bold text-text-primary">{value}</p>
+          <p className="v2-kpi-num text-text-primary">{value}</p>
         )}
       </div>
     </div>

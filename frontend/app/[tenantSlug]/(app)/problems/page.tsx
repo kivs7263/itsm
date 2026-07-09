@@ -297,6 +297,8 @@ function RecurringTab({ tenantSlug }: { tenantSlug: string }) {
           새로고침
         </button>
       </div>
+      {/* ALVEO-V2 Track 4: 카드 래핑 (외곽 rounded+border는 overflow-hidden, 스크롤/sticky는 내부 div가 담당) */}
+      <div className="mx-6 mb-4 mt-4 flex-1 min-h-0 flex flex-col rounded-[14px] border border-border-default bg-surface shadow-[var(--shadow-card)] overflow-hidden">
       <div className="flex-1 overflow-auto min-h-0">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-surface border-b border-border-default">
@@ -417,6 +419,7 @@ function RecurringTab({ tenantSlug }: { tenantSlug: string }) {
           )}
         </tbody>
       </table>
+      </div>
       </div>
     </div>
   );
@@ -661,7 +664,8 @@ export default function ProblemsPage() {
         </div>
       </div>
 
-      {/* 테이블 */}
+      {/* 테이블 — ALVEO-V2 Track 4: 카드 래핑 (외곽 rounded+border는 overflow-hidden, 스크롤/sticky는 내부 div가 담당) */}
+      <div className="mx-6 mb-4 mt-4 flex-1 min-h-0 flex flex-col rounded-[14px] border border-border-default bg-surface shadow-[var(--shadow-card)] overflow-hidden">
       <div className="flex-1 overflow-auto min-h-0">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-surface border-b border-border-default">
@@ -748,6 +752,7 @@ export default function ProblemsPage() {
             )}
           </tbody>
         </table>
+      </div>
       </div>
 
       {/* 페이지네이션 */}

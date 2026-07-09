@@ -303,6 +303,7 @@ export function Sidebar() {
                 background: 'var(--sidebar-active-bg)',
                 color: 'var(--sidebar-active-text, #F5F5F5)',
                 fontSize: '14px',
+                boxShadow: 'inset 2px 0 0 0 var(--sidebar-active-border)', // ALVEO-V2 좌측 inset 바 (teal)
               }
             : {
                 color: 'var(--sidebar-nav-text, rgba(255,255,255,0.6))',
@@ -441,7 +442,7 @@ export function Sidebar() {
               )}
               style={
                 settingsActive
-                  ? { background: 'var(--sidebar-active-bg)', color: 'var(--sidebar-active-text, #F5F5F5)', fontSize: '14px' }
+                  ? { background: 'var(--sidebar-active-bg)', color: 'var(--sidebar-active-text, #F5F5F5)', fontSize: '14px', boxShadow: 'inset 2px 0 0 0 var(--sidebar-active-border)' }
                   : { color: 'var(--sidebar-nav-text, rgba(255,255,255,0.6))', fontSize: '14px' }
               }
               title={!effectivelyExpanded ? t.nav.settings : undefined}

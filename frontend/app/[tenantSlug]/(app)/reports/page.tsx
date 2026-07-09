@@ -243,7 +243,7 @@ function KpiCard({
         <Skeleton className="h-8 w-20 mt-1" />
       ) : (
         <div>
-          <p className="text-2xl font-bold text-text-primary tabular-nums">{value}</p>
+          <p className="v2-kpi-num text-text-primary">{value}</p>
           {sub && <p className="text-xs text-text-secondary mt-0.5">{sub}</p>}
         </div>
       )}
@@ -1043,7 +1043,7 @@ export default function ReportsPage() {
                 {isLoading ? (
                   <Skeleton className="h-8 w-20 mt-1" />
                 ) : (
-                  <p className="text-3xl font-bold text-text-primary mt-0.5">
+                  <p className="v2-kpi-num text-text-primary mt-0.5">
                     {complianceRate.toFixed(1)}
                     <span className="text-lg font-medium text-text-secondary ml-0.5">%</span>
                   </p>
