@@ -3,6 +3,7 @@
 import { useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { AxiosError } from 'axios';
 import { toast } from 'sonner';
 import api, { getErrorMessage } from '@/lib/api';
 import {
@@ -84,6 +85,7 @@ export function useAuth() {
     data: meData,
     isLoading,
     isError,
+    error: authError,
   } = useQuery<AuthMeData | null>({
     queryKey: AUTH_QUERY_KEY,
     queryFn: async () => {
@@ -93,11 +95,25 @@ export function useAuth() {
     },
     enabled: isAuthenticated(),
     staleTime: 5 * 60 * 1000, // 5분
-    retry: false,
+    // 429(rate-limit)만 backoff 재시도 — 401 등 진짜 인증오류는 재시도 안함
+    // (interceptor가 401은 이미 refresh 시도 후 넘김. 여기서 또 재시도할 필요 없음)
+    retry: (failureCount, err) => {
+      const status = (err as AxiosError)?.response?.status;
+      return status === 429 && failureCount < 4;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 8000),
+    // 재시도 소진 후에도 429가 지속되면 일정 간격으로 계속 재확인
+    // (429 ≠ 미인증 — 로그아웃 처리 금지, 세션 유지한 채 회복 대기)
+    refetchInterval: (query) => {
+      const status = (query.state.error as AxiosError)?.response?.status;
+      return status === 429 ? 10000 : false;
+    },
   });
 
   const user = meData?.user ?? null;
   const tenants = meData?.tenants ?? [];
+  // 429(rate-limit)는 미인증이 아니다 — layout이 이 상태에서 로그아웃/리다이렉트 하지 않도록 구분해서 노출
+  const isRateLimited = isError && (authError as AxiosError)?.response?.status === 429;
 
   // 로그인
   const loginMutation = useMutation({
@@ -149,6 +165,7 @@ export function useAuth() {
     tenants,
     isLoading,
     isError,
+    isRateLimited,
     isAuthenticated: !!user,
 
     // 액션

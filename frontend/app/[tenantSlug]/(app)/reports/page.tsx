@@ -826,7 +826,7 @@ export default function ReportsPage() {
     return (
       <div className="flex flex-col h-full">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-default bg-surface shrink-0">
-          <h1 className="text-xl font-semibold text-text-primary">리포트</h1>
+          <h1 className="v2-page-title text-text-primary">리포트</h1>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
           <AlertCircle size={32} className="text-error" />
@@ -847,7 +847,7 @@ export default function ReportsPage() {
     <div className="flex flex-col h-full">
       {/* 헤더 */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border-default bg-surface shrink-0">
-        <h1 className="text-xl font-semibold text-text-primary">리포트</h1>
+        <h1 className="v2-page-title text-text-primary">리포트</h1>
       </div>
 
       {/* 본문 */}

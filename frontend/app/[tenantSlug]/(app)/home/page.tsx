@@ -373,7 +373,7 @@ function EngineerDashboard({ tenantSlug }: { tenantSlug: string }) {
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">내 워크스페이스</h1>
+          <h1 className="v2-page-title text-text-primary">내 워크스페이스</h1>
           <p className="text-sm text-text-secondary mt-0.5">오늘도 수고하세요.</p>
         </div>
         <button
@@ -715,7 +715,7 @@ function TeamDashboard({ tenantSlug }: { tenantSlug: string }) {
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">팀 대시보드</h1>
+          <h1 className="v2-page-title text-text-primary">팀 대시보드</h1>
           <p className="text-sm text-text-secondary mt-0.5">팀 전체 현황을 확인하세요.</p>
         </div>
         <button
@@ -794,7 +794,7 @@ function SalesDashboard({ tenantSlug }: { tenantSlug: string }) {
     <div className="flex flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">영업 현황</h1>
+          <h1 className="v2-page-title text-text-primary">영업 현황</h1>
           <p className="text-sm text-text-secondary mt-0.5">고객 및 계약 파이프라인을 확인하세요.</p>
         </div>
         <button
@@ -856,7 +856,7 @@ function CLevelDashboard({ tenantSlug }: { tenantSlug: string }) {
     <div className="flex flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">경영 현황</h1>
+          <h1 className="v2-page-title text-text-primary">경영 현황</h1>
           <p className="text-sm text-text-secondary mt-0.5">운영 지표 요약입니다.</p>
         </div>
         <button

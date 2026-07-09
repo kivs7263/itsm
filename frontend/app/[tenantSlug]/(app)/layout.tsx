@@ -317,7 +317,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const router = useRouter();
   const params = useParams();
   const tenantSlug = params?.tenantSlug as string | undefined;
-  const { user, tenants, isLoading, isAuthenticated, logout } = useAuth();
+  const { user, tenants, isLoading, isAuthenticated, isRateLimited, logout } = useAuth();
   const { locale, setLocale } = useLocale();
   const pathname = usePathname();
   const isAdmin = user?.role === 'admin';
@@ -343,11 +343,14 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   }, [handleGlobalKeyDown]);
 
   // 미인증 리다이렉트
+  // 429(rate-limit)는 미인증이 아니다 — 세션 유지한 채 재시도(useAuth의 backoff)를
+  // 기다린다. 여기서 로그아웃/리다이렉트 처리하면 정상 로그인 사용자가 빠른 화면
+  // 전환만으로 강제 로그아웃 화면을 보게 된다 (ALVEO-V2 ITSM_gap §0).
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!isLoading && !isAuthenticated && !isRateLimited) {
       router.replace(tenantSlug ? `/${tenantSlug}/login` : '/login');
     }
-  }, [isLoading, isAuthenticated, router, tenantSlug]);
+  }, [isLoading, isAuthenticated, isRateLimited, router, tenantSlug]);
 
   // 가짜 slug 보호 — URL slug가 사용자 테넌트에 없으면 실제 slug로 교정
   useEffect(() => {

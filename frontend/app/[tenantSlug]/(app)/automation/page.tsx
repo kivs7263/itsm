@@ -407,7 +407,7 @@ export default function AutomationPage() {
       {/* 헤더 */}
       <div className="flex items-center gap-2 px-6 py-4 border-b border-border-default bg-surface shrink-0">
         <Zap size={18} className="text-brand" />
-        <h1 className="text-xl font-semibold text-text-primary">자동화</h1>
+        <h1 className="v2-page-title text-text-primary">자동화</h1>
       </div>
 
       {/* 탭 바 */}

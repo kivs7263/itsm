@@ -163,7 +163,7 @@ export default function ServiceCatalogPage() {
       {/* 헤더 */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border-default bg-surface shrink-0">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">서비스 카탈로그 관리</h1>
+          <h1 className="v2-page-title text-text-primary">서비스 카탈로그 관리</h1>
           <p className="text-xs text-text-secondary mt-0.5">
             오퍼링별 신청 폼과 다단/조건부 결재선을 구성합니다.
           </p>

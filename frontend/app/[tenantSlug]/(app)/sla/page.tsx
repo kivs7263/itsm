@@ -790,7 +790,7 @@ export default function SLAPage() {
     <div className="flex flex-col h-full">
       {/* 헤더 */}
       <div className="px-6 py-4 border-b border-border-default bg-surface shrink-0">
-        <h1 className="text-xl font-semibold text-text-primary">SLA</h1>
+        <h1 className="v2-page-title text-text-primary">SLA</h1>
       </div>
 
       {/* 탭 바 */}
